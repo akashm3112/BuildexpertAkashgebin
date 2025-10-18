@@ -1,0 +1,250 @@
+const express = require('express');
+const multer = require('multer');
+const { body, validationResult } = require('express-validator');
+const { auth } = require('../middleware/auth');
+const { uploadImage, uploadMultipleImages } = require('../utils/cloudinary');
+
+const router = express.Router();
+
+// Configure multer for memory storage (for Cloudinary upload)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Check file type
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  },
+});
+
+// All routes require authentication
+router.use(auth);
+
+// @route   POST /api/upload/single
+// @desc    Upload a single image to Cloudinary
+// @access  Private
+router.post('/single', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No image file provided'
+      });
+    }
+
+    // Convert buffer to base64 for Cloudinary
+    const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    
+    // Upload to Cloudinary
+    const result = await uploadImage(base64Image, 'buildxpert');
+    
+    if (!result.success) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to upload image to Cloudinary',
+        error: result.error
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Image uploaded successfully',
+      data: {
+        url: result.url,
+        public_id: result.public_id,
+        width: result.width,
+        height: result.height,
+        format: result.format,
+        size: result.size
+      }
+    });
+
+  } catch (error) {
+    console.error('Single image upload error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
+
+// @route   POST /api/upload/multiple
+// @desc    Upload multiple images to Cloudinary
+// @access  Private
+router.post('/multiple', upload.array('images', 10), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No image files provided'
+      });
+    }
+
+    // Convert buffers to base64 for Cloudinary
+    const base64Images = req.files.map(file => 
+      `data:${file.mimetype};base64,${file.buffer.toString('base64')}`
+    );
+    
+    // Upload to Cloudinary
+    const result = await uploadMultipleImages(base64Images, 'buildxpert');
+    
+    if (!result.success) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to upload some images to Cloudinary',
+        data: {
+          uploaded: result.urls.length,
+          failed: result.failed,
+          errors: result.errors
+        }
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Images uploaded successfully',
+      data: {
+        urls: result.urls,
+        public_ids: result.public_ids,
+        uploaded: result.urls.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Multiple images upload error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
+
+// @route   POST /api/upload/base64
+// @desc    Upload base64 image to Cloudinary
+// @access  Private
+router.post('/base64', [
+  body('image').notEmpty().withMessage('Base64 image data is required'),
+  body('folder').optional().isString().withMessage('Folder must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { image, folder = 'buildxpert' } = req.body;
+
+    // Validate base64 format
+    if (!image.startsWith('data:image/')) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid base64 image format'
+      });
+    }
+
+    // Upload to Cloudinary
+    const result = await uploadImage(image, folder);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to upload image to Cloudinary',
+        error: result.error
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Image uploaded successfully',
+      data: {
+        url: result.url,
+        public_id: result.public_id,
+        width: result.width,
+        height: result.height,
+        format: result.format,
+        size: result.size
+      }
+    });
+
+  } catch (error) {
+    console.error('Base64 image upload error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
+
+// @route   POST /api/upload/multiple-base64
+// @desc    Upload multiple base64 images to Cloudinary
+// @access  Private
+router.post('/multiple-base64', [
+  body('images').isArray().withMessage('Images must be an array'),
+  body('images.*').isString().withMessage('Each image must be a base64 string'),
+  body('folder').optional().isString().withMessage('Folder must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { images, folder = 'buildxpert' } = req.body;
+
+    // Validate base64 format for all images
+    const invalidImages = images.filter(img => !img.startsWith('data:image/'));
+    if (invalidImages.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid base64 image format detected'
+      });
+    }
+
+    // Upload to Cloudinary
+    const result = await uploadMultipleImages(images, folder);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to upload some images to Cloudinary',
+        data: {
+          uploaded: result.urls.length,
+          failed: result.failed,
+          errors: result.errors
+        }
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Images uploaded successfully',
+      data: {
+        urls: result.urls,
+        public_ids: result.public_ids,
+        uploaded: result.urls.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Multiple base64 images upload error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
+
+module.exports = router; 

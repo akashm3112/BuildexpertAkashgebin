@@ -1,0 +1,329 @@
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from './AuthContext';
+import { API_BASE_URL } from '@/constants/api';
+import { io as socketIOClient } from 'socket.io-client';
+import { tokenManager } from '../utils/tokenManager';
+import { AppState, AppStateStatus } from 'react-native';
+import { bookingNotificationService } from '@/services/BookingNotificationService';
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  created_at: string;
+  is_read?: boolean;
+  read?: boolean;
+  formatted_date?: string;
+  formatted_time?: string;
+  relative_time?: string;
+}
+
+interface NotificationContextType {
+  unreadCount: number;
+  notifications: Notification[];
+  fetchUnreadCount: () => Promise<void>;
+  fetchNotifications: () => Promise<void>;
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  refreshNotifications: () => void;
+  resetNotificationState: () => void;
+}
+
+const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+
+export function NotificationProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const appState = useRef(AppState.currentState);
+
+  // Fetch unread count from API
+  const fetchUnreadCount = async () => {
+    if (!user?.id) {
+      console.log('🔍 fetchUnreadCount: No user ID available');
+      return;
+    }
+    
+    // Check if user has a token in context first
+    if (!user?.token) {
+      console.log('🔍 fetchUnreadCount: No token in user context');
+    }
+    
+    try {
+      const token = await tokenManager.getValidToken();
+      if (!token) {
+        console.log('🔍 fetchUnreadCount: No valid token available');
+        return;
+      }
+
+      console.log('🔍 fetchUnreadCount: Making API call...');
+      const response = await fetch(`${API_BASE_URL}/api/notifications/unread-count`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      console.log('🔍 fetchUnreadCount: Response status:', response.status);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'success') {
+          setUnreadCount(data.data.unreadCount);
+          console.log('✅ fetchUnreadCount: Success, unread count:', data.data.unreadCount);
+        }
+      } else {
+        const errorText = await response.text();
+        console.log('❌ fetchUnreadCount: API error:', response.status, errorText);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching unread count:', error);
+    }
+  };
+
+  // Fetch all notifications
+  const fetchNotifications = async () => {
+    if (!user?.id) {
+      console.log('🔍 fetchNotifications: No user ID available');
+      return;
+    }
+    
+    try {
+      const token = await tokenManager.getValidToken();
+      if (!token) {
+        console.log('🔍 fetchNotifications: No valid token available');
+        return;
+      }
+
+      console.log('🔍 fetchNotifications: Making API call...');
+      const response = await fetch(`${API_BASE_URL}/api/notifications`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      console.log('🔍 fetchNotifications: Response status:', response.status);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'success') {
+          setNotifications(data.data.notifications);
+          // Update unread count based on notifications
+          const unread = data.data.notifications.filter((n: Notification) => !n.is_read).length;
+          setUnreadCount(unread);
+          console.log('✅ fetchNotifications: Success, notifications count:', data.data.notifications.length);
+        }
+      } else {
+        const errorText = await response.text();
+        console.log('❌ fetchNotifications: API error:', response.status, errorText);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching notifications:', error);
+    }
+  };
+
+  // Mark individual notification as read
+  const markAsRead = async (id: string) => {
+    try {
+      const token = await tokenManager.getValidToken();
+      if (!token) return;
+
+      // Update local state immediately for better UX
+      setNotifications(prev =>
+        prev.map(notification =>
+          notification.id === id ? { ...notification, is_read: true } : notification
+        )
+      );
+
+      // Update unread count
+      setUnreadCount(prev => Math.max(0, prev - 1));
+
+      // Call API to mark as read
+      await fetch(`${API_BASE_URL}/api/notifications/${id}/mark-read`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  // Mark all notifications as read
+  const markAllAsRead = async () => {
+    try {
+      const token = await tokenManager.getValidToken();
+      if (!token) return;
+
+      // Update local state immediately
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+
+      // Call API
+      await fetch(`${API_BASE_URL}/api/notifications/mark-all-read`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+
+  // Refresh notifications (for pull-to-refresh)
+  const refreshNotifications = () => {
+    fetchNotifications();
+  };
+
+  const resetNotificationState = () => {
+    console.log('🔄 Resetting notification state...');
+    setUnreadCount(0);
+    setNotifications([]);
+  };
+
+  // Handle booking-specific notifications with vibration and sound
+  const handleBookingNotification = (data: any) => {
+    try {
+      const { type, title, message, data: notificationData } = data;
+      
+      // Extract relevant information from notification data
+      const providerName = notificationData?.providerName || 'Service Provider';
+      const serviceName = notificationData?.serviceName || 'Service';
+      const customerName = notificationData?.customerName || 'Customer';
+      const amount = notificationData?.amount;
+      const reason = notificationData?.reason;
+      const scheduledDate = notificationData?.scheduledDate;
+      const timeUntil = notificationData?.timeUntil;
+      const location = notificationData?.location;
+      const rating = notificationData?.rating;
+
+      // Trigger appropriate notification based on type
+      switch (type) {
+        case 'new_booking_received':
+          bookingNotificationService.notifyNewBookingReceived(customerName, serviceName, scheduledDate);
+          break;
+        case 'booking_cancelled_by_customer':
+          bookingNotificationService.notifyBookingCancelledByCustomer(customerName, serviceName, reason);
+          break;
+        case 'booking_completed':
+          bookingNotificationService.notifyBookingCompleted(customerName, serviceName, amount);
+          break;
+        case 'booking_confirmed':
+          bookingNotificationService.notifyBookingConfirmed(customerName, serviceName, scheduledDate);
+          break;
+        case 'payment_received':
+          if (amount) {
+            bookingNotificationService.notifyPaymentReceived(amount, customerName, serviceName);
+          }
+          break;
+        case 'customer_rating_received':
+          if (rating) {
+            bookingNotificationService.notifyCustomerRatingReceived(customerName, rating, serviceName);
+          }
+          break;
+        case 'booking_reminder':
+          bookingNotificationService.notifyBookingReminder(customerName, serviceName, timeUntil);
+          break;
+        case 'service_requested':
+          bookingNotificationService.notifyServiceRequested(customerName, serviceName, location);
+          break;
+        default:
+          // For other notification types, just trigger a basic vibration
+          bookingNotificationService.testNotification();
+          break;
+      }
+    } catch (error) {
+      console.error('Error handling booking notification:', error);
+    }
+  };
+
+  // Handle app state changes
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      // App has come to foreground, refresh notifications
+      fetchUnreadCount();
+      fetchNotifications();
+    }
+    appState.current = nextAppState;
+  };
+
+  // Set up real-time notifications via socket.io
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const socket = socketIOClient(`${API_BASE_URL}`);
+    
+    socket.on('connect', () => {
+      console.log('Notification socket connected:', socket.id);
+      socket.emit('join', user.id);
+    });
+
+    socket.on('notification_created', (data) => {
+      console.log('🔔 New notification received via socket:', data);
+      
+      // Trigger vibration and sound for booking-related notifications
+      if (data && data.type) {
+        handleBookingNotification(data);
+      }
+      
+      fetchNotifications();
+      fetchUnreadCount();
+    });
+
+    socket.on('notification_updated', () => {
+      console.log('Notification updated');
+      fetchNotifications();
+      fetchUnreadCount();
+    });
+
+    socket.on('notification_deleted', () => {
+      console.log('Notification deleted');
+      fetchNotifications();
+      fetchUnreadCount();
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Notification socket disconnected');
+    });
+
+    socket.on('error', (error) => {
+      console.error('Notification socket error:', error);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [user?.id]);
+
+  // Set up app state listener
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, []);
+
+  // Initial fetch when user changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchUnreadCount();
+      fetchNotifications();
+    } else {
+      setUnreadCount(0);
+      setNotifications([]);
+    }
+  }, [user?.id]);
+
+  return (
+    <NotificationContext.Provider value={{
+      unreadCount,
+      notifications,
+      fetchUnreadCount,
+      fetchNotifications,
+      markAsRead,
+      markAllAsRead,
+      refreshNotifications,
+      resetNotificationState,
+    }}>
+      {children}
+    </NotificationContext.Provider>
+  );
+}
+
+export function useNotifications() {
+  const context = useContext(NotificationContext);
+  if (context === undefined) {
+    throw new Error('useNotifications must be used within a NotificationProvider');
+  }
+  return context;
+}

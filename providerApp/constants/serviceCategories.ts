@@ -1,0 +1,86 @@
+export const SERVICE_CATEGORIES = [
+  {
+    id: 'engineer-interior',
+    name: 'Engineer / Interior',
+    icon: '🏗️',
+    description: 'Engineering and Interior Design Services',
+    basePrice: 99,
+    image: require('../assets/images/engineer.jpg'),
+  },
+  {
+    id: 'plumber',
+    name: 'Plumber',
+    icon: '🔧',
+    description: 'Plumbing and Water Related Services',
+    basePrice: 99,
+    image: require('../assets/images/plumber.jpg'),
+  },
+  {
+    id: 'granite-tiles',
+    name: 'Granite & Tiles Laying',
+    icon: '🏠',
+    description: 'Floor and Wall Tiling Services',
+    basePrice: 99,
+    image: require('../assets/images/tiles.jpg'),
+  },
+  {
+    id: 'painting-cleaning',
+    name: 'Painting & Cleaning',
+    icon: '🎨',
+    description: 'Painting and Cleaning Services',
+    basePrice: 99,
+    image: require('../assets/images/painting.jpg'),
+  },
+  {
+    id: 'contact-building',
+    name: 'Contact & Building',
+    icon: '🏢',
+    description: 'Construction and Building Services',
+    basePrice: 99,
+    image: require('../assets/images/labors.jpg'),
+  },
+  {
+    id: 'labor',
+    name: 'Labor',
+    icon: '👷',
+    description: 'General Labor Services',
+    basePrice: 0, // Free for labor category
+    image: require('../assets/images/contractors.jpg'),
+  },
+  {
+    id: 'mason-mastri',
+    name: 'Mason / Mastri',
+    icon: '🧱',
+    description: 'Masonry and Construction Work',
+    basePrice: 99,
+    image: require('../assets/images/mistri.jpg'),
+  },
+  {
+    id: 'interiors-building',
+    name: 'Interiors of the Building',
+    icon: '🏠',
+    description: 'Interior Building Services',
+    basePrice: 99,
+    image: require('../assets/images/interior.jpg'),
+  },
+  {
+    id: 'stainless-steel',
+    name: 'Stainless Steel M.S',
+    icon: '⚙️',
+    description: 'Metal Work and Steel Services',
+    basePrice: 99,
+    image: require('../assets/images/steel.jpeg'),
+  },
+  {
+    id: 'glass-mirror',
+    name: 'Glass & Mirror',
+    icon: '🪞',
+    description: 'Glass and Mirror Installation Services',
+    basePrice: 99,
+    image: require('../assets/images/mirrior.jpg'),
+  },
+];
+
+export const getServiceById = (id: string) => {
+  return SERVICE_CATEGORIES.find(service => service.id === id);
+};

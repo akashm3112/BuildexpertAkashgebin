@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# environment files
+.env*
+
+# OS
+.DS_Store
+
+# build artifacts
+dist/
+build/
+
+# misc
+*.pem
+*.orig.*
+
+# bin
+node_modules/.bin/ 

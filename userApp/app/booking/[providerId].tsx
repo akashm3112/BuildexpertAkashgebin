@@ -1,0 +1,1007 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Platform,
+  ActivityIndicator,
+  Dimensions,
+} from 'react-native';
+import { SafeView } from '@/components/SafeView';
+import { useLocalSearchParams, router } from 'expo-router';
+import { 
+  ArrowLeft, 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  User,
+  Phone,
+  CreditCard,
+  CheckCircle,
+  CheckCircle2,
+  AlertTriangle
+} from 'lucide-react-native';
+import { Modal } from '@/components/common/Modal';
+import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
+import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '@/constants/api';
+
+const TIME_SLOTS = [
+  '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
+  '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM',
+  '05:00 PM', '06:00 PM', '07:00 PM', '08:00 PM'
+];
+
+// Responsive design utilities
+const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 375;
+const isMediumScreen = screenWidth >= 375 && screenWidth < 414;
+const isLargeScreen = screenWidth >= 414;
+
+const getResponsiveSpacing = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
+
+// Generate next 7 days
+const generateDates = (t: any) => {
+  const dates = [];
+  const today = new Date();
+  
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayName = dayNames[date.getDay()];
+    const dayNumber = date.getDate();
+    
+    let dateLabel = '';
+    if (i === 0) dateLabel = t('booking.today');
+    else if (i === 1) dateLabel = t('booking.tomorrow');
+    else dateLabel = t(`booking.dayNames.${dayName}`);
+    
+    dates.push({
+      date: dateLabel,
+      day: t(`booking.dayNames.${dayName}`),
+      number: dayNumber.toString(),
+      fullDate: date.toISOString().split('T')[0] // YYYY-MM-DD format
+    });
+  }
+  
+  return dates;
+};
+
+// Helper to check if a time slot is in the past for today
+function isTimeSlotInPast(dateIndex: number, timeSlot: string) {
+  if (dateIndex !== 0) return false; // Only check for today
+  const today = new Date();
+  // Parse the selected time slot into 24-hour format
+  const [time, modifier] = timeSlot.split(' ');
+  let [hours, minutes] = time.split(':').map(Number);
+  if (modifier === 'PM' && hours !== 12) hours += 12;
+  if (modifier === 'AM' && hours === 12) hours = 0;
+  const slotDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes);
+  return slotDate <= today;
+}
+
+interface Provider {
+  user_id: string;
+  full_name: string;
+  phone: string;
+  profile_pic_url?: string;
+  years_of_experience: number;
+  service_description: string;
+  provider_service_id: string;
+  service_charge_value: number;
+  service_charge_unit: string;
+  working_proof_urls?: string[];
+  payment_start_date: string;
+  payment_end_date: string;
+  averageRating?: number;
+  totalReviews?: number;
+  full_address?: string; // Added for location
+  state?: string; // Added for state
+  service_name?: string; // Service category name
+}
+
+export default function BookingScreen() {
+  const { providerId } = useLocalSearchParams<{ providerId: string }>();
+  const { user } = useAuth();
+  const { t } = useLanguage();
+  const [selectedDate, setSelectedDate] = useState(0);
+  const [selectedTime, setSelectedTime] = useState('');
+  const [selectedService, setSelectedService] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [fetchingProvider, setFetchingProvider] = useState(true);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    buttons?: { text: string; onPress: () => void; style?: 'primary' | 'secondary' | 'destructive' }[];
+  }>({
+    title: '',
+    message: '',
+    type: 'info'
+  });
+  const [provider, setProvider] = useState<Provider | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Generate dates with translations
+  const DATES = generateDates(t);
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons?: { text: string; onPress: () => void; style?: 'primary' | 'secondary' | 'destructive' }[]) => {
+    setAlertConfig({ title, message, type, buttons });
+    setShowAlertModal(true);
+  };
+
+  // Fetch provider details
+  useEffect(() => {
+    fetchProviderDetails();
+  }, [providerId]);
+
+  // Handle screen orientation changes
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', () => {
+      // Force re-render when screen dimensions change
+      // This ensures responsive styles are updated
+    });
+
+    return () => subscription?.remove();
+  }, []);
+
+  const fetchProviderDetails = async () => {
+    try {
+      setFetchingProvider(true);
+      setError(null);
+
+      // Get provider details using provider_service_id
+      const response = await fetch(`${API_BASE_URL}/api/public/provider-service/${providerId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch provider details');
+      }
+
+      const data = await response.json();
+      if (data.status === 'success' && data.data.provider) {
+        setProvider(data.data.provider);
+      } else {
+        throw new Error('Provider not found');
+      }
+    } catch (err) {
+      console.error('Error fetching provider:', err);
+      setError('Failed to load provider details');
+    } finally {
+      setFetchingProvider(false);
+    }
+  };
+
+  const handleBooking = async () => {
+    if (!selectedTime || !selectedService || !provider) {
+      showAlert(t('booking.incompleteSelection'), t('booking.selectTimeAndService'), 'warning');
+      return;
+    }
+
+    let token = user?.token;
+    if (!token) {
+      const storedToken = await AsyncStorage.getItem('token');
+      token = storedToken === null ? undefined : storedToken;
+    }
+    if (!token) {
+      showAlert(t('booking.authenticationRequired'), t('booking.loginToBook'), 'error');
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      const bookingData = {
+        providerServiceId: provider.provider_service_id,
+        selectedService: selectedService,
+        appointmentDate: DATES[selectedDate].fullDate,
+        appointmentTime: selectedTime
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(bookingData)
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.status === 'success') {
+        setShowConfirmation(true);
+        Toast.show({
+          type: 'success',
+          text1: t('booking.bookingConfirmed'),
+          text2: t('booking.bookingConfirmedMessage', { 
+            providerName: provider.full_name, 
+            date: DATES[selectedDate].date, 
+            time: selectedTime
+          })
+        });
+      } else {
+        throw new Error(result.message || 'Failed to create booking');
+      }
+    } catch (err) {
+      console.error('Booking error:', err);
+      showAlert(t('booking.bookingFailed'), err instanceof Error ? err.message : t('booking.failedToCreateBooking'), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewBookings = () => {
+    setShowConfirmation(false);
+    router.push('/(tabs)/bookings');
+  };
+
+  const handleGoHome = () => {
+    setShowConfirmation(false);
+    router.push('/(tabs)');
+  };
+
+  // Generate services based on provider's service category
+  const getServices = (): string[] => {
+    if (!provider) return [];
+    
+    // Get service category from provider
+    const serviceCategory = provider.service_name || '';
+    
+    // Default service options for each category (3 main + Others)
+    const serviceOptions: Record<string, string[]> = {
+      'plumber': [
+        t('serviceOptions.tapRepair'),
+        t('serviceOptions.pipeLeakage'),
+        t('serviceOptions.bathroomFitting'),
+        t('serviceOptions.others')
+      ],
+      'mason-mastri': [
+        t('serviceOptions.wallConstruction'),
+        t('serviceOptions.foundationWork'),
+        t('serviceOptions.brickLaying'),
+        t('serviceOptions.others')
+      ],
+      'electrician': [
+        t('serviceOptions.wiringInstallation'),
+        t('serviceOptions.switchSocketInstallation'),
+        t('serviceOptions.fanInstallation'),
+        t('serviceOptions.others')
+      ],
+      'carpenter': [
+        t('serviceOptions.doorInstallation'),
+        t('serviceOptions.windowInstallation'),
+        t('serviceOptions.furnitureMaking'),
+        t('serviceOptions.others')
+      ],
+      'painter': [
+        t('serviceOptions.interiorPainting'),
+        t('serviceOptions.exteriorPainting'),
+        t('serviceOptions.wallTexture'),
+        t('serviceOptions.others')
+      ],
+      'painting-cleaning': [
+        t('serviceOptions.houseCleaning'),
+        t('serviceOptions.officeCleaning'),
+        t('serviceOptions.deepCleaning'),
+        t('serviceOptions.others')
+      ],
+      'granite-tiles': [
+        t('serviceOptions.graniteInstallation'),
+        t('serviceOptions.tileInstallation'),
+        t('serviceOptions.kitchenCountertop'),
+        t('serviceOptions.others')
+      ],
+      'engineer-interior': [
+        t('serviceOptions.interiorDesign'),
+        t('serviceOptions.spacePlanning'),
+        t('serviceOptions.threeDVisualization'),
+        t('serviceOptions.others')
+      ],
+      'labors': [
+        t('serviceOptions.loadingUnloading'),
+        t('serviceOptions.materialTransportation'),
+        t('serviceOptions.siteCleaning'),
+        t('serviceOptions.others')
+      ],
+      'interiors-building': [
+        t('serviceOptions.completeInteriorDesign'),
+        t('serviceOptions.modularKitchen'),
+        t('serviceOptions.wardrobeDesign'),
+        t('serviceOptions.others')
+      ],
+      'stainless-steel': [
+        t('serviceOptions.kitchenSinkInstallation'),
+        t('serviceOptions.staircaseRailing'),
+        t('serviceOptions.gateInstallation'),
+        t('serviceOptions.others')
+      ],
+      'contact-building': [
+        t('serviceOptions.completeHouseConstruction'),
+        t('serviceOptions.commercialBuilding'),
+        t('serviceOptions.renovationServices'),
+        t('serviceOptions.others')
+      ],
+      'glass-mirror': [
+        t('serviceOptions.mirrorInstallation'),
+        t('serviceOptions.glassDoorInstallation'),
+        t('serviceOptions.windowGlassReplacement'),
+        t('serviceOptions.others')
+      ]
+    };
+    
+    // Return services based on category, or fallback to description parsing
+    if (serviceCategory && serviceOptions[serviceCategory]) {
+      return serviceOptions[serviceCategory];
+    }
+    
+    // Fallback: parse from service description if category not found
+    return provider.service_description.split(', ').filter((service: string) => service.trim());
+  };
+
+  if (fetchingProvider) {
+    return (
+      <SafeView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color="#1E293B" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('booking.title')}</Text>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={styles.loadingText}>{t('booking.loadingProviderDetails')}</Text>
+        </View>
+      </SafeView>
+    );
+  }
+
+  if (error || !provider) {
+    return (
+      <SafeView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color="#1E293B" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('booking.title')}</Text>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={styles.errorContainer}>
+          <AlertTriangle size={48} color="#EF4444" />
+          <Text style={styles.errorTitle}>{t('booking.errorLoadingProvider')}</Text>
+          <Text style={styles.errorText}>{error || t('booking.providerNotFound')}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchProviderDetails}>
+            <Text style={styles.retryButtonText}>{t('booking.tryAgain')}</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeView>
+    );
+  }
+
+  return (
+    <SafeView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={24} color="#1E293B" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('booking.title')}</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Provider Info */}
+        <View style={styles.providerCard}>
+          <View style={styles.providerInfo}>
+            <View style={styles.providerDetails}>
+              <Text style={styles.providerName}>{provider.full_name}</Text>
+              <Text style={styles.providerSpecialty}>
+                {provider.service_name ? `${provider.service_name.charAt(0).toUpperCase() + provider.service_name.slice(1)}` : t('booking.serviceProvider')}
+              </Text>
+              {/* <Text style={styles.providerDescription}>{provider.service_description}</Text> */}
+              <View style={styles.providerMeta}>
+                <View style={styles.ratingContainer}>
+                  <Text style={styles.rating}>⭐ {provider.averageRating?.toFixed(1) || 'N/A'}</Text>
+                </View>
+                <View style={styles.locationContainer}>
+                  <MapPin size={14} color="#64748B" />
+                  <Text style={styles.location}>
+                    {provider.state ? ` ${provider.state}` : ''}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.priceContainer}>
+              <Text style={styles.price}>₹{provider.service_charge_value}/{provider.service_charge_unit}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Service Selection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            {t('booking.selectService', { serviceName: provider.service_name ? `${provider.service_name.charAt(0).toUpperCase() + provider.service_name.slice(1)}` : t('booking.service') })}
+          </Text>
+          <View style={styles.servicesGrid}>
+            {getServices().length > 0 ? (
+              getServices().map((service, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.serviceOption,
+                    selectedService === service && styles.selectedServiceOption
+                  ]}
+                  onPress={() => setSelectedService(service)}
+                >
+                  <Text 
+                    style={[
+                      styles.serviceText,
+                      selectedService === service && styles.selectedServiceText
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {service}
+                  </Text>
+                  {selectedService === service && (
+                    <CheckCircle size={16} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.noServicesContainer}>
+                <Text style={styles.noServicesText}>
+                  {t('booking.noSpecificServices')}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Date Selection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('booking.selectDate')}</Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.datesContainer}
+          >
+            {DATES.map((dateItem, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.dateOption,
+                  selectedDate === index && styles.selectedDateOption
+                ]}
+                onPress={() => setSelectedDate(index)}
+              >
+                <Text style={[
+                  styles.dateDay,
+                  selectedDate === index && styles.selectedDateText
+                ]}>
+                  {dateItem.day}
+                </Text>
+                <Text style={[
+                  styles.dateNumber,
+                  selectedDate === index && styles.selectedDateText
+                ]}>
+                  {dateItem.number}
+                </Text>
+                <Text style={[
+                  styles.dateLabel,
+                  selectedDate === index && styles.selectedDateText
+                ]}>
+                  {dateItem.date}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Time Selection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('booking.selectTime')}</Text>
+          <View style={styles.timeGrid}>
+            {TIME_SLOTS.map((time, index) => {
+              const disabled = isTimeSlotInPast(selectedDate, time);
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.timeOption,
+                    selectedTime === time && styles.selectedTimeOption,
+                    disabled && { opacity: 0.4 }
+                  ]}
+                  onPress={() => !disabled && setSelectedTime(time)}
+                  disabled={disabled}
+                >
+                  <Clock size={16} color={selectedTime === time ? '#FFFFFF' : '#64748B'} />
+                  <Text 
+                    style={[
+                      styles.timeText,
+                      selectedTime === time && styles.selectedTimeText
+                    ]}
+                  >
+                    {time}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Booking Summary */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>{t('booking.bookingSummary')}</Text>
+          
+          <View style={styles.summaryRow}>
+            <User size={16} color="#64748B" />
+            <Text style={styles.summaryLabel}>{t('booking.provider')}:</Text>
+            <Text style={styles.summaryValue}>{provider.full_name}</Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Calendar size={16} color="#64748B" />
+            <Text style={styles.summaryLabel}>{t('booking.date')}:</Text>
+            <Text style={styles.summaryValue}>
+              {selectedDate !== null ? DATES[selectedDate].date : t('booking.notSelected')}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Clock size={16} color="#64748B" />
+            <Text style={styles.summaryLabel}>{t('booking.time')}:</Text>
+            <Text style={styles.summaryValue}>
+              {selectedTime || t('booking.notSelected')}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <CreditCard size={16} color="#64748B" />
+            <Text style={styles.summaryLabel}>{t('booking.service')}:</Text>
+            <Text style={styles.summaryValue}>
+              {selectedService || t('booking.notSelected')}
+            </Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>{t('booking.estimatedCost')}:</Text>
+            <Text style={styles.totalValue}>₹{provider.service_charge_value}/{provider.service_charge_unit}</Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Book Button */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[
+            styles.bookButton,
+            (!selectedTime || !selectedService || loading) && styles.bookButtonDisabled
+          ]}
+          onPress={handleBooking}
+          disabled={!selectedTime || !selectedService || loading}
+        >
+          <Text style={styles.bookButtonText}>
+            {loading ? t('booking.confirmingBooking') : t('booking.confirmBooking')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <Modal
+        visible={showConfirmation}
+        onClose={() => setShowConfirmation(false)}
+        title={t('booking.bookingConfirmed')}
+        type="success"
+        message={t('booking.bookingConfirmedMessage', { 
+          providerName: provider.full_name, 
+          date: DATES[selectedDate].date, 
+          time: selectedTime
+        })}
+        buttons={[
+          {
+            text: t('booking.viewBookings'),
+            onPress: handleViewBookings,
+            style: 'primary'
+          },
+          {
+            text: t('booking.goHome'),
+            onPress: handleGoHome,
+            style: 'secondary'
+          }
+        ]}
+      />
+
+      <Modal
+        visible={showAlertModal}
+        onClose={() => setShowAlertModal(false)}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        buttons={alertConfig.buttons || [
+          {
+            text: 'OK',
+            onPress: () => setShowAlertModal(false),
+            style: 'primary'
+          }
+        ]}
+      />
+    </SafeView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: getResponsiveSpacing(20, 28, 32),
+    paddingVertical: getResponsiveSpacing(16, 20, 24),
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: getResponsiveSpacing(16, 18, 20),
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  placeholder: {
+    width: 32,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: getResponsiveSpacing(12, 16, 20),
+    fontSize: getResponsiveSpacing(14, 16, 18),
+    color: '#64748B',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: getResponsiveSpacing(24, 40, 48),
+  },
+  errorTitle: {
+    fontSize: getResponsiveSpacing(16, 18, 20),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginTop: getResponsiveSpacing(12, 16, 20),
+    marginBottom: getResponsiveSpacing(6, 8, 10),
+  },
+  errorText: {
+    fontSize: getResponsiveSpacing(12, 14, 16),
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: getResponsiveSpacing(16, 24, 32),
+  },
+  retryButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: getResponsiveSpacing(20, 24, 28),
+    paddingVertical: getResponsiveSpacing(10, 12, 14),
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: getResponsiveSpacing(12, 14, 16),
+    fontWeight: '600',
+  },
+  providerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: getResponsiveSpacing(12, 16, 20),
+    marginVertical: getResponsiveSpacing(12, 16, 20),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#CBD5E1',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
+      },
+    }),
+  },
+  providerInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  providerDetails: {
+    flex: 1,
+  },
+  providerName: {
+    fontSize: getResponsiveSpacing(16, 18, 20),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: getResponsiveSpacing(3, 4, 5),
+  },
+  providerSpecialty: {
+    fontSize: getResponsiveSpacing(12, 14, 16),
+    color: '#64748B',
+    marginBottom: getResponsiveSpacing(3, 4, 5),
+    fontWeight: '500',
+  },
+  providerDescription: {
+    fontSize: getResponsiveSpacing(10, 12, 14),
+    color: '#94A3B8',
+    marginBottom: getResponsiveSpacing(6, 8, 10),
+  },
+  providerMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingContainer: {
+    marginRight: getResponsiveSpacing(12, 16, 20),
+  },
+  rating: {
+    fontSize: getResponsiveSpacing(12, 14, 16),
+    color: '#1E293B',
+    fontWeight: '500',
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  location: {
+    fontSize: getResponsiveSpacing(10, 12, 14),
+    color: '#64748B',
+    marginLeft: getResponsiveSpacing(3, 4, 5),
+  },
+  priceContainer: {
+    alignItems: 'flex-end',
+  },
+  price: {
+    fontSize: getResponsiveSpacing(14, 16, 18),
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  section: {
+    marginBottom: getResponsiveSpacing(16, 24, 32),
+  },
+  sectionTitle: {
+    fontSize: getResponsiveSpacing(16, 18, 20),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: getResponsiveSpacing(12, 16, 20),
+  },
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: getResponsiveSpacing(8, 12, 16),
+  },
+  serviceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: getResponsiveSpacing(10, 12, 14),
+    paddingHorizontal: getResponsiveSpacing(12, 16, 18),
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: getResponsiveSpacing(8, 12, 16),
+    width: '48%',
+    justifyContent: 'space-between',
+  },
+  selectedServiceOption: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  serviceText: {
+    fontSize: getResponsiveSpacing(12, 14, 16),
+    color: '#64748B',
+    fontWeight: '500',
+    flex: 1,
+    maxWidth: getResponsiveSpacing(100, 120, 140),
+  },
+  selectedServiceText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  noServicesContainer: {
+    width: '100%',
+    padding: 20,
+    alignItems: 'center',
+  },
+  noServicesText: {
+    fontSize: getResponsiveSpacing(12, 14, 16),
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  datesContainer: {
+    paddingHorizontal: 4,
+  },
+  dateOption: {
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: getResponsiveSpacing(10, 12, 14),
+    paddingHorizontal: getResponsiveSpacing(12, 16, 18),
+    borderRadius: 8,
+    marginRight: getResponsiveSpacing(8, 12, 16),
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    minWidth: getResponsiveSpacing(50, 60, 70),
+  },
+  selectedDateOption: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  dateDay: {
+    fontSize: getResponsiveSpacing(10, 12, 14),
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  dateNumber: {
+    fontSize: getResponsiveSpacing(16, 18, 20),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginVertical: getResponsiveSpacing(1, 2, 3),
+  },
+  dateLabel: {
+    fontSize: getResponsiveSpacing(8, 10, 12),
+    color: '#64748B',
+  },
+  selectedDateText: {
+    color: '#FFFFFF',
+  },
+  timeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: getResponsiveSpacing(6, 8, 10),
+    justifyContent: 'space-between',
+  },
+  timeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: getResponsiveSpacing(6, 8, 10),
+    paddingHorizontal: getResponsiveSpacing(8, 12, 14),
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    width: `${(100 / 3) - 2}%`, // Exactly 3 items per row with gap consideration
+    justifyContent: 'center',
+  },
+  selectedTimeOption: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  timeText: {
+    fontSize: getResponsiveSpacing(12, 14, 16),
+    color: '#64748B',
+    marginLeft: getResponsiveSpacing(6, 8, 10),
+  },
+  selectedTimeText: {
+    color: '#FFFFFF',
+  },
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: getResponsiveSpacing(12, 16, 20),
+    marginBottom: getResponsiveSpacing(16, 24, 32),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#CBD5E1',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
+      },
+    }),
+  },
+  summaryTitle: {
+    fontSize: getResponsiveSpacing(16, 18, 20),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: getResponsiveSpacing(12, 16, 20),
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: getResponsiveSpacing(8, 12, 16),
+  },
+  summaryLabel: {
+    fontSize: getResponsiveSpacing(12, 14, 16),
+    color: '#64748B',
+    marginLeft: getResponsiveSpacing(6, 8, 10),
+    marginRight: getResponsiveSpacing(6, 8, 10),
+    minWidth: getResponsiveSpacing(50, 60, 70),
+  },
+  summaryValue: {
+    fontSize: getResponsiveSpacing(12, 14, 16),
+    color: '#1E293B',
+    fontWeight: '500',
+    flex: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: getResponsiveSpacing(12, 16, 20),
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  totalLabel: {
+    fontSize: getResponsiveSpacing(14, 16, 18),
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  totalValue: {
+    fontSize: getResponsiveSpacing(16, 18, 20),
+    fontWeight: '700',
+    color: '#3B82F6',
+  },
+  footer: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    paddingVertical: getResponsiveSpacing(12, 16, 20),
+  },
+  bookButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: getResponsiveSpacing(12, 16, 20),
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  bookButtonDisabled: {
+    backgroundColor: '#CBD5E1',
+  },
+  bookButtonText: {
+    color: '#FFFFFF',
+    fontSize: getResponsiveSpacing(14, 16, 18),
+    fontWeight: '600',
+  },
+});
