@@ -66,6 +66,15 @@ class WebRTCService {
     }
   }
 
+  // Check if WebRTC is available and show appropriate message
+  private checkWebRTCAvailability(): boolean {
+    if (!this.isWebRTCAvailable) {
+      this.events.onError?.('Calling is not available on web browsers. Please use the mobile app for voice calls.');
+      return false;
+    }
+    return true;
+  }
+
   // Initialize Socket.io connection
   async initialize(userId: string, token: string) {
     if (this.socket?.connected) {
@@ -161,18 +170,34 @@ class WebRTCService {
   // Start a call
   async startCall(callData: CallData) {
     try {
-      if (!this.isWebRTCAvailable) {
-        throw new Error('WebRTC is not available on web browser. Please use the mobile app for calling.');
+      if (!this.checkWebRTCAvailability()) {
+        return;
       }
 
       console.log('📞 Starting call...', callData);
       this.currentCall = callData;
 
-      // Get local audio stream
-      this.localStream = await mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
+      // Get local audio stream with error handling
+      try {
+        this.localStream = await mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+        console.log('📞 Audio stream acquired successfully');
+      } catch (mediaError: any) {
+        console.error('❌ Failed to get audio stream:', mediaError);
+        if (mediaError.name === 'NotAllowedError') {
+          throw new Error('Microphone access denied. Please allow microphone access to make calls.');
+        } else if (mediaError.name === 'NotFoundError') {
+          throw new Error('No microphone found. Please connect a microphone to make calls.');
+        } else {
+          throw new Error('Failed to access microphone. Please check your audio settings.');
+        }
+      }
 
       // Create peer connection
       this.peerConnection = new RTCPeerConnection(RTC_CONFIG);
@@ -183,7 +208,7 @@ class WebRTCService {
       });
 
       // Handle ICE candidates
-      this.peerConnection.onicecandidate = (event) => {
+      this.peerConnection!.onicecandidate = (event) => {
         if (event.candidate) {
           console.log('📞 Sending ICE candidate');
           this.socket?.emit('call:ice-candidate', {
@@ -195,11 +220,47 @@ class WebRTCService {
       };
 
       // Handle connection state changes
-      this.peerConnection.onconnectionstatechange = () => {
-        console.log('📞 Connection state:', this.peerConnection?.connectionState);
-        if (this.peerConnection?.connectionState === 'connected') {
-          this.callStartTime = Date.now();
-          this.events.onCallConnected?.();
+      this.peerConnection!.onconnectionstatechange = () => {
+        const pc = this.peerConnection;
+        if (pc) {
+          console.log('📞 Connection state:', pc.connectionState);
+          switch (pc.connectionState) {
+            case 'connected':
+              this.callStartTime = Date.now();
+              this.events.onCallConnected?.();
+              this.startCallQualityMonitoring();
+              break;
+            case 'disconnected':
+              console.warn('📞 Connection lost, attempting to reconnect...');
+              // Attempt to reconnect by creating a new offer
+              setTimeout(() => {
+                if (this.peerConnection?.connectionState === 'disconnected') {
+                  this.createOffer();
+                }
+              }, 2000);
+              break;
+            case 'failed':
+              console.error('📞 Connection failed');
+              this.events.onError?.('Call connection failed. Please try again.');
+              this.cleanup();
+              break;
+            case 'closed':
+              console.log('📞 Connection closed');
+              this.cleanup();
+              break;
+          }
+        }
+      };
+
+      // Handle ICE connection state changes
+      this.peerConnection!.oniceconnectionstatechange = () => {
+        if (this.peerConnection) {
+          console.log('📞 ICE connection state:', this.peerConnection.iceConnectionState);
+          if (this.peerConnection.iceConnectionState === 'failed') {
+            console.error('📞 ICE connection failed');
+            this.events.onError?.('Network connection failed. Please check your internet connection.');
+            this.cleanup();
+          }
         }
       };
 
@@ -247,7 +308,7 @@ class WebRTCService {
       });
 
       // Handle ICE candidates
-      this.peerConnection.onicecandidate = (event) => {
+      this.peerConnection!.onicecandidate = (event) => {
         if (event.candidate) {
           console.log('📞 Sending ICE candidate');
           this.socket?.emit('call:ice-candidate', {
@@ -259,7 +320,7 @@ class WebRTCService {
       };
 
       // Handle connection state changes
-      this.peerConnection.onconnectionstatechange = () => {
+      this.peerConnection!.onconnectionstatechange = () => {
         console.log('📞 Connection state:', this.peerConnection?.connectionState);
         if (this.peerConnection?.connectionState === 'connected') {
           this.callStartTime = Date.now();
@@ -369,6 +430,43 @@ class WebRTCService {
   }
 
   // Cleanup resources
+  // Monitor call quality
+  private startCallQualityMonitoring() {
+    if (!this.peerConnection || !this.currentCall) return;
+    
+    const monitorInterval = setInterval(() => {
+      if (!this.peerConnection || !this.currentCall) {
+        clearInterval(monitorInterval);
+        return;
+      }
+      
+      // Check connection state
+      if (this.peerConnection.connectionState === 'failed') {
+        console.warn('📞 Call quality: Connection failed');
+        this.events.onError?.('Call connection lost. Attempting to reconnect...');
+        clearInterval(monitorInterval);
+        return;
+      }
+      
+      // Check ICE connection state
+      if (this.peerConnection.iceConnectionState === 'failed') {
+        console.warn('📞 Call quality: ICE connection failed');
+        this.events.onError?.('Network connection lost. Please check your internet connection.');
+        clearInterval(monitorInterval);
+        return;
+      }
+      
+      // Log connection quality
+      console.log('📞 Call quality:', {
+        connectionState: this.peerConnection.connectionState,
+        iceConnectionState: this.peerConnection.iceConnectionState,
+        iceGatheringState: this.peerConnection.iceGatheringState,
+        signalingState: this.peerConnection.signalingState
+      });
+      
+    }, 10000); // Check every 10 seconds
+  }
+
   private cleanup() {
     console.log('📞 Cleaning up call resources');
 

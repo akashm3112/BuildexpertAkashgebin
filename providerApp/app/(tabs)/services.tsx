@@ -454,7 +454,7 @@ export default function ServicesScreen() {
                           providerServiceId: service.provider_service_id,
                           serviceId: service.service_id,
                           serviceName: categoryInfo.name,
-                          amount: 999, // Default amount, should come from service config
+                          amount: 99, // Standard service registration fee
                           category: categoryInfo.id
                         }
                       })}
@@ -475,7 +475,7 @@ export default function ServicesScreen() {
                           providerServiceId: service.provider_service_id,
                           serviceId: service.service_id,
                           serviceName: categoryInfo.name,
-                          amount: 999, // Default amount
+                          amount: 99, // Standard service registration fee
                           category: categoryInfo.id
                         }
                       })}

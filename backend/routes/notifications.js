@@ -4,6 +4,7 @@ const { auth } = require('../middleware/auth');
 const { formatNotificationTimestamp } = require('../utils/timezone');
 const { sendNotification, sendAutoNotification } = require('../utils/notifications');
 const { pushNotificationService } = require('../utils/pushNotifications');
+const DatabaseOptimizer = require('../utils/databaseOptimization');
 const getIO = () => require('../server').io;
 
 const router = express.Router();
@@ -17,38 +18,16 @@ router.use(auth);
 router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 20, type } = req.query;
-    const offset = (page - 1) * limit;
-    
-    let whereClause = 'WHERE user_id = $1 AND role = $2';
-    let queryParams = [req.user.id, req.user.role];
-    let paramCount = 3;
-    
-    // Add type filter if provided
-    if (type) {
-      whereClause += ` AND title ILIKE $${paramCount}`;
-      queryParams.push(`%${type}%`);
-      paramCount++;
-    }
-    
-    // Get notifications with pagination
-    const notifications = await getRows(
-      `SELECT id, title, message, is_read, created_at, role 
-       FROM notifications 
-       ${whereClause} 
-       ORDER BY created_at DESC 
-       LIMIT $${paramCount} OFFSET $${paramCount + 1}`,
-      [...queryParams, limit, offset]
+
+    // Use optimized database query
+    const result = await DatabaseOptimizer.getNotificationsWithPagination(
+      req.user.id, 
+      req.user.role, 
+      { page: parseInt(page), limit: parseInt(limit), type }
     );
-    
-    // Get total count for pagination
-    const countResult = await getRows(
-      `SELECT COUNT(*) as total FROM notifications ${whereClause}`,
-      queryParams
-    );
-    const totalCount = parseInt(countResult[0]?.total || 0);
 
     // Format timestamps to IST and add relative time
-    const formattedNotifications = notifications.map(notification => {
+    const formattedNotifications = result.notifications.map(notification => {
       try {
         const timestampData = formatNotificationTimestamp(notification.created_at);
         
@@ -78,12 +57,7 @@ router.get('/', async (req, res) => {
       status: 'success',
       data: { 
         notifications: formattedNotifications,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalCount / limit),
-          totalCount,
-          hasMore: parseInt(page) * limit < totalCount
-        }
+        pagination: result.pagination
       }
     });
   } catch (error) {

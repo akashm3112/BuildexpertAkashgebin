@@ -1,5 +1,6 @@
 const express = require('express');
 const { getRow, getRows } = require('../database/connection');
+const DatabaseOptimizer = require('../utils/databaseOptimization');
 
 const router = express.Router();
 
@@ -234,32 +235,8 @@ router.get('/provider-service/:providerServiceId', async (req, res) => {
   try {
     const { providerServiceId } = req.params;
 
-    const provider = await getRow(`
-      SELECT 
-        u.id as user_id,
-        u.full_name,
-        u.phone,
-        u.profile_pic_url,
-        pp.years_of_experience,
-        pp.service_description,
-        pp.is_engineering_provider,
-        pp.engineering_certificate_url,
-        ps.id as provider_service_id,
-        ps.service_charge_value,
-        ps.service_charge_unit,
-        ps.working_proof_urls,
-        ps.payment_start_date,
-        ps.payment_end_date,
-        sm.name as service_name,
-        a.state as state,
-        a.full_address as full_address
-      FROM provider_services ps
-      JOIN provider_profiles pp ON ps.provider_id = pp.id
-      JOIN users u ON pp.user_id = u.id
-      JOIN services_master sm ON ps.service_id = sm.id
-      LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
-      WHERE ps.id = $1 AND ps.payment_status = 'active'
-    `, [providerServiceId]);
+    // Use optimized database query
+    const provider = await DatabaseOptimizer.getProviderWithRatings(providerServiceId);
 
     if (!provider) {
       return res.status(404).json({
@@ -268,31 +245,10 @@ router.get('/provider-service/:providerServiceId', async (req, res) => {
       });
     }
 
-    // Get provider's ratings
-    const ratings = await getRows(`
-      SELECT r.rating, r.review, r.created_at, u.full_name as customer_name
-      FROM ratings r
-      JOIN bookings b ON r.booking_id = b.id
-      JOIN users u ON b.user_id = u.id
-      WHERE b.provider_service_id = $1
-      ORDER BY r.created_at DESC
-      LIMIT 10
-    `, [providerServiceId]);
-
-    // Calculate average rating
-    const avgRating = ratings.length > 0 
-      ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length 
-      : 0;
-
     res.json({
       status: 'success',
       data: {
-        provider: {
-          ...provider,
-          ratings,
-          averageRating: Math.round(avgRating * 10) / 10,
-          totalReviews: ratings.length
-        }
+        provider
       }
     });
 

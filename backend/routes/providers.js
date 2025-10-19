@@ -7,6 +7,7 @@ const { formatNotificationTimestamp } = require('../utils/timezone');
 const { sendNotification, sendAutoNotification } = require('../utils/notifications');
 const { emitEarningsUpdate } = require('../utils/earnings');
 const { pushNotificationService, NotificationTemplates } = require('../utils/pushNotifications');
+const DatabaseOptimizer = require('../utils/databaseOptimization');
 const getIO = () => require('../server').io;
 
 const router = express.Router();
@@ -382,72 +383,20 @@ router.delete('/services/:id', async (req, res) => {
 router.get('/bookings', async (req, res) => {
   try {
     const { status, page = 1, limit = 10 } = req.query;
-    const offset = (page - 1) * limit;
 
-    let whereClause = `
-      WHERE ps.provider_id = (
-        SELECT id FROM provider_profiles WHERE user_id = $1
-      )
-    `;
-    let queryParams = [req.user.id];
-    let paramCount = 2;
-
-    if (status) {
-      whereClause += ` AND b.status = $${paramCount}`;
-      queryParams.push(status);
-      paramCount++;
-    }
-
-    const bookings = await getRows(`
-      SELECT 
-        b.*,
-        u.full_name as customer_name,
-        u.phone as customer_phone,
-        sm.name as service_name,
-        r.rating as rating_value,
-        r.review as rating_review,
-        r.created_at as rating_created_at
-      FROM bookings b
-      JOIN provider_services ps ON b.provider_service_id = ps.id
-      JOIN users u ON b.user_id = u.id
-      JOIN services_master sm ON ps.service_id = sm.id
-      LEFT JOIN ratings r ON r.booking_id = b.id
-      ${whereClause}
-      ORDER BY b.created_at DESC
-      LIMIT $${paramCount} OFFSET $${paramCount + 1}
-    `, [...queryParams, limit, offset]);
-
-    // Map bookings to include a nested rating object if exists
-    const mappedBookings = bookings.map(b => ({
-      ...b,
-      rating: b.rating_value !== null ? {
-        rating: b.rating_value,
-        review: b.rating_review,
-        created_at: b.rating_created_at
-      } : null
-    }));
-
-    // Get total count
-    const countResult = await getRow(`
-      SELECT COUNT(*) as total
-      FROM bookings b
-      JOIN provider_services ps ON b.provider_service_id = ps.id
-      ${whereClause}
-    `, queryParams);
-
-    const total = parseInt(countResult.total);
-    const totalPages = Math.ceil(total / limit);
+    // Use optimized database query
+    const result = await DatabaseOptimizer.getBookingsWithDetails(req.user.id, {
+      status,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      userType: 'provider'
+    });
 
     res.json({
       status: 'success',
       data: {
-        bookings: mappedBookings,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages,
-          total,
-          limit: parseInt(limit)
-        }
+        bookings: result.bookings,
+        pagination: result.pagination
       }
     });
 

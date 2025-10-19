@@ -73,7 +73,7 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ visible, onClose }
                     styles.languageItem,
                     selectedLanguage === code && styles.selectedLanguageItem
                   ]}
-                  onPress={() => setSelectedLanguage(code)}
+                  onPress={() => setSelectedLanguage(code as any)}
                 >
                   <View style={styles.languageInfo}>
                     <Text style={[

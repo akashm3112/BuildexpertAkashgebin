@@ -132,6 +132,7 @@ const io = new Server(server, {
 
 // Store active calls
 const activeCalls = new Map();
+const callTimeouts = new Map(); // Store call timeout IDs
 
 io.on('connection', (socket) => {
   console.log('🔌 New client connected:', socket.id);
@@ -158,6 +159,28 @@ io.on('connection', (socket) => {
       status: 'ringing'
     });
 
+    // Set call timeout (30 seconds)
+    const timeoutId = setTimeout(() => {
+      const call = activeCalls.get(bookingId);
+      if (call && call.status === 'ringing') {
+        console.log('📞 Call timeout for booking:', bookingId);
+        
+        // Notify caller about timeout
+        io.to(call.callerId).emit('call:ended', { 
+          bookingId, 
+          duration: 0, 
+          endedBy: 'timeout',
+          reason: 'Call timed out - no answer'
+        });
+        
+        // Clean up
+        activeCalls.delete(bookingId);
+        callTimeouts.delete(bookingId);
+      }
+    }, 30000); // 30 seconds timeout
+    
+    callTimeouts.set(bookingId, timeoutId);
+
     // Notify receiver about incoming call
     io.to(receiverId).emit('call:incoming', {
       bookingId,
@@ -176,12 +199,21 @@ io.on('connection', (socket) => {
       call.status = 'active';
       call.acceptTime = Date.now();
       
+      // Clear the timeout since call was accepted
+      const timeoutId = callTimeouts.get(bookingId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        callTimeouts.delete(bookingId);
+      }
+      
       // Notify caller that call was accepted
       io.to(call.callerId).emit('call:accepted', {
         bookingId,
-        receiverId,
+        receiverId: receiverId || socket.userId,
         socketId: socket.id
       });
+    } else {
+      console.warn('📞 Call not found for booking:', bookingId);
     }
   });
 
@@ -191,6 +223,13 @@ io.on('connection', (socket) => {
     
     const call = activeCalls.get(bookingId);
     if (call) {
+      // Clear the timeout since call was rejected
+      const timeoutId = callTimeouts.get(bookingId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        callTimeouts.delete(bookingId);
+      }
+      
       io.to(call.callerId).emit('call:rejected', { bookingId, reason });
       activeCalls.delete(bookingId);
     }
@@ -198,7 +237,13 @@ io.on('connection', (socket) => {
 
   // WebRTC Offer
   socket.on('call:offer', ({ bookingId, offer, to }) => {
-    console.log('📞 Sending offer to:', to);
+    console.log('📞 WebRTC Offer sent:', { 
+      bookingId, 
+      from: socket.userId, 
+      to, 
+      offerType: offer.type,
+      timestamp: new Date().toISOString()
+    });
     io.to(to).emit('call:offer', {
       bookingId,
       offer,
@@ -208,7 +253,13 @@ io.on('connection', (socket) => {
 
   // WebRTC Answer
   socket.on('call:answer', ({ bookingId, answer, to }) => {
-    console.log('📞 Sending answer to:', to);
+    console.log('📞 WebRTC Answer sent:', { 
+      bookingId, 
+      from: socket.userId, 
+      to, 
+      answerType: answer.type,
+      timestamp: new Date().toISOString()
+    });
     io.to(to).emit('call:answer', {
       bookingId,
       answer,
@@ -218,6 +269,13 @@ io.on('connection', (socket) => {
 
   // ICE Candidate
   socket.on('call:ice-candidate', ({ bookingId, candidate, to }) => {
+    console.log('📞 ICE Candidate sent:', { 
+      bookingId, 
+      from: socket.userId, 
+      to, 
+      candidateType: candidate.candidate,
+      timestamp: new Date().toISOString()
+    });
     io.to(to).emit('call:ice-candidate', {
       bookingId,
       candidate,
@@ -234,6 +292,13 @@ io.on('connection', (socket) => {
       const endTime = Date.now();
       const duration = call.acceptTime ? Math.floor((endTime - call.acceptTime) / 1000) : 0;
       
+      // Clear any pending timeout
+      const timeoutId = callTimeouts.get(bookingId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        callTimeouts.delete(bookingId);
+      }
+      
       // Notify both parties
       io.to(call.callerId).emit('call:ended', { bookingId, duration, endedBy: userId });
       io.to(call.receiverId).emit('call:ended', { bookingId, duration, endedBy: userId });
@@ -242,15 +307,77 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
-    console.log('❌ Client disconnected:', socket.id);
+  // Connection error handling
+  socket.on('error', (error) => {
+    console.error('❌ Socket error:', { 
+      socketId: socket.id, 
+      userId: socket.userId, 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // WebRTC connection state events
+  socket.on('call:connection-state', ({ bookingId, state, details }) => {
+    console.log('📞 Connection state change:', { 
+      bookingId, 
+      userId: socket.userId, 
+      state, 
+      details,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // WebRTC error events
+  socket.on('call:error', ({ bookingId, error, details }) => {
+    console.error('📞 WebRTC Error:', { 
+      bookingId, 
+      userId: socket.userId, 
+      error, 
+      details,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // Call quality metrics
+  socket.on('call:quality', ({ bookingId, metrics }) => {
+    console.log('📞 Call quality metrics:', { 
+      bookingId, 
+      userId: socket.userId, 
+      metrics,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('❌ Client disconnected:', { 
+      socketId: socket.id, 
+      userId: socket.userId, 
+      reason,
+      timestamp: new Date().toISOString()
+    });
     
     // Clean up any active calls for this user
     if (socket.userId) {
       for (const [bookingId, call] of activeCalls.entries()) {
         if (call.callerId === socket.userId || call.receiverId === socket.userId) {
           const otherUserId = call.callerId === socket.userId ? call.receiverId : call.callerId;
+          console.log('📞 Cleaning up call due to disconnect:', { 
+            bookingId, 
+            disconnectedUser: socket.userId, 
+            otherUser: otherUserId,
+            timestamp: new Date().toISOString()
+          });
+          
           io.to(otherUserId).emit('call:ended', { bookingId, reason: 'disconnect' });
+          
+          // Clear timeout for this call
+          const timeoutId = callTimeouts.get(bookingId);
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            callTimeouts.delete(bookingId);
+          }
+          
           activeCalls.delete(bookingId);
         }
       }

@@ -111,17 +111,45 @@ router.post('/log', [
       });
     }
 
-    const { bookingId, duration, callerType, status = 'completed' } = req.body;
+    const { 
+      bookingId, 
+      duration, 
+      callerType, 
+      status = 'completed',
+      connectionQuality,
+      errorDetails,
+      endReason,
+      metrics
+    } = req.body;
     const userId = req.user.id;
 
-    // Log the call
+    // Enhanced call logging with additional details
     await query(`
       INSERT INTO call_logs (
-        booking_id, caller_type, caller_id, call_status, duration, created_at
-      ) VALUES ($1, $2, $3, $4, $5, NOW())
-    `, [bookingId, callerType, userId, status, duration]);
+        booking_id, caller_type, caller_id, call_status, duration, 
+        connection_quality, error_details, end_reason, metrics, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+    `, [
+      bookingId, 
+      callerType, 
+      userId, 
+      status, 
+      duration,
+      connectionQuality ? JSON.stringify(connectionQuality) : null,
+      errorDetails ? JSON.stringify(errorDetails) : null,
+      endReason,
+      metrics ? JSON.stringify(metrics) : null
+    ]);
 
-    console.log('📞 Call logged:', { bookingId, duration, callerType });
+    console.log('📞 Call logged with details:', { 
+      bookingId, 
+      duration, 
+      callerType, 
+      status,
+      connectionQuality,
+      endReason,
+      timestamp: new Date().toISOString()
+    });
 
     res.json({
       status: 'success',
@@ -137,6 +165,56 @@ router.post('/log', [
   }
 });
 
+
+/**
+ * @route   POST /api/calls/event
+ * @desc    Log individual call events
+ * @access  Private
+ */
+router.post('/event', [
+  body('callLogId').isUUID().withMessage('Valid call log ID is required'),
+  body('eventType').notEmpty().withMessage('Event type is required'),
+  body('eventData').optional().isObject()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { callLogId, eventType, eventData } = req.body;
+
+    // Log the call event
+    await query(`
+      INSERT INTO call_events (
+        call_log_id, event_type, event_data, timestamp
+      ) VALUES ($1, $2, $3, NOW())
+    `, [callLogId, eventType, JSON.stringify(eventData || {})]);
+
+    console.log('📞 Call event logged:', { 
+      callLogId, 
+      eventType, 
+      eventData,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Call event logged successfully'
+    });
+
+  } catch (error) {
+    console.error('Error logging call event:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal server error'
+    });
+  }
+});
 
 /**
  * @route   GET /api/calls/history/:bookingId
@@ -163,9 +241,21 @@ router.get('/history/:bookingId', async (req, res) => {
     }
 
     const calls = await getRows(`
-      SELECT * FROM call_logs 
-      WHERE booking_id = $1 
-      ORDER BY created_at DESC
+      SELECT 
+        cl.*,
+        json_agg(
+          json_build_object(
+            'id', ce.id,
+            'event_type', ce.event_type,
+            'event_data', ce.event_data,
+            'timestamp', ce.timestamp
+          ) ORDER BY ce.timestamp
+        ) FILTER (WHERE ce.id IS NOT NULL) as events
+      FROM call_logs cl
+      LEFT JOIN call_events ce ON cl.id = ce.call_log_id
+      WHERE cl.booking_id = $1 
+      GROUP BY cl.id
+      ORDER BY cl.created_at DESC
     `, [bookingId]);
 
     res.json({

@@ -4,7 +4,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
 import { useLanguage } from '@/context/LanguageContext';
-import { getResponsiveSpacing, getResponsiveFontSize } from '@/utils/responsive';
 
 interface LogoutButtonProps {
   style?: any;
@@ -85,7 +84,7 @@ export default function LogoutButton({
   };
 
   const getButtonStyle = () => {
-    const baseStyle = [styles.button];
+    const baseStyle: any[] = [styles.button];
     
     switch (variant) {
       case 'destructive':
@@ -102,7 +101,7 @@ export default function LogoutButton({
   };
 
   const getTextStyle = () => {
-    const baseStyle = [styles.buttonText];
+    const baseStyle: any[] = [styles.buttonText];
     
     switch (variant) {
       case 'destructive':
@@ -133,15 +132,15 @@ export default function LogoutButton({
 
 const styles = StyleSheet.create({
   button: {
-    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
-    paddingVertical: getResponsiveSpacing(12, 14, 16),
-    borderRadius: getResponsiveSpacing(8, 10, 12),
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: getResponsiveSpacing(44, 48, 52),
+    minHeight: 48,
   },
   buttonText: {
-    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontSize: 16,
     fontWeight: '600',
   },
   defaultButton: {

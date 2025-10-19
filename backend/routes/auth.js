@@ -7,6 +7,7 @@ const { auth } = require('../middleware/auth');
 const { formatNotificationTimestamp } = require('../utils/timezone');
 const { sendNotification, sendAutoNotification } = require('../utils/notifications');
 const { uploadImage } = require('../utils/cloudinary');
+const config = require('../utils/config');
 const getIO = () => require('../server').io;
 const {
   generateOTP,
@@ -71,20 +72,20 @@ const validateOTP = [
 
 // Basic rate limiters for OTP endpoints
 const otpRequestLimiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
+  windowMs: config.get('rateLimit.windowMs'),
   max: 5,
   message: { status: 'error', message: 'Too many OTP requests. Please try again later.' }
 });
 const otpVerifyLimiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
+  windowMs: config.get('rateLimit.windowMs'),
   max: 10,
   message: { status: 'error', message: 'Too many verification attempts. Please try again later.' }
 });
 
 // Helper function to generate JWT token
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE
+  return jwt.sign({ userId }, config.get('jwt.secret'), {
+    expiresIn: config.get('jwt.expire')
   });
 };
 
@@ -598,16 +599,16 @@ router.post('/login', validateLogin, async (req, res) => {
       });
     }
 
-    // Check password (handle both plain text and hashed passwords)
+    // Check password using bcrypt (all passwords should be hashed)
     let isPasswordValid = false;
     
-    // Check if password is hashed (starts with $2a$ or $2b$)
-    if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
-      // Password is hashed, use bcrypt comparison
+    try {
+      // Always use bcrypt comparison for security
       isPasswordValid = await bcrypt.compare(password, user.password);
-    } else {
-      // Password is plain text, do direct comparison
-      isPasswordValid = password === user.password;
+    } catch (bcryptError) {
+      console.error('Bcrypt comparison error:', bcryptError);
+      // If bcrypt comparison fails, the password is invalid
+      isPasswordValid = false;
     }
     
     if (!isPasswordValid) {

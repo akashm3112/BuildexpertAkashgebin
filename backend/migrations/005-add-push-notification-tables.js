@@ -2,6 +2,7 @@ const { query } = require('../database/connection');
 
 /**
  * Add push notification related tables
+ * This migration creates comprehensive push notification infrastructure
  */
 const addPushNotificationTables = async () => {
   try {
@@ -101,7 +102,7 @@ const addPushNotificationTables = async () => {
     `);
     console.log('✅ notification_queue table created');
 
-    // 7. Create indexes for better performance
+    // 7. Create comprehensive indexes for better performance
     await query(`
       CREATE INDEX IF NOT EXISTS idx_user_push_tokens_user_id ON user_push_tokens(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_push_tokens_active ON user_push_tokens(is_active);
@@ -129,11 +130,22 @@ const addPushNotificationTables = async () => {
   }
 };
 
-module.exports = { addPushNotificationTables };
+module.exports = addPushNotificationTables;
 
-// Run migration if called directly
+// Run if called directly
 if (require.main === module) {
   addPushNotificationTables()
-    .then(() => process.exit(0))
-    .catch(() => process.exit(1));
+    .then(result => {
+      if (result.success) {
+        console.log('✅ Migration completed successfully');
+        process.exit(0);
+      } else {
+        console.error('❌ Migration failed:', result.error);
+        process.exit(1);
+      }
+    })
+    .catch(error => {
+      console.error('❌ Migration error:', error);
+      process.exit(1);
+    });
 }

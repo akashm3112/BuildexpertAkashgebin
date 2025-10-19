@@ -2,6 +2,7 @@ const { query } = require('../database/connection');
 
 /**
  * Add call masking related tables
+ * This migration creates tables for WebRTC call functionality
  */
 const addCallMaskingTables = async () => {
   try {
@@ -25,7 +26,7 @@ const addCallMaskingTables = async () => {
     `);
     console.log('✅ call_sessions table created');
 
-    // 2. Create call_logs table
+    // 2. Create call_logs table with enhanced fields
     await query(`
       CREATE TABLE IF NOT EXISTS call_logs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -36,6 +37,10 @@ const addCallMaskingTables = async () => {
         caller_phone TEXT NOT NULL,
         call_status TEXT DEFAULT 'initiated',
         call_duration INTEGER DEFAULT 0,
+        connection_quality JSONB,
+        error_details JSONB,
+        end_reason TEXT,
+        metrics JSONB,
         call_started_at TIMESTAMP,
         call_ended_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
@@ -44,7 +49,19 @@ const addCallMaskingTables = async () => {
     `);
     console.log('✅ call_logs table created');
 
-    // 3. Create call_recordings table (optional)
+    // 3. Create call_events table for detailed call event tracking
+    await query(`
+      CREATE TABLE IF NOT EXISTS call_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        call_log_id UUID REFERENCES call_logs(id) ON DELETE CASCADE,
+        event_type TEXT NOT NULL,
+        event_data JSONB,
+        timestamp TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log('✅ call_events table created');
+
+    // 4. Create call_recordings table (optional)
     await query(`
       CREATE TABLE IF NOT EXISTS call_recordings (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -59,7 +76,7 @@ const addCallMaskingTables = async () => {
     `);
     console.log('✅ call_recordings table created');
 
-    // 4. Create indexes for better performance
+    // 5. Create comprehensive indexes for better performance
     await query(`
       CREATE INDEX IF NOT EXISTS idx_call_sessions_booking_id ON call_sessions(booking_id);
       CREATE INDEX IF NOT EXISTS idx_call_sessions_status ON call_sessions(status);
@@ -67,7 +84,13 @@ const addCallMaskingTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_call_logs_booking_id ON call_logs(booking_id);
       CREATE INDEX IF NOT EXISTS idx_call_logs_call_sid ON call_logs(call_sid);
       CREATE INDEX IF NOT EXISTS idx_call_logs_session_id ON call_logs(session_id);
-      CREATE INDEX IF NOT EXISTS idx_call_logs_status ON call_logs(call_status);
+      CREATE INDEX IF NOT EXISTS idx_call_logs_call_status ON call_logs(call_status);
+      CREATE INDEX IF NOT EXISTS idx_call_logs_end_reason ON call_logs(end_reason);
+      CREATE INDEX IF NOT EXISTS idx_call_logs_call_started_at ON call_logs(call_started_at);
+      CREATE INDEX IF NOT EXISTS idx_call_logs_call_ended_at ON call_logs(call_ended_at);
+      CREATE INDEX IF NOT EXISTS idx_call_events_call_log_id ON call_events(call_log_id);
+      CREATE INDEX IF NOT EXISTS idx_call_events_event_type ON call_events(event_type);
+      CREATE INDEX IF NOT EXISTS idx_call_events_timestamp ON call_events(timestamp);
       CREATE INDEX IF NOT EXISTS idx_call_recordings_call_log_id ON call_recordings(call_log_id);
     `);
     console.log('✅ Call masking indexes created');
@@ -80,14 +103,22 @@ const addCallMaskingTables = async () => {
   }
 };
 
-module.exports = { addCallMaskingTables };
+module.exports = addCallMaskingTables;
 
-// Run migration if called directly
+// Run if called directly
 if (require.main === module) {
   addCallMaskingTables()
-    .then(() => process.exit(0))
-    .catch(() => process.exit(1));
+    .then(result => {
+      if (result.success) {
+        console.log('✅ Migration completed successfully');
+        process.exit(0);
+      } else {
+        console.error('❌ Migration failed:', result.error);
+        process.exit(1);
+      }
+    })
+    .catch(error => {
+      console.error('❌ Migration error:', error);
+      process.exit(1);
+    });
 }
-
-
-

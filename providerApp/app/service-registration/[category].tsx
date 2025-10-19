@@ -543,7 +543,7 @@ export default function ServiceRegistration() {
               params: {
                 serviceId: category as string,
                 serviceName: service?.name,
-                amount: service?.basePrice || 999,
+                amount: service?.basePrice || 99,
                 category: category as string,
                 providerServiceId: providerServiceId
               }
