@@ -89,6 +89,7 @@ export default function ProfileScreen() {
   const [bookingsCount, setBookingsCount] = useState(0);
   const [averageRating, setAverageRating] = useState(0);
   const [totalReviews, setTotalReviews] = useState(0);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [refreshing, setRefreshing] = useState(false);
 
@@ -506,32 +507,64 @@ export default function ProfileScreen() {
 
   const fetchBookingsStats = async () => {
     try {
-      let token = null;
-      // Try to get token from AsyncStorage if not present in userProfile
-      token = await AsyncStorage.getItem('token');
-      if (!token) return;
+      setStatsLoading(true);
+      console.log('📊 Fetching bookings stats...');
+      let token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.log('❌ No token found for bookings stats');
+        setStatsLoading(false);
+        return;
+      }
+      
+      console.log('🌐 API URL:', `${API_BASE_URL}/api/bookings`);
       const response = await fetch(`${API_BASE_URL}/api/bookings`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
+      
+      console.log('📥 Bookings response status:', response.status);
       const data = await response.json();
+      console.log('📥 Bookings response data:', data);
+      
       if (response.ok && data.status === 'success') {
-        setBookingsCount(data.data.pagination.total);
+        // Handle different response structures
+        const bookings = data.data?.bookings || [];
+        const pagination = data.data?.pagination || {};
+        const totalBookings = pagination.total || bookings.length || 0;
+        
+        console.log('📊 Total bookings found:', totalBookings);
+        setBookingsCount(totalBookings);
+        
         // Calculate ratings and reviews from bookings
         let ratingsSum = 0;
         let ratingsCount = 0;
-        (data.data.bookings || []).forEach((b: any) => {
+        bookings.forEach((b: any) => {
           if (b.rating && b.rating.rating) {
             ratingsSum += b.rating.rating;
             ratingsCount++;
           }
         });
+        
+        console.log('⭐ Ratings calculated:', { ratingsSum, ratingsCount });
         setTotalReviews(ratingsCount);
         setAverageRating(ratingsCount > 0 ? (ratingsSum / ratingsCount) : 0);
+      } else {
+        console.log('⚠️ Bookings fetch failed:', data.message || 'Unknown error');
+        // Set default values on failure
+        setBookingsCount(0);
+        setTotalReviews(0);
+        setAverageRating(0);
       }
     } catch (err) {
-      // fallback: keep stats as 0
+      console.error('❌ Error fetching bookings stats:', err);
+      // Set default values on error
+      setBookingsCount(0);
+      setTotalReviews(0);
+      setAverageRating(0);
+      setStatsError(true);
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -864,17 +897,29 @@ export default function ProfileScreen() {
         {/* Stats */}
         <View style={styles.statsContainer}>
           <TouchableOpacity style={styles.statItem} onPress={handleMyBookings}>
-            <Text style={styles.statValue}>{bookingsCount}</Text>
+            {statsLoading ? (
+              <ActivityIndicator size="small" color="#3B82F6" />
+            ) : (
+              <Text style={styles.statValue}>{bookingsCount}</Text>
+            )}
             <Text style={styles.statLabel}>{t('profile.bookings')}</Text>
           </TouchableOpacity>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{averageRating > 0 ? averageRating.toFixed(1) : '-'}</Text>
+            {statsLoading ? (
+              <ActivityIndicator size="small" color="#3B82F6" />
+            ) : (
+              <Text style={styles.statValue}>{averageRating > 0 ? averageRating.toFixed(1) : '-'}</Text>
+            )}
             <Text style={styles.statLabel}>{t('profile.rating')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{totalReviews}</Text>
+            {statsLoading ? (
+              <ActivityIndicator size="small" color="#3B82F6" />
+            ) : (
+              <Text style={styles.statValue}>{totalReviews}</Text>
+            )}
             <Text style={styles.statLabel}>{t('profile.reviews')}</Text>
           </View>
         </View>
