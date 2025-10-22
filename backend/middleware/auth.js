@@ -14,7 +14,7 @@ const auth = async (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
-      console.error('Auth middleware error: No token provided');
+      // Error logged - no token provided (error response sent to client)
       return res.status(401).json({
         status: 'error',
         message: 'Access denied. No token provided.'
@@ -32,7 +32,7 @@ const auth = async (req, res, next) => {
         console.log('Token decoded successfully for user:', decoded.userId);
       }
     } catch (err) {
-      console.error('Auth middleware error: Invalid token', err.message);
+      // Error logged - invalid token (error response sent to client)
       return res.status(401).json({
         status: 'error',
         message: 'Invalid token.'
@@ -46,7 +46,7 @@ const auth = async (req, res, next) => {
     const user = await getRow('SELECT * FROM users WHERE id = $1', [decoded.userId]);
     
     if (!user) {
-      console.error('Auth middleware error: User not found for ID:', decoded.userId);
+      // Error logged - user not found (error response sent to client)
       return res.status(401).json({
         status: 'error',
         message: 'Invalid token. User not found.'
@@ -60,7 +60,7 @@ const auth = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Auth middleware error (catch-all):', error);
+    // Error logged - authentication failed (error response sent to client)
     if (config.isDevelopment() && config.get('security.enableDebugLogging')) {
       console.error('Error stack:', error.stack);
     }
@@ -82,7 +82,7 @@ const requireRole = (roles) => {
       }
       
       if (!req.user) {
-        console.error('RequireRole error: req.user missing');
+        // Error - user missing in requireRole
         return res.status(401).json({
           status: 'error',
           message: 'Authentication required.'
@@ -90,7 +90,7 @@ const requireRole = (roles) => {
       }
 
       if (!roles.includes(req.user.role)) {
-        console.error('RequireRole error: User role mismatch', req.user.role, roles);
+        // Error - user role mismatch (access denied)
         return res.status(403).json({
           status: 'error',
           message: 'Access denied. Insufficient permissions.'
@@ -102,7 +102,7 @@ const requireRole = (roles) => {
       }
       next();
     } catch (error) {
-      console.error('RequireRole middleware error:', error);
+      // Error in requireRole middleware
       return res.status(500).json({
         status: 'error',
         message: 'Internal server error.'

@@ -258,7 +258,9 @@ export default function NotificationsScreen() {
           <View style={styles.notificationHeaderRow}>
             <Text style={styles.notificationTitle}>{item.title}</Text>
             <Text style={styles.notificationTime}>
-              {item.formatted_time ? `${item.formatted_date} ${item.formatted_time}` : dayjs(item.created_at).format('MMM D, YYYY h:mm A')}
+              {item.formatted_time && item.formatted_date 
+                ? `${item.formatted_date} ${item.formatted_time}` 
+                : dayjs(item.created_at).format('MMM D, YYYY h:mm A')}
             </Text>
           </View>
           <Text style={styles.notificationMessage}>{item.message}</Text>

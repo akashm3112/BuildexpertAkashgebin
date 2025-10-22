@@ -1,10 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { query, getRow, getRows } = require('../database/connection');
+const { query, getRow, getRows, pool } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const { sendNotification } = require('../utils/notifications');
 const PaymentLogger = require('../utils/paymentLogging');
+const PaymentSecurity = require('../utils/paymentSecurity');
+const logger = require('../utils/logger');
+const rateLimit = require('express-rate-limit');
 
 // Paytm Configuration
 // TODO: Replace with actual Paytm credentials
@@ -16,6 +19,36 @@ const PAYTM_CONFIG = {
   INDUSTRY_TYPE_ID: process.env.PAYTM_INDUSTRY_TYPE || 'Retail',
   CALLBACK_URL: process.env.PAYTM_CALLBACK_URL || 'http://localhost:3000/api/payments/paytm-callback'
 };
+
+// Rate Limiting Configuration
+const paymentInitiationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3, // Max 3 payment initiations per 15 minutes
+  message: {
+    status: 'error',
+    message: 'Too many payment attempts. Please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logger.payment('Rate limit exceeded', {
+      userId: req.user?.id,
+      ip: req.ip
+    });
+    res.status(429).json({
+      status: 'error',
+      message: 'Too many payment attempts. Please try again in 15 minutes.'
+    });
+  }
+});
+
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // Max 10 webhook calls per minute
+  message: 'Too many webhook requests',
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 /**
  * Generate checksum for Paytm
@@ -39,7 +72,7 @@ async function verifyPaytmPayment(orderId, transactionId = null) {
   const startTime = Date.now();
   
   try {
-    console.log('💰 Starting Paytm verification:', { orderId, timestamp: new Date().toISOString() });
+    logger.payment('Starting Paytm verification', { orderId });
 
     // Prepare verification parameters
     const verificationParams = {
@@ -56,11 +89,9 @@ async function verifyPaytmPayment(orderId, transactionId = null) {
       ? 'https://securegw.paytm.in/merchant-status/getTxnStatus'
       : 'https://securegw-stage.paytm.in/merchant-status/getTxnStatus';
 
-    console.log('💰 Paytm API Request:', {
+    logger.payment('Paytm API Request', {
       orderId,
-      endpoint: verificationUrl,
-      params: { ...verificationParams, CHECKSUMHASH: '[REDACTED]' },
-      timestamp: new Date().toISOString()
+      endpoint: verificationUrl
     });
 
     // Make API call to Paytm
@@ -76,12 +107,11 @@ async function verifyPaytmPayment(orderId, transactionId = null) {
 
     if (!response.ok) {
       const error = new Error(`Paytm API error: ${response.status} ${response.statusText}`);
-      console.error('💰 Paytm API Error:', {
+      logger.error('Paytm API Error', {
         orderId,
         status: response.status,
         statusText: response.statusText,
-        responseTime: `${responseTime}ms`,
-        timestamp: new Date().toISOString()
+        responseTime: `${responseTime}ms`
       });
 
       // Log API interaction
@@ -102,13 +132,11 @@ async function verifyPaytmPayment(orderId, transactionId = null) {
 
     const paytmResponse = await response.json();
     
-    console.log('💰 Paytm verification response:', {
+    logger.payment('Paytm verification response', {
       orderId,
       status: paytmResponse.STATUS,
       responseCode: paytmResponse.RESPCODE,
-      responseMessage: paytmResponse.RESPMSG,
-      responseTime: `${responseTime}ms`,
-      timestamp: new Date().toISOString()
+      responseTime: `${responseTime}ms`
     });
 
     // Log API interaction
@@ -156,11 +184,10 @@ async function verifyPaytmPayment(orderId, transactionId = null) {
   } catch (error) {
     const responseTime = Date.now() - startTime;
     
-    console.error('💰 Paytm verification error:', {
+    logger.error('Paytm verification error', {
       orderId,
       error: error.message,
-      responseTime: `${responseTime}ms`,
-      timestamp: new Date().toISOString()
+      responseTime: `${responseTime}ms`
     });
 
     // Log verification failure
@@ -186,12 +213,13 @@ async function verifyPaytmPayment(orderId, transactionId = null) {
  * @desc    Initiate Paytm payment for service registration
  * @access  Private (Provider only)
  */
-router.post('/initiate-paytm', auth, requireRole(['provider']), async (req, res) => {
+router.post('/initiate-paytm', paymentInitiationLimiter, auth, requireRole(['provider']), async (req, res) => {
   const startTime = Date.now();
   let transactionId = null;
+  let lockKey = null;
   
   try {
-    console.log('💰 Payment initiation started:', {
+    logger.payment('Payment initiation started', {
       userId: req.user.id,
       body: req.body,
       timestamp: new Date().toISOString()
@@ -200,11 +228,10 @@ router.post('/initiate-paytm', auth, requireRole(['provider']), async (req, res)
     const { providerServiceId, amount, serviceCategory, serviceName } = req.body;
 
     if (!providerServiceId || !amount) {
-      console.log('💰 Payment initiation failed - missing parameters:', {
+      logger.payment('Payment initiation failed - missing parameters', {
         userId: req.user.id,
         providerServiceId,
-        amount,
-        timestamp: new Date().toISOString()
+        amount
       });
       
       return res.status(400).json({
@@ -212,6 +239,53 @@ router.post('/initiate-paytm', auth, requireRole(['provider']), async (req, res)
         message: 'Provider service ID and amount are required'
       });
     }
+
+    // SECURITY CHECK 1: Check for duplicate payments (Idempotency)
+    const duplicate = await PaymentSecurity.checkDuplicatePayment(providerServiceId, req.user.id);
+    if (duplicate) {
+      logger.payment('Duplicate payment attempt blocked', {
+        userId: req.user.id,
+        providerServiceId,
+        existingOrderId: duplicate.order_id,
+        existingStatus: duplicate.status
+      });
+      return res.status(409).json({
+        status: 'error',
+        message: 'A payment for this service is already in progress or completed',
+        existingOrderId: duplicate.order_id,
+        existingStatus: duplicate.status
+      });
+    }
+
+    // SECURITY CHECK 2: Validate payment amount
+    const amountValidation = await PaymentSecurity.validatePaymentAmount(providerServiceId, amount);
+    if (!amountValidation.valid) {
+      logger.payment('Invalid payment amount', {
+        userId: req.user.id,
+        providerServiceId,
+        expected: amountValidation.expected,
+        received: amountValidation.received
+      });
+      return res.status(400).json({
+        status: 'error',
+        message: amountValidation.message,
+        expectedAmount: amountValidation.expected
+      });
+    }
+
+    // SECURITY CHECK 3: Acquire payment lock (prevent concurrent payments)
+    const lock = await PaymentSecurity.acquirePaymentLock(req.user.id, providerServiceId);
+    if (!lock.acquired) {
+      logger.payment('Payment lock acquisition failed', {
+        userId: req.user.id,
+        providerServiceId
+      });
+      return res.status(409).json({
+        status: 'error',
+        message: lock.message
+      });
+    }
+    lockKey = lock.lockKey;
 
     // Extract client information
     const clientInfo = PaymentLogger.extractClientInfo(req);
@@ -226,15 +300,32 @@ router.post('/initiate-paytm', auth, requireRole(['provider']), async (req, res)
     `, [providerServiceId, req.user.id]);
 
     if (!providerService) {
-      console.log('💰 Payment initiation failed - service not found:', {
+      logger.payment('Payment initiation failed - service not found', {
         userId: req.user.id,
-        providerServiceId,
-        timestamp: new Date().toISOString()
+        providerServiceId
       });
+      
+      if (lockKey) await PaymentSecurity.releasePaymentLock(lockKey);
       
       return res.status(404).json({
         status: 'error',
         message: 'Provider service not found or you do not have permission'
+      });
+    }
+
+    // SECURITY CHECK 4: Calculate risk score
+    const riskAssessment = await PaymentSecurity.calculatePaymentRiskScore(
+      req.user.id,
+      amount,
+      clientInfo
+    );
+
+    if (riskAssessment.level === 'high') {
+      logger.payment('High-risk payment flagged', {
+        userId: req.user.id,
+        riskScore: riskAssessment.score,
+        factors: riskAssessment.factors,
+        amount
       });
     }
 
@@ -261,6 +352,18 @@ router.post('/initiate-paytm', auth, requireRole(['provider']), async (req, res)
     ]);
 
     transactionId = result.rows[0].id;
+
+    // Log security event if high risk
+    if (riskAssessment.level === 'high') {
+      await PaymentLogger.logSecurityEvent(
+        transactionId,
+        'high_risk_payment',
+        riskAssessment.score,
+        riskAssessment.factors,
+        'flagged_for_review',
+        { message: 'Payment flagged for manual review due to high risk score' }
+      );
+    }
 
     // Log payment initiation event
     await PaymentLogger.logPaymentEvent(transactionId, 'payment_initiated', {
@@ -310,14 +413,18 @@ router.post('/initiate-paytm', auth, requireRole(['provider']), async (req, res)
       timestamp: new Date().toISOString()
     });
 
-    console.log('💰 Payment initiated successfully:', {
+    logger.payment('Payment initiated successfully', {
       orderId,
       transactionId,
       amount,
       userId: req.user.id,
-      responseTime: `${responseTime}ms`,
-      timestamp: new Date().toISOString()
+      responseTime: `${responseTime}ms`
     });
+
+    // Release payment lock
+    if (lockKey) {
+      await PaymentSecurity.releasePaymentLock(lockKey);
+    }
 
     res.json({
       status: 'success',
@@ -330,19 +437,24 @@ router.post('/initiate-paytm', auth, requireRole(['provider']), async (req, res)
   } catch (error) {
     const responseTime = Date.now() - startTime;
     
-    console.error('💰 Payment initiation error:', {
+    logger.error('Payment initiation error', {
       error: error.message,
-      userId: req.user.id,
-      responseTime: `${responseTime}ms`,
-      timestamp: new Date().toISOString()
+      stack: error.stack,
+      userId: req.user?.id,
+      responseTime: `${responseTime}ms`
     });
+
+    // Release payment lock on error
+    if (lockKey) {
+      await PaymentSecurity.releasePaymentLock(lockKey);
+    }
 
     // Log initiation failure
     if (transactionId) {
       await PaymentLogger.logPaymentEvent(transactionId, 'payment_initiation_failed', {
         error: error.message,
         responseTime
-      }, req.user.id, req);
+      }, req.user?.id, req);
     }
 
     res.status(500).json({
@@ -400,51 +512,81 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
     const paymentVerification = await verifyPaytmPayment(orderId, transaction.id);
 
     if (paymentVerification.success) {
-      // Get existing service to check if it's a renewal
-      const existingService = await getRow(`
-        SELECT payment_start_date, payment_end_date, payment_status
-        FROM provider_services
-        WHERE id = $1
-      `, [providerServiceId]);
-
-      let startDate, endDate;
+      // USE DATABASE TRANSACTION for atomicity
+      const client = await pool.connect();
       
-      if (existingService && existingService.payment_status === 'active' && existingService.payment_end_date) {
-        // Renewal: Start new period after current expiry
-        const currentEndDate = new Date(existingService.payment_end_date);
-        startDate = currentEndDate;
-        endDate = new Date(currentEndDate);
-        endDate.setDate(endDate.getDate() + 30);
-      } else {
-        // New activation or expired service: Start immediately
-        startDate = new Date();
-        endDate = new Date();
-        endDate.setDate(endDate.getDate() + 30);
+      try {
+        await client.query('BEGIN');
+        
+        // Get existing service to check if it's a renewal
+        const existingServiceResult = await client.query(`
+          SELECT payment_start_date, payment_end_date, payment_status
+          FROM provider_services
+          WHERE id = $1
+        `, [providerServiceId]);
+        
+        const existingService = existingServiceResult.rows[0];
+
+        let startDate, endDate;
+        
+        if (existingService && existingService.payment_status === 'active' && existingService.payment_end_date) {
+          // Renewal: Start new period after current expiry
+          const currentEndDate = new Date(existingService.payment_end_date);
+          startDate = currentEndDate;
+          endDate = new Date(currentEndDate);
+          endDate.setDate(endDate.getDate() + 30);
+        } else {
+          // New activation or expired service: Start immediately
+          startDate = new Date();
+          endDate = new Date();
+          endDate.setDate(endDate.getDate() + 30);
+        }
+
+        // Update provider service status
+        await client.query(`
+          UPDATE provider_services
+          SET payment_status = 'active',
+              payment_start_date = $1,
+              payment_end_date = $2
+          WHERE id = $3
+        `, [startDate, endDate, providerServiceId]);
+
+        // Update payment transaction with success details
+        await client.query(`
+          UPDATE payment_transactions
+          SET status = 'completed',
+              payment_gateway_response = $1,
+              completed_at = NOW(),
+              transaction_id = $2,
+              updated_at = NOW()
+          WHERE order_id = $3
+        `, [
+          JSON.stringify(paymentVerification.paytmResponse), 
+          paymentVerification.transactionId,
+          orderId
+        ]);
+
+        // Commit transaction
+        await client.query('COMMIT');
+        
+        logger.payment('Payment completed successfully with transaction', {
+          orderId,
+          transactionId: paymentVerification.transactionId,
+          userId: req.user.id
+        });
+        
+      } catch (transactionError) {
+        // Rollback on any error
+        await client.query('ROLLBACK');
+        logger.error('Payment transaction rollback', {
+          orderId,
+          error: transactionError.message,
+          userId: req.user.id
+        });
+        throw transactionError;
+      } finally {
+        client.release();
       }
-
-      // Update provider service status
-      await query(`
-        UPDATE provider_services
-        SET payment_status = 'active',
-            payment_start_date = $1,
-            payment_end_date = $2
-        WHERE id = $3
-      `, [startDate, endDate, providerServiceId]);
-
-      // Update payment transaction with success details
-      await query(`
-        UPDATE payment_transactions
-        SET status = 'completed',
-            payment_gateway_response = $1,
-            completed_at = NOW(),
-            transaction_id = $2,
-            updated_at = NOW()
-        WHERE order_id = $3
-      `, [
-        JSON.stringify(paymentVerification.paytmResponse), 
-        paymentVerification.transactionId,
-        orderId
-      ]);
 
       // Log payment success event
       await PaymentLogger.logPaymentEvent(transaction.id, 'payment_completed', {
@@ -476,14 +618,12 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
         'provider'
       );
 
-      console.log(`✅ Payment successful for order ${orderId}, service activated:`, {
+      logger.payment('Payment successful and service activated', {
         orderId,
         transactionId: transaction.id,
         paytmTransactionId: paymentVerification.transactionId,
         amount: paymentVerification.amount,
-        userId: req.user.id,
-        responseTime: `${paymentVerification.responseTime}ms`,
-        timestamp: new Date().toISOString()
+        userId: req.user.id
       });
 
       res.json({
@@ -543,15 +683,12 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
           'provider'
         );
 
-        console.log(`❌ Payment failed for order ${orderId}:`, {
+        logger.payment('Payment failed', {
           orderId,
           transactionId: transaction.id,
           error: paymentVerification.error,
           responseCode: paymentVerification.responseCode,
-          responseMessage: paymentVerification.responseMessage,
-          userId: req.user.id,
-          responseTime: `${paymentVerification.responseTime}ms`,
-          timestamp: new Date().toISOString()
+          userId: req.user.id
         });
 
         res.status(400).json({
@@ -561,7 +698,9 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
         });
 
       } catch (dbError) {
-        console.error('Database error during payment failure:', dbError);
+        logger.error('Database error during payment failure', {
+          error: dbError.message
+        });
         res.status(500).json({
           status: 'error',
           message: 'Payment failed and error recording failed. Please contact support.'
@@ -570,7 +709,7 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
     }
 
   } catch (error) {
-    console.error('Verify Paytm payment error:', error);
+    logger.error('Verify Paytm payment error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Failed to verify payment'
@@ -583,11 +722,27 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
  * @desc    Paytm callback handler
  * @access  Public (called by Paytm)
  */
-router.post('/paytm-callback', async (req, res) => {
+router.post('/paytm-callback', webhookLimiter, async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const paytmResponse = req.body;
+    const clientIP = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
     
-    console.log('Paytm callback received:', paytmResponse);
+    logger.payment('Paytm callback received', {
+      orderId: paytmResponse.ORDERID,
+      status: paytmResponse.STATUS,
+      ip: clientIP
+    });
+
+    // SECURITY CHECK 1: Verify IP is from Paytm
+    if (!PaymentSecurity.verifyPaytmIP(clientIP)) {
+      logger.payment('Unauthorized webhook attempt - invalid IP', {
+        ip: clientIP,
+        orderId: paytmResponse.ORDERID
+      });
+      return res.status(403).send('Unauthorized');
+    }
 
     // Extract order details
     const orderId = paytmResponse.ORDERID;
@@ -596,18 +751,39 @@ router.post('/paytm-callback', async (req, res) => {
     const amount = paytmResponse.TXNAMOUNT;
     const responseCode = paytmResponse.RESPCODE;
     const responseMessage = paytmResponse.RESPMSG;
+    const timestamp = paytmResponse.TXNDATE;
 
     if (!orderId) {
-      console.error('No order ID in Paytm callback');
+      logger.error('No order ID in Paytm callback', { ip: clientIP });
       return res.status(400).send('Invalid callback data');
     }
 
-    // Verify checksum from Paytm
+    // SECURITY CHECK 2: Check for replay attacks
+    const replayCheck = await PaymentSecurity.checkWebhookReplay(
+      orderId,
+      transactionId,
+      timestamp
+    );
+    
+    if (replayCheck.isReplay) {
+      logger.payment('Webhook replay attack detected', {
+        orderId,
+        transactionId,
+        reason: replayCheck.message,
+        ip: clientIP
+      });
+      return res.status(400).send('Replay detected');
+    }
+
+    // SECURITY CHECK 3: Verify checksum from Paytm
     const receivedChecksum = paytmResponse.CHECKSUMHASH;
     const calculatedChecksum = generateChecksum(paytmResponse, PAYTM_CONFIG.MERCHANT_KEY);
 
     if (receivedChecksum !== calculatedChecksum) {
-      console.error('Checksum verification failed for order:', orderId);
+      logger.error('Checksum verification failed', {
+        orderId,
+        ip: clientIP
+      });
       return res.status(400).send('Checksum verification failed');
     }
 
@@ -618,7 +794,7 @@ router.post('/paytm-callback', async (req, res) => {
     `, [orderId]);
 
     if (!transaction) {
-      console.error('Transaction not found for order:', orderId);
+      logger.error('Transaction not found for order', { orderId });
       return res.status(404).send('Transaction not found');
     }
 
@@ -660,7 +836,7 @@ router.post('/paytm-callback', async (req, res) => {
         'provider'
       );
 
-      console.log(`✅ Payment successful via callback for order ${orderId}`);
+      logger.payment('Payment successful via callback', { orderId });
 
     } else {
       // Payment failed
@@ -680,14 +856,17 @@ router.post('/paytm-callback', async (req, res) => {
         'provider'
       );
 
-      console.log(`❌ Payment failed via callback for order ${orderId}: ${responseMessage}`);
+      logger.payment('Payment failed via callback', {
+        orderId,
+        responseMessage
+      });
     }
 
     // Return success response to Paytm
     res.send('<html><body><h1>Payment processed successfully</h1></body></html>');
 
   } catch (error) {
-    console.error('Paytm callback error:', error);
+    logger.error('Paytm callback error', { error: error.message });
     res.status(500).send('Error processing payment');
   }
 });
@@ -719,7 +898,7 @@ router.get('/transaction-history', auth, requireRole(['provider']), async (req, 
     });
 
   } catch (error) {
-    console.error('Get transaction history error:', error);
+    logger.error('Get transaction history error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch transaction history'
@@ -798,7 +977,7 @@ router.post('/retry-payment', auth, requireRole(['provider']), async (req, res) 
     });
 
   } catch (error) {
-    console.error('Retry payment error:', error);
+    logger.error('Retry payment error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Failed to retry payment'
@@ -840,7 +1019,7 @@ router.get('/payment-status/:orderId', auth, requireRole(['provider']), async (r
     });
 
   } catch (error) {
-    console.error('Get payment status error:', error);
+    logger.error('Get payment status error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch payment status'
@@ -885,7 +1064,7 @@ router.post('/event', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error logging payment event:', error);
+    logger.error('Error logging payment event', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Failed to log payment event'
@@ -972,7 +1151,7 @@ router.get('/analytics', auth, requireRole(['provider']), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error getting payment analytics:', error);
+    logger.error('Error getting payment analytics', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch payment analytics'
@@ -1014,7 +1193,7 @@ router.get('/events/:transactionId', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error getting payment events:', error);
+    logger.error('Error getting payment events', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch payment events'

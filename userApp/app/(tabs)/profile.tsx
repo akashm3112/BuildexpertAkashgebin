@@ -12,7 +12,6 @@ import {
   Modal as RNModal,
   TextInput,
   Platform,
-  BackHandler,
   Dimensions,
   ActivityIndicator,
   RefreshControl,
@@ -139,18 +138,12 @@ export default function ProfileScreen() {
     
     initializeProfile();
     
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!user) return true;
-      return false;
-    });
-    
     // Listen for dimension changes (orientation, etc.)
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
       setDimensions(window);
     });
     
     return () => {
-      backHandler.remove();
       subscription?.remove();
     };
   }, [user]);

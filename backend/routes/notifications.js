@@ -5,6 +5,7 @@ const { formatNotificationTimestamp } = require('../utils/timezone');
 const { sendNotification, sendAutoNotification } = require('../utils/notifications');
 const { pushNotificationService } = require('../utils/pushNotifications');
 const DatabaseOptimizer = require('../utils/databaseOptimization');
+const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
 
 const router = express.Router();
@@ -36,7 +37,10 @@ router.get('/', async (req, res) => {
           ...timestampData
         };
       } catch (error) {
-        console.error('Error formatting timestamp for notification:', notification.id, error);
+        logger.error('Error formatting timestamp for notification', {
+          notificationId: notification.id,
+          error: error.message
+        });
         // Fallback formatting
         const date = new Date(notification.created_at);
         return {
@@ -61,7 +65,7 @@ router.get('/', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get notifications error:', error);
+    logger.error('Get notifications error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -86,7 +90,7 @@ router.get('/unread-count', async (req, res) => {
       data: { unreadCount }
     });
   } catch (error) {
-    console.error('Get unread count error:', error);
+    logger.error('Get unread count error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -111,7 +115,7 @@ router.put('/:id/mark-read', async (req, res) => {
       message: 'Notification marked as read' 
     });
   } catch (error) {
-    console.error('Mark notification as read error:', error);
+    logger.error('Mark notification as read error', { error: error.message });
     res.status(500).json({ 
       status: 'error', 
       message: 'Internal server error' 
@@ -130,7 +134,7 @@ router.put('/mark-all-read', async (req, res) => {
     );
     res.json({ status: 'success', message: 'All notifications marked as read' });
   } catch (error) {
-    console.error('Mark all notifications as read error:', error);
+    logger.error('Mark all notifications as read error', { error: error.message });
     res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
@@ -214,7 +218,10 @@ router.get('/history', async (req, res) => {
           ...timestampData
         };
       } catch (error) {
-        console.error('Error formatting timestamp for notification:', notification.id, error);
+        logger.error('Error formatting timestamp for notification', {
+          notificationId: notification.id,
+          error: error.message
+        });
         const date = new Date(notification.created_at);
         return {
           ...notification,
@@ -243,7 +250,7 @@ router.get('/history', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get notification history error:', error);
+    logger.error('Get notification history error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -293,7 +300,7 @@ router.get('/recent', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching recent notifications:', error);
+    logger.error('Error fetching recent notifications', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

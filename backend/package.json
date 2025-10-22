@@ -46,7 +46,8 @@
     "pg": "^8.11.3",
     "pg-pool": "^3.6.1",
     "socket.io": "^4.8.1",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "winston": "^3.18.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

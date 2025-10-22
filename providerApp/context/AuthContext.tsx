@@ -48,7 +48,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!Array.isArray(parsed.registeredServices)) {
           parsed.registeredServices = [];
         }
+        
+        console.log('📱 AuthContext: Loading user from storage:', { 
+          id: parsed.id, 
+          phone: parsed.phone, 
+          role: parsed.role,
+          fullName: parsed.fullName || parsed.full_name 
+        });
+        
         setUser(parsed);
+      } else {
+        console.log('📱 AuthContext: No user data found in storage');
       }
     } catch (error) {
       console.error('Error loading user:', error);
@@ -62,6 +72,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!Array.isArray(userData.registeredServices)) {
         userData.registeredServices = [];
       }
+      
+      console.log('💾 AuthContext: Saving user data:', { 
+        id: userData.id, 
+        phone: userData.phone, 
+        role: userData.role,
+        fullName: userData.fullName || userData.full_name 
+      });
+      
       await AsyncStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
       if (userData.token) {

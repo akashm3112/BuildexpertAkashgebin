@@ -934,7 +934,7 @@ const styles = StyleSheet.create({
     // No background here, let container handle it
   },
   bookingsListContent: {
-    paddingBottom: getResponsiveSpacing(24, 30, 36), // Space at the bottom of the scrollable list
+    flexGrow: 1,
     paddingTop: getResponsiveSpacing(6, 8, 10), // Space at the top to separate from filters
   },
   bookingCard: {

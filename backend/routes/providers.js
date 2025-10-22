@@ -8,6 +8,7 @@ const { sendNotification, sendAutoNotification } = require('../utils/notificatio
 const { emitEarningsUpdate } = require('../utils/earnings');
 const { pushNotificationService, NotificationTemplates } = require('../utils/pushNotifications');
 const DatabaseOptimizer = require('../utils/databaseOptimization');
+const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
 
 const router = express.Router();
@@ -46,7 +47,7 @@ router.get('/profile', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get provider profile error:', error);
+    logger.error('Get provider profile error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -108,14 +109,16 @@ router.put('/profile', [
       
       // Check if it's a new image that needs to be uploaded (base64 or file URI)
       if (engineeringCertificateUrl.startsWith('data:image/') || engineeringCertificateUrl.startsWith('file://')) {
-        console.log('Uploading engineering certificate to Cloudinary...');
+        logger.info('Uploading engineering certificate to Cloudinary');
         const uploadResult = await uploadImage(engineeringCertificateUrl, 'buildxpert/certificates');
         
         if (uploadResult.success) {
           cloudinaryUrl = uploadResult.url;
-          console.log('Successfully uploaded engineering certificate to Cloudinary');
+          logger.info('Successfully uploaded engineering certificate to Cloudinary');
         } else {
-          console.error('Failed to upload engineering certificate to Cloudinary:', uploadResult.error);
+          logger.error('Failed to upload engineering certificate to Cloudinary', {
+            error: uploadResult.error
+          });
           return res.status(500).json({
             status: 'error',
             message: 'Failed to upload engineering certificate'
@@ -152,7 +155,7 @@ router.put('/profile', [
     });
 
   } catch (error) {
-    console.error('Update provider profile error:', error);
+    logger.error('Update provider profile error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -183,7 +186,7 @@ router.get('/services', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get provider services error:', error);
+    logger.error('Get provider services error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -253,15 +256,21 @@ router.put('/services/:id', [
         );
 
         if (needsUpload) {
-          console.log('Uploading working proof images to Cloudinary...');
+          logger.info('Uploading working proof images to Cloudinary', {
+            count: workingProofUrls.length
+          });
           const { uploadMultipleImages } = require('../utils/cloudinary');
           const uploadResult = await uploadMultipleImages(workingProofUrls, 'buildxpert/working-proofs');
           
           if (uploadResult.success) {
             cloudinaryUrls = uploadResult.urls;
-            console.log('Successfully uploaded', cloudinaryUrls.length, 'images to Cloudinary');
+            logger.info('Successfully uploaded images to Cloudinary', {
+              count: cloudinaryUrls.length
+            });
           } else {
-            console.error('Failed to upload images to Cloudinary:', uploadResult.errors);
+            logger.error('Failed to upload images to Cloudinary', {
+              errors: uploadResult.errors
+            });
             return res.status(500).json({
               status: 'error',
               message: 'Failed to upload working proof images'
@@ -302,7 +311,7 @@ router.put('/services/:id', [
     });
 
   } catch (error) {
-    console.error('Update provider service error:', error);
+    logger.error('Update provider service error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -333,7 +342,9 @@ router.delete('/services/:id', async (req, res) => {
 
     // Delete images from Cloudinary if they exist
     if (existingService.working_proof_urls && existingService.working_proof_urls.length > 0) {
-      console.log('Deleting images from Cloudinary...');
+      logger.info('Deleting images from Cloudinary', {
+        count: serviceToDelete.working_proof_urls.length
+      });
       
       // Extract public IDs from Cloudinary URLs
       const publicIds = existingService.working_proof_urls.map(url => {
@@ -354,9 +365,13 @@ router.delete('/services/:id', async (req, res) => {
         const { deleteMultipleImages } = require('../utils/cloudinary');
         const deleteResult = await deleteMultipleImages(publicIds);
         if (deleteResult.success) {
-          console.log('Successfully deleted', deleteResult.deleted, 'images from Cloudinary');
+          logger.info('Successfully deleted images from Cloudinary', {
+            count: deleteResult.deleted
+          });
         } else {
-          console.error('Failed to delete some images from Cloudinary:', deleteResult.errors);
+          logger.error('Failed to delete some images from Cloudinary', {
+            errors: deleteResult.errors
+          });
         }
       }
     }
@@ -369,7 +384,7 @@ router.delete('/services/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Remove provider service error:', error);
+    logger.error('Remove provider service error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -401,7 +416,7 @@ router.get('/bookings', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get provider bookings error:', error);
+    logger.error('Get provider bookings error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -511,7 +526,9 @@ router.put('/bookings/:id/status', [
           }
         };
         await pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification);
-        console.log('📱 Push notification sent for booking acceptance');
+        logger.booking('Push notification sent for booking acceptance', {
+          bookingId: id
+        });
 
       } else if (status === 'rejected') {
         // Send in-app notification
@@ -534,7 +551,9 @@ router.put('/bookings/:id/status', [
           }
         };
         await pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification);
-        console.log('📱 Push notification sent for booking rejection');
+        logger.booking('Push notification sent for booking rejection', {
+          bookingId: id
+        });
 
       } else if (status === 'completed') {
         // Send in-app notification
@@ -556,7 +575,9 @@ router.put('/bookings/:id/status', [
           }
         };
         await pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification);
-        console.log('📱 Push notification sent for service completion');
+        logger.booking('Push notification sent for service completion', {
+          bookingId: id
+        });
       }
 
       // Notify provider about the status change
@@ -587,7 +608,7 @@ router.put('/bookings/:id/status', [
     });
 
   } catch (error) {
-    console.error('Update booking status error:', error);
+    logger.error('Update booking status error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -605,14 +626,16 @@ router.post('/report-customer', [
   body('description').notEmpty().withMessage('Description is required')
 ], async (req, res) => {
   try {
-    console.log('🔍 Report customer request received:', {
+    logger.info('Report customer request received', {
       user: req.user.id,
       body: req.body
     });
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.log('❌ Validation errors:', errors.array());
+      logger.warn('Validation errors in report customer', {
+        errors: errors.array()
+      });
       return res.status(400).json({
         status: 'error',
         message: 'Validation failed',
@@ -629,7 +652,7 @@ router.post('/report-customer', [
       evidence = [] 
     } = req.body;
 
-    console.log('📝 Processing report data:', {
+    logger.info('Processing report data', {
       customerName,
       incidentDate,
       incidentTime,
@@ -641,20 +664,36 @@ router.post('/report-customer', [
     // Check if provider profile exists
     const providerProfile = await getRow('SELECT id FROM provider_profiles WHERE user_id = $1', [req.user.id]);
     if (!providerProfile) {
-      console.log('❌ Provider profile not found for user:', req.user.id);
+      logger.warn('Provider profile not found', { userId: req.user.id });
       return res.status(404).json({
         status: 'error',
         message: 'Provider profile not found'
       });
     }
 
-    console.log('✅ Provider profile found:', providerProfile.id);
+    logger.info('Provider profile found', { profileId: providerProfile.id });
 
-    // Create the report in the database
+    // Try to find the user ID based on customer name (optional)
+    let customerUserId = null;
+    try {
+      const customerUser = await getRow(
+        'SELECT id FROM users WHERE full_name ILIKE $1 AND role = $2 LIMIT 1',
+        [customerName, 'user']
+      );
+      if (customerUser) {
+        customerUserId = customerUser.id;
+      }
+    } catch (err) {
+      // Ignore if user not found - we'll just store the name
+      logger.info('Customer user not found by name', { customerName });
+    }
+
+    // Create the report in the new table
     const result = await query(`
-      INSERT INTO provider_reports (
+      INSERT INTO provider_reports_users (
         provider_id,
         customer_name,
+        customer_user_id,
         incident_date,
         incident_time,
         incident_type,
@@ -663,11 +702,12 @@ router.post('/report-customer', [
         status,
         created_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, 'open', NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, 'open', NOW()
       ) RETURNING *
     `, [
-      providerProfile.id,
+      req.user.id,
       customerName,
+      customerUserId,
       incidentDate,
       incidentTime || null,
       incidentType,
@@ -676,7 +716,7 @@ router.post('/report-customer', [
     ]);
 
     const newReport = result.rows[0];
-    console.log('✅ Report created successfully:', newReport.id);
+    logger.info('Report created successfully', { reportId: newReport.id });
 
     // Notify the provider that their report was submitted
     try {
@@ -686,9 +726,11 @@ router.post('/report-customer', [
         `Your customer report has been submitted successfully. Our team will review it and take appropriate action.`,
         'provider'
       );
-      console.log('✅ Notification sent:', providerNotification.id);
+      logger.info('Report notification sent', { notificationId: providerNotification.id });
     } catch (notificationError) {
-      console.error('⚠️ Failed to send notification:', notificationError);
+      logger.error('Failed to send report notification', {
+        error: notificationError.message
+      });
       // Don't fail the request if notification fails
     }
 
@@ -699,7 +741,7 @@ router.post('/report-customer', [
     });
 
   } catch (error) {
-    console.error('❌ Report customer error:', error);
+    logger.error('Report customer error', { error: error.message, stack: error.stack });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error',
@@ -763,7 +805,7 @@ router.get('/reports', requireRole(['admin']), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get provider reports error:', error);
+    logger.error('Get provider reports error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -823,7 +865,7 @@ router.get('/my-reports', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get my reports error:', error);
+    logger.error('Get my reports error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -871,7 +913,7 @@ router.put('/reports/:id/status', [
     });
 
   } catch (error) {
-    console.error('Update report status error:', error);
+    logger.error('Update report status error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

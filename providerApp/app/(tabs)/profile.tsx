@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, BackHandler, Dimensions, StatusBar, Image, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, StatusBar, Image, ActivityIndicator, RefreshControl, Modal as RNModal } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { User, Phone, MapPin, LogOut, CreditCard as Edit, Bell, Shield, Globe, Volume2, CircleHelp as HelpCircle, FileText, Star, Settings, CreditCard, TriangleAlert as AlertTriangle, Trash2, Camera } from 'lucide-react-native';
+import { User, Phone, MapPin, LogOut, CreditCard as Edit, Bell, Shield, Globe, Volume2, CircleHelp as HelpCircle, FileText, Star, Settings, CreditCard, TriangleAlert as AlertTriangle, Trash2, Camera, X } from 'lucide-react-native';
 import { SafeView } from '@/components/SafeView';
 import { LanguageModal } from '@/components/common/LanguageModal';
 import { Modal } from '@/components/common/Modal';
@@ -271,11 +271,6 @@ export default function ProfileScreen() {
     if (!user) {
       router.replace('/auth');
     }
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!user) return true;
-      return false;
-    });
-    return () => backHandler.remove();
   }, [user]);
 
   // Update userProfile when user context changes
@@ -371,10 +366,21 @@ export default function ProfileScreen() {
           onPress: async () => {
             try {
               setShowAlertModal(false);
+              
+              // Perform logout
               await logout();
-              // Clear navigation stack and navigate to auth
-              router.dismissAll();
-              router.replace('/auth');
+              
+              // Add a small delay to ensure logout completes before navigation
+              setTimeout(() => {
+                try {
+                  router.replace('/auth');
+                } catch (navError) {
+                  console.error('Navigation error during logout:', navError);
+                  // Fallback: try to navigate to root
+                  router.push('/auth');
+                }
+              }, 100);
+              
             } catch (error) {
               console.error('Logout error:', error);
               showAlert(t('alerts.error'), t('alerts.failedToLogout'), 'error');
@@ -1261,15 +1267,25 @@ export default function ProfileScreen() {
       </ScrollView>
 
       {/* Notification Settings Modal */}
-      <Modal
+      <RNModal
         visible={notificationSettingsVisible}
-        onClose={() => setNotificationSettingsVisible(false)}
-        title=""
-        message=""
-        type="info"
+        animationType="slide"
+        presentationStyle="pageSheet"
       >
-        <NotificationSettings onClose={() => setNotificationSettingsVisible(false)} />
-      </Modal>
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setNotificationSettingsVisible(false)}>
+              <X size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Notification Settings</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <NotificationSettings onClose={() => setNotificationSettingsVisible(false)} />
+          </ScrollView>
+        </SafeView>
+      </RNModal>
 
       {/* Alert Modal */}
       <Modal
@@ -1560,5 +1576,27 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#9CA3AF',
     textAlign: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  modalContent: {
+    flex: 1,
   },
 });

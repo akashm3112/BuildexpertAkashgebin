@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { auth } = require('../middleware/auth');
 const { pushNotificationService, NotificationTemplates } = require('../utils/pushNotifications');
 const { query, getRow, getRows } = require('../database/connection');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ router.post('/register-token', [
       });
     }
   } catch (error) {
-    console.error('Error registering push token:', error);
+    logger.error('Error registering push token', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -106,7 +107,7 @@ router.post('/send-test', [
       });
     }
   } catch (error) {
-    console.error('Error sending test notification:', error);
+    logger.error('Error sending test notification', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -142,7 +143,7 @@ router.get('/settings', async (req, res) => {
       }
     } catch (error) {
       // Table might not exist yet, use defaults
-      console.log('Using default notification settings');
+      logger.info('Using default notification settings', { userId: req.user.id });
     }
 
     res.json({
@@ -150,7 +151,7 @@ router.get('/settings', async (req, res) => {
       data: { settings }
     });
   } catch (error) {
-    console.error('Error getting notification settings:', error);
+    logger.error('Error getting notification settings', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -207,7 +208,7 @@ router.put('/settings', [
       message: 'Notification settings updated successfully'
     });
   } catch (error) {
-    console.error('Error updating notification settings:', error);
+    logger.error('Error updating notification settings', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -262,7 +263,7 @@ router.get('/history', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error getting notification history:', error);
+    logger.error('Error getting notification history', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -301,7 +302,7 @@ router.delete('/token', [
       message: 'Push token(s) removed successfully'
     });
   } catch (error) {
-    console.error('Error removing push token:', error);
+    logger.error('Error removing push token', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

@@ -41,22 +41,41 @@ export default function LogoutButton({
       // Perform logout (clears AsyncStorage and user state)
       await logout();
       
-      // Navigate to auth screen
-      router.replace('/auth');
+      // Add a small delay to ensure logout completes before navigation
+      setTimeout(() => {
+        try {
+          router.replace('/auth');
+          console.log('✅ Complete logout successful');
+          onLogoutComplete?.();
+        } catch (navError) {
+          console.error('❌ Navigation error during logout:', navError);
+          // Fallback: try to navigate to root
+          try {
+            router.push('/auth');
+          } catch (fallbackError) {
+            console.error('❌ Fallback navigation also failed:', fallbackError);
+          }
+          onLogoutComplete?.();
+        }
+      }, 100);
       
-      console.log('✅ Complete logout successful');
-      onLogoutComplete?.();
     } catch (error) {
       console.error('❌ Logout error:', error);
       
       // Even if there's an error, try to navigate to auth
-      try {
-        router.replace('/auth');
-      } catch (navError) {
-        console.error('❌ Navigation error during logout:', navError);
-      }
-      
-      onLogoutComplete?.();
+      setTimeout(() => {
+        try {
+          router.replace('/auth');
+        } catch (navError) {
+          console.error('❌ Navigation error during logout:', navError);
+          try {
+            router.push('/auth');
+          } catch (fallbackError) {
+            console.error('❌ Fallback navigation also failed:', fallbackError);
+          }
+        }
+        onLogoutComplete?.();
+      }, 100);
     }
   };
 

@@ -19,10 +19,21 @@ export const performCompleteLogout = async () => {
       await AsyncStorage.multiRemove(keysToRemove);
     }
     
-    // Navigate to auth screen
-    router.replace('/auth');
-    
-    console.log('✅ Complete logout successful');
+    // Add a small delay to ensure logout completes before navigation
+    setTimeout(() => {
+      try {
+        router.replace('/auth');
+        console.log('✅ Complete logout successful');
+      } catch (navError) {
+        console.error('❌ Navigation error during logout:', navError);
+        // Fallback: try to navigate to root
+        try {
+          router.push('/auth');
+        } catch (fallbackError) {
+          console.error('❌ Fallback navigation also failed:', fallbackError);
+        }
+      }
+    }, 100);
     
     // Return success
     return { success: true };
@@ -30,11 +41,18 @@ export const performCompleteLogout = async () => {
     console.error('❌ Error during complete logout:', error);
     
     // Even if there's an error, try to navigate to auth
-    try {
-      router.replace('/auth');
-    } catch (navError) {
-      console.error('❌ Navigation error during logout:', navError);
-    }
+    setTimeout(() => {
+      try {
+        router.replace('/auth');
+      } catch (navError) {
+        console.error('❌ Navigation error during logout:', navError);
+        try {
+          router.push('/auth');
+        } catch (fallbackError) {
+          console.error('❌ Fallback navigation also failed:', fallbackError);
+        }
+      }
+    }, 100);
     
     return { success: false, error };
   }
@@ -51,13 +69,39 @@ export const performEmergencyLogout = async () => {
     // Clear everything from AsyncStorage
     await AsyncStorage.clear();
     
-    // Force navigation to auth
-    router.replace('/auth');
+    // Force navigation to auth with delay
+    setTimeout(() => {
+      try {
+        router.replace('/auth');
+        console.log('✅ Emergency logout completed');
+      } catch (navError) {
+        console.error('❌ Navigation error during emergency logout:', navError);
+        try {
+          router.push('/auth');
+        } catch (fallbackError) {
+          console.error('❌ Fallback navigation also failed:', fallbackError);
+        }
+      }
+    }, 100);
     
-    console.log('✅ Emergency logout completed');
     return { success: true };
   } catch (error) {
     console.error('❌ Emergency logout error:', error);
+    
+    // Even if there's an error, try to navigate to auth
+    setTimeout(() => {
+      try {
+        router.replace('/auth');
+      } catch (navError) {
+        console.error('❌ Navigation error during emergency logout:', navError);
+        try {
+          router.push('/auth');
+        } catch (fallbackError) {
+          console.error('❌ Fallback navigation also failed:', fallbackError);
+        }
+      }
+    }, 100);
+    
     return { success: false, error };
   }
 };

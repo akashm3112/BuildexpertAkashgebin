@@ -8,6 +8,7 @@ const { formatNotificationTimestamp } = require('../utils/timezone');
 const { sendNotification, sendAutoNotification } = require('../utils/notifications');
 const { uploadImage } = require('../utils/cloudinary');
 const config = require('../utils/config');
+const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
 const {
   generateOTP,
@@ -141,8 +142,11 @@ router.post('/signup', validateSignup, async (req, res) => {
     if (otpResult.success) {
       storeOTP(phone, otp);
       // Store pending signup data (do not insert into DB yet)
-      console.log('📝 Storing pending signup data...');
-      console.log('  - Profile picture URL:', finalProfilePicUrl ? finalProfilePicUrl.substring(0, 50) + '...' : 'null');
+      logger.auth('Storing pending signup data', {
+        phone,
+        role,
+        hasProfilePic: !!finalProfilePicUrl
+      });
       storePendingSignup(phone, { fullName, email, phone, password: hashedPassword, role, profilePicUrl: finalProfilePicUrl });
       return res.json({
         status: 'success',
@@ -155,7 +159,7 @@ router.post('/signup', validateSignup, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Signup error:', error);
+    logger.error('Signup error', { error: error.message, stack: error.stack });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -210,7 +214,7 @@ router.post('/send-otp', [otpRequestLimiter,
     }
 
   } catch (error) {
-    console.error('Send OTP error:', error);
+    logger.error('Send OTP error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -270,38 +274,40 @@ router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], async (req, res) 
     // Handle profile picture upload to Cloudinary if it's not the default
     let finalProfilePicUrl = pendingSignup.profilePicUrl;
     
-    console.log('🔍 Profile picture debug info:');
-    console.log('  - Pending signup profilePicUrl:', pendingSignup.profilePicUrl ? pendingSignup.profilePicUrl.substring(0, 50) + '...' : 'null');
-    console.log('  - Starts with data:image:', pendingSignup.profilePicUrl ? pendingSignup.profilePicUrl.startsWith('data:image') : false);
-    console.log('  - Starts with file://:', pendingSignup.profilePicUrl ? pendingSignup.profilePicUrl.startsWith('file://') : false);
-    console.log('  - Includes default URL:', pendingSignup.profilePicUrl ? pendingSignup.profilePicUrl.includes('dqoizs0fu') : false);
+    // Profile picture debug logging removed for production
     
     if (pendingSignup.profilePicUrl && 
         !pendingSignup.profilePicUrl.includes('dqoizs0fu') && 
         (pendingSignup.profilePicUrl.startsWith('data:image') || pendingSignup.profilePicUrl.startsWith('file://'))) {
               try {
-          console.log('🔄 Uploading profile picture to Cloudinary...');
+          logger.info('Uploading profile picture to Cloudinary');
           const uploadResult = await uploadImage(pendingSignup.profilePicUrl, 'profile-pictures');
           
           if (uploadResult.success) {
             finalProfilePicUrl = uploadResult.url;
-            console.log('✅ Successfully uploaded profile picture to Cloudinary');
-            console.log('  - Final URL:', finalProfilePicUrl);
+            logger.info('Successfully uploaded profile picture to Cloudinary');
           } else {
-            console.error('❌ Failed to upload profile picture to Cloudinary:', uploadResult.error);
+            logger.error('Failed to upload profile picture to Cloudinary', {
+              error: uploadResult.error
+            });
             // Use default profile picture if upload fails
             finalProfilePicUrl = 'https://res.cloudinary.com/dqoizs0fu/raw/upload/v1756189484/profile-pictures/m3szbez4bzvwh76j1fle';
           }
         } catch (uploadError) {
-          console.error('❌ Profile picture upload error:', uploadError);
+          logger.error('Profile picture upload error', {
+            error: uploadError.message
+          });
           // Use default profile picture if upload fails
           finalProfilePicUrl = 'https://res.cloudinary.com/dqoizs0fu/raw/upload/v1756189484/profile-pictures/m3szbez4bzvwh76j1fle';
         }
     }
 
     // Insert user into DB
-    console.log('💾 Inserting user into database with profile picture...');
-    console.log('  - Final profile picture URL:', finalProfilePicUrl);
+    logger.auth('Inserting user into database', {
+      phone,
+      role: pendingSignup.role,
+      hasProfilePic: !!finalProfilePicUrl
+    });
     
     const result = await query(`
       INSERT INTO users (full_name, email, phone, password, role, profile_pic_url)
@@ -310,9 +316,10 @@ router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], async (req, res) 
     `, [pendingSignup.fullName, pendingSignup.email, pendingSignup.phone, pendingSignup.password, pendingSignup.role, finalProfilePicUrl]);
     const user = result.rows[0];
     
-    console.log('✅ User created successfully');
-    console.log('  - User ID:', user.id);
-    console.log('  - Stored profile_pic_url:', user.profile_pic_url);
+    logger.auth('User created successfully', {
+      userId: user.id,
+      role: user.role
+    });
 
     // Mark user as verified
     await query('UPDATE users SET is_verified = true WHERE id = $1', [user.id]);
@@ -376,7 +383,9 @@ router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], async (req, res) 
         });
       }
     } catch (notificationError) {
-      console.error('Failed to create welcome notification:', notificationError);
+      logger.error('Failed to create welcome notification', {
+        error: notificationError.message
+      });
       // Don't fail the signup process if notification creation fails
     }
 
@@ -400,7 +409,7 @@ router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], async (req, res) 
       }
     });
   } catch (error) {
-    console.error('Verify OTP error:', error);
+    logger.error('Verify OTP error', { error: error.message, stack: error.stack });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -441,7 +450,7 @@ router.post('/resend-otp', [otpRequestLimiter,
     }
 
   } catch (error) {
-    console.error('Resend OTP error:', error);
+    logger.error('Resend OTP error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -472,7 +481,7 @@ router.post('/forgot-password', [otpRequestLimiter,
     storeOTP(phone, otp);
     return res.json({ status: 'success', message: 'OTP sent to your mobile number' });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    logger.error('Forgot password error', { error: error.message });
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
@@ -500,7 +509,7 @@ router.post('/forgot-password/verify', [otpVerifyLimiter, ...validateOTP], async
     const session = createPasswordResetSession(phone);
     return res.json({ status: 'success', message: 'OTP verified', data: { resetToken: session.token, expiresAt: session.expiryTime } });
   } catch (error) {
-    console.error('Forgot password verify error:', error);
+    logger.error('Forgot password verify error', { error: error.message });
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
@@ -534,7 +543,7 @@ router.post('/forgot-password/reset', [
     consumePasswordResetSession(phone);
     return res.json({ status: 'success', message: 'Password has been reset successfully' });
   } catch (error) {
-    console.error('Forgot password reset error:', error);
+    logger.error('Forgot password reset error', { error: error.message });
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
@@ -564,7 +573,7 @@ router.post('/refresh', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Token refresh error:', error);
+    logger.error('Token refresh error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -606,7 +615,7 @@ router.post('/login', validateLogin, async (req, res) => {
       // Always use bcrypt comparison for security
       isPasswordValid = await bcrypt.compare(password, user.password);
     } catch (bcryptError) {
-      console.error('Bcrypt comparison error:', bcryptError);
+      logger.error('Bcrypt comparison error', { error: bcryptError.message });
       // If bcrypt comparison fails, the password is invalid
       isPasswordValid = false;
     }
@@ -639,7 +648,7 @@ router.post('/login', validateLogin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -671,7 +680,7 @@ router.get('/me', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get profile error:', error);
+    logger.error('Get profile error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

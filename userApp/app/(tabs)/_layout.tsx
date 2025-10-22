@@ -1,7 +1,7 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter, useSegments } from 'expo-router';
 import { Chrome as Home, Calendar, Bell, User } from 'lucide-react-native';
-import React from 'react';
-import { View, Text } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, BackHandler } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotifications } from '@/context/NotificationContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -40,6 +40,27 @@ function NotificationTabIcon({ color, size }: { color: string; size: number }) {
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
+  const router = useRouter();
+  const segments = useSegments();
+
+  // Handle back button press - navigate to home tab when on other tabs
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Get current route segments
+      const currentRoute = segments.join('/');
+      
+      // If we're on home tab, prevent back navigation (exit app)
+      if (currentRoute === '(tabs)' || currentRoute === '(tabs)/index') {
+        return true; // Prevent back navigation, let Android handle app exit
+      }
+      
+      // If we're on any other tab, navigate to home tab
+      router.push('/(tabs)');
+      return true; // Prevent default back behavior
+    });
+
+    return () => backHandler.remove();
+  }, [segments, router]);
 
   return (
     <Tabs

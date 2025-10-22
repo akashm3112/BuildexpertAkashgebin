@@ -5,6 +5,7 @@ const { auth, requireRole } = require('../middleware/auth');
 const { uploadMultipleImages, deleteMultipleImages } = require('../utils/cloudinary');
 const { formatNotificationTimestamp } = require('../utils/timezone');
 const { sendNotification, sendAutoNotification } = require('../utils/notifications');
+const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
 
 const router = express.Router();
@@ -45,7 +46,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get services error:', error);
+    logger.error('Get services error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -60,12 +61,13 @@ router.use(auth);
 // @access  Private
 router.get('/my-registrations', async (req, res) => {
   try {
-    console.log('=== MY-REGISTRATIONS ENDPOINT ===');
-    console.log('User ID:', req.user.id);
-    console.log('User role:', req.user.role);
+    logger.info('MY-REGISTRATIONS endpoint called', {
+      userId: req.user.id,
+      role: req.user.role
+    });
 
     if (req.user.role !== 'provider') {
-      console.error('User is not a provider!');
+      logger.warn('User is not a provider', { userId: req.user.id, role: req.user.role });
       return res.status(403).json({
         status: 'error',
         message: 'Access denied. Only providers can access this endpoint.'
@@ -74,10 +76,13 @@ router.get('/my-registrations', async (req, res) => {
 
     // First check if user has a provider profile
     const providerProfile = await getRow('SELECT * FROM provider_profiles WHERE user_id = $1', [req.user.id]);
-    console.log('Provider profile found:', !!providerProfile);
+    logger.info('Provider profile lookup', {
+      userId: req.user.id,
+      found: !!providerProfile
+    });
 
     if (!providerProfile) {
-      console.log('No provider profile found, returning empty array');
+      logger.info('No provider profile found', { userId: req.user.id });
       return res.json({
         status: 'success',
         data: { registeredServices: [] }
@@ -123,7 +128,7 @@ router.get('/my-registrations', async (req, res) => {
         ORDER BY ps.created_at DESC
       `, [req.user.id]);
     } catch (dbErr) {
-      console.error('Database error in my-registrations:', dbErr);
+      logger.error('Database error in my-registrations', { error: dbErr.message });
       return res.status(500).json({
         status: 'error',
         message: 'Database error',
@@ -131,7 +136,10 @@ router.get('/my-registrations', async (req, res) => {
       });
     }
 
-    console.log('Found registered services:', registeredServices);
+    logger.info('Found registered services', {
+      userId: req.user.id,
+      count: registeredServices.length
+    });
 
     res.json({
       status: 'success',
@@ -139,8 +147,10 @@ router.get('/my-registrations', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get my registrations error:', error);
-    console.error('Error stack:', error.stack);
+    logger.error('Get my registrations error', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error',
@@ -170,7 +180,7 @@ router.get('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get service error:', error);
+    logger.error('Get service error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -244,7 +254,7 @@ router.get('/:id/providers', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get service providers error:', error);
+    logger.error('Get service providers error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -317,7 +327,7 @@ router.get('/:id/providers/:providerId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get provider details error:', error);
+    logger.error('Get provider details error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -392,14 +402,20 @@ router.put('/:id/providers', requireRole(['provider']), async (req, res) => {
       );
 
       if (needsUpload) {
-        console.log('Uploading new working proof images to Cloudinary...');
+        logger.info('Uploading working proof images to Cloudinary', {
+          count: workingProofUrls.length
+        });
         const uploadResult = await uploadMultipleImages(workingProofUrls, 'buildxpert/working-proofs');
         
         if (uploadResult.success) {
           cloudinaryUrls = uploadResult.urls;
-          console.log('Successfully uploaded', cloudinaryUrls.length, 'images to Cloudinary');
+          logger.info('Successfully uploaded images to Cloudinary', {
+            count: cloudinaryUrls.length
+          });
         } else {
-          console.error('Failed to upload images to Cloudinary:', uploadResult.errors);
+          logger.error('Failed to upload images to Cloudinary', {
+            errors: uploadResult.errors
+          });
           return res.status(500).json({
             status: 'error',
             message: 'Failed to upload working proof images'
@@ -414,15 +430,17 @@ router.put('/:id/providers', requireRole(['provider']), async (req, res) => {
     // Handle engineering certificate upload to Cloudinary
     let cloudinaryCertificateUrl = engineeringCertificateUrl;
     if (engineeringCertificateUrl && (engineeringCertificateUrl.startsWith('data:image/') || engineeringCertificateUrl.startsWith('file://'))) {
-      console.log('Uploading engineering certificate to Cloudinary...');
+      logger.info('Uploading engineering certificate to Cloudinary');
       const { uploadImage } = require('../utils/cloudinary');
       const uploadResult = await uploadImage(engineeringCertificateUrl, 'buildxpert/certificates');
       
       if (uploadResult.success) {
         cloudinaryCertificateUrl = uploadResult.url;
-        console.log('Successfully uploaded engineering certificate to Cloudinary');
+        logger.info('Successfully uploaded engineering certificate to Cloudinary');
       } else {
-        console.error('Failed to upload engineering certificate to Cloudinary:', uploadResult.error);
+        logger.error('Failed to upload engineering certificate to Cloudinary', {
+          error: uploadResult.error
+        });
         return res.status(500).json({
           status: 'error',
           message: 'Failed to upload engineering certificate'
@@ -473,7 +491,7 @@ router.put('/:id/providers', requireRole(['provider']), async (req, res) => {
       message: 'Service registration updated successfully'
     });
   } catch (error) {
-    console.error('Update provider service error:', error);
+    logger.error('Update provider service error', { error: error.message, stack: error.stack });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -530,12 +548,7 @@ router.post('/:id/providers', requireRole(['provider']), [
       }
     }
     
-    console.log('Debug - workingProofUrls from body:', workingProofUrls);
-    console.log('Debug - workingProofUrls type:', typeof workingProofUrls);
-    console.log('Debug - validWorkingProofUrls:', validWorkingProofUrls);
-    console.log('Debug - validWorkingProofUrls type:', typeof validWorkingProofUrls);
-    console.log('Debug - validWorkingProofUrls length:', validWorkingProofUrls.length);
-    console.log('Debug - Is Array?', Array.isArray(validWorkingProofUrls));
+    // Debug logging removed for production
 
     // Map frontend category ID to database service name
     const serviceName = categoryToServiceMap[id];
@@ -575,15 +588,17 @@ router.post('/:id/providers', requireRole(['provider']), [
     // Handle engineering certificate upload to Cloudinary
     let cloudinaryCertificateUrl = engineeringCertificateUrl;
     if (engineeringCertificateUrl && (engineeringCertificateUrl.startsWith('data:image/') || engineeringCertificateUrl.startsWith('file://'))) {
-      console.log('Uploading engineering certificate to Cloudinary...');
+      logger.info('Uploading engineering certificate to Cloudinary');
       const { uploadImage } = require('../utils/cloudinary');
       const uploadResult = await uploadImage(engineeringCertificateUrl, 'buildxpert/certificates');
       
       if (uploadResult.success) {
         cloudinaryCertificateUrl = uploadResult.url;
-        console.log('Successfully uploaded engineering certificate to Cloudinary');
+        logger.info('Successfully uploaded engineering certificate to Cloudinary');
       } else {
-        console.error('Failed to upload engineering certificate to Cloudinary:', uploadResult.error);
+        logger.error('Failed to upload engineering certificate to Cloudinary', {
+          error: uploadResult.error
+        });
         return res.status(500).json({
           status: 'error',
           message: 'Failed to upload engineering certificate'
@@ -613,14 +628,20 @@ router.post('/:id/providers', requireRole(['provider']), [
     // Upload working proof images to Cloudinary if provided
     let cloudinaryUrls = [];
     if (validWorkingProofUrls.length > 0) {
-      console.log('Uploading working proof images to Cloudinary...');
+      logger.info('Uploading working proof images to Cloudinary', {
+        count: validWorkingProofUrls.length
+      });
       const uploadResult = await uploadMultipleImages(validWorkingProofUrls, 'buildxpert/working-proofs');
       
       if (uploadResult.success) {
         cloudinaryUrls = uploadResult.urls;
-        console.log('Successfully uploaded', cloudinaryUrls.length, 'images to Cloudinary');
+          logger.info('Successfully uploaded images to Cloudinary', {
+            count: cloudinaryUrls.length
+          });
       } else {
-        console.error('Failed to upload images to Cloudinary:', uploadResult.errors);
+          logger.error('Failed to upload images to Cloudinary', {
+            errors: uploadResult.errors
+          });
         return res.status(500).json({
           status: 'error',
           message: 'Failed to upload working proof images'
@@ -638,14 +659,14 @@ router.post('/:id/providers', requireRole(['provider']), [
     // Insert provider service with Cloudinary URLs
     let serviceResult;
     if (cloudinaryUrls.length > 0) {
-      console.log('Debug - Inserting with Cloudinary URLs:', cloudinaryUrls);
+      // Debug logging removed for production
       serviceResult = await query(`
         INSERT INTO provider_services (provider_id, service_id, service_charge_value, service_charge_unit, working_proof_urls)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING *
       `, [providerProfile.id, service.id, serviceChargeValue, serviceChargeUnit, cloudinaryUrls]);
     } else {
-      console.log('Debug - Inserting with empty array instead of NULL');
+      // Debug logging removed for production
       serviceResult = await query(`
         INSERT INTO provider_services (provider_id, service_id, service_charge_value, service_charge_unit, working_proof_urls)
         VALUES ($1, $2, $3, $4, '{}')
@@ -676,11 +697,16 @@ router.post('/:id/providers', requireRole(['provider']), [
       newProviderService.payment_start_date = startDate;
       newProviderService.payment_end_date = endDate;
       
-      console.log('✅ Labor service registered for free - activated immediately');
+      logger.info('Labor service registered for free - activated immediately', {
+        providerServiceId: newProviderService.id
+      });
     } else {
       // Paid services require payment
       newProviderService.payment_status = 'pending';
-      console.log('💰 Paid service registered - payment required');
+      logger.info('Paid service registered - payment required', {
+        providerServiceId: newProviderService.id,
+        amount: amountValidation.service.base_price
+      });
     }
 
     // Add welcome notification for new providers (only on first service registration)
@@ -743,11 +769,15 @@ router.post('/:id/providers', requireRole(['provider']), [
           );
         }
       } catch (notificationError) {
-        console.error('Failed to notify interested users:', notificationError);
+        logger.error('Failed to notify interested users', {
+          error: notificationError.message
+        });
         // Don't fail the registration process if notification creation fails
       }
     } catch (notificationError) {
-      console.error('Failed to create welcome notification for provider:', notificationError);
+      logger.error('Failed to create welcome notification for provider', {
+        error: notificationError.message
+      });
       // Don't fail the registration process if notification creation fails
     }
 
@@ -765,7 +795,10 @@ router.post('/:id/providers', requireRole(['provider']), [
     });
 
   } catch (error) {
-    console.error('Register as provider error:', error.stack || error);
+    logger.error('Register as provider error', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -778,9 +811,10 @@ router.post('/:id/providers', requireRole(['provider']), [
 // @access  Private
 router.delete('/my-registrations/:serviceId', requireRole(['provider']), async (req, res) => {
   try {
-    console.log('=== CANCEL SERVICE REGISTRATION ===');
-    console.log('User ID:', req.user.id);
-    console.log('Service ID:', req.params.serviceId);
+    logger.info('Cancel service registration request', {
+      userId: req.user.id,
+      serviceId: req.params.serviceId
+    });
 
     const { serviceId } = req.params;
 
@@ -818,7 +852,9 @@ router.delete('/my-registrations/:serviceId', requireRole(['provider']), async (
 
     // Delete images from Cloudinary if they exist
     if (serviceRegistration.working_proof_urls && serviceRegistration.working_proof_urls.length > 0) {
-      console.log('Deleting images from Cloudinary...');
+      logger.info('Deleting images from Cloudinary', {
+        count: serviceRegistration.working_proof_urls.length
+      });
       
       // Extract public IDs from Cloudinary URLs
       const publicIds = serviceRegistration.working_proof_urls.map(url => {
@@ -838,9 +874,13 @@ router.delete('/my-registrations/:serviceId', requireRole(['provider']), async (
       if (publicIds.length > 0) {
         const deleteResult = await deleteMultipleImages(publicIds);
         if (deleteResult.success) {
-          console.log('Successfully deleted', deleteResult.deleted, 'images from Cloudinary');
+          logger.info('Successfully deleted images from Cloudinary', {
+            count: deleteResult.deleted
+          });
         } else {
-          console.error('Failed to delete some images from Cloudinary:', deleteResult.errors);
+          logger.error('Failed to delete some images from Cloudinary', {
+            errors: deleteResult.errors
+          });
         }
       }
     }
@@ -860,7 +900,10 @@ router.delete('/my-registrations/:serviceId', requireRole(['provider']), async (
     // Delete the service registration
     await query('DELETE FROM provider_services WHERE id = $1', [serviceId]);
 
-    console.log('Service registration cancelled successfully');
+    logger.info('Service registration cancelled successfully', {
+      serviceId: req.params.serviceId,
+      userId: req.user.id
+    });
 
     res.json({
       status: 'success',
@@ -868,7 +911,10 @@ router.delete('/my-registrations/:serviceId', requireRole(['provider']), async (
     });
 
   } catch (error) {
-    console.error('Cancel service registration error:', error);
+    logger.error('Cancel service registration error', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

@@ -3,6 +3,7 @@ const multer = require('multer');
 const { body, validationResult } = require('express-validator');
 const { auth } = require('../middleware/auth');
 const { uploadImage, uploadMultipleImages } = require('../utils/cloudinary');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -65,7 +66,7 @@ router.post('/single', upload.single('image'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Single image upload error:', error);
+    logger.error('Single image upload error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -116,7 +117,7 @@ router.post('/multiple', upload.array('images', 10), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Multiple images upload error:', error);
+    logger.error('Multiple images upload error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -176,7 +177,7 @@ router.post('/base64', [
     });
 
   } catch (error) {
-    console.error('Base64 image upload error:', error);
+    logger.error('Base64 image upload error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -239,7 +240,7 @@ router.post('/multiple-base64', [
     });
 
   } catch (error) {
-    console.error('Multiple base64 images upload error:', error);
+    logger.error('Multiple base64 images upload error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

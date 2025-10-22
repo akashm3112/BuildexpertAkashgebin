@@ -3,6 +3,7 @@
  */
 
 // Convert UTC timestamp to IST (India Standard Time)
+// NOTE: Database is already set to Asia/Kolkata timezone, so timestamps are already in IST
 const convertToIST = (utcDate) => {
   if (!utcDate) return null;
   
@@ -13,9 +14,9 @@ const convertToIST = (utcDate) => {
     return null;
   }
   
-  // IST is UTC+5:30
-  const istTime = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
-  return istTime;
+  // Database timezone is already set to 'Asia/Kolkata' in connection.js
+  // So the timestamps from DB are already in IST, no conversion needed
+  return date;
 };
 
 // Format date for display

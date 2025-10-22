@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { auth } = require('../middleware/auth');
 const { getRow, getRows, query } = require('../database/connection');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -83,7 +84,7 @@ router.post('/initiate', [
     });
 
   } catch (error) {
-    console.error('Error initiating call:', error);
+    logger.error('Error initiating call', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -141,7 +142,7 @@ router.post('/log', [
       metrics ? JSON.stringify(metrics) : null
     ]);
 
-    console.log('📞 Call logged with details:', { 
+    logger.info('Call logged with details', { 
       bookingId, 
       duration, 
       callerType, 
@@ -157,7 +158,7 @@ router.post('/log', [
     });
 
   } catch (error) {
-    console.error('Error logging call:', error);
+    logger.error('Error logging call', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -195,7 +196,7 @@ router.post('/event', [
       ) VALUES ($1, $2, $3, NOW())
     `, [callLogId, eventType, JSON.stringify(eventData || {})]);
 
-    console.log('📞 Call event logged:', { 
+    logger.info('Call event logged', { 
       callLogId, 
       eventType, 
       eventData,
@@ -208,7 +209,7 @@ router.post('/event', [
     });
 
   } catch (error) {
-    console.error('Error logging call event:', error);
+    logger.error('Error logging call event', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -264,7 +265,7 @@ router.get('/history/:bookingId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error getting call history:', error);
+    logger.error('Error getting call history', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

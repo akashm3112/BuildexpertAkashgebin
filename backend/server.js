@@ -19,6 +19,7 @@ const publicRoutes = require('./routes/public');
 const notificationRoutes = require('./routes/notifications');
 const earningsRoutes = require('./routes/earnings');
 const paymentRoutes = require('./routes/payments');
+const adminRoutes = require('./routes/admin');
 
 // Initialize services
 const { bookingReminderService } = require('./services/bookingReminders');
@@ -59,17 +60,72 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Request timeout middleware - CRITICAL FOR PRODUCTION
+app.use((req, res, next) => {
+  // Set timeout for all requests (30 seconds)
+  req.setTimeout(30000, () => {
+    console.error('⚠️ Request timeout:', {
+      url: req.url,
+      method: req.method,
+      ip: req.ip
+    });
+    if (!res.headersSent) {
+      res.status(408).json({
+        status: 'error',
+        message: 'Request timeout - please try again'
+      });
+    }
+  });
+  
+  res.setTimeout(30000, () => {
+    console.error('⚠️ Response timeout:', {
+      url: req.url,
+      method: req.method,
+      ip: req.ip
+    });
+  });
+  
+  next();
+});
+
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'success',
+// Health check endpoint - ENHANCED WITH DATABASE CHECK
+app.get('/health', async (req, res) => {
+  const health = {
+    status: 'healthy',
     message: 'BuildXpert API is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
-  });
+    environment: process.env.NODE_ENV,
+    uptime: Math.floor(process.uptime()),
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB'
+    }
+  };
+
+  // Check database connectivity
+  try {
+    const { pool } = require('./database/connection');
+    const result = await pool.query('SELECT NOW() as db_time, version() as db_version');
+    health.database = {
+      status: 'connected',
+      timestamp: result.rows[0].db_time,
+      version: result.rows[0].db_version.split(' ')[0] + ' ' + result.rows[0].db_version.split(' ')[1]
+    };
+    
+    res.status(200).json(health);
+  } catch (error) {
+    health.status = 'unhealthy';
+    health.database = {
+      status: 'disconnected',
+      error: error.message
+    };
+    
+    console.error('❌ Health check failed - database disconnected:', error.message);
+    res.status(503).json(health);
+  }
 });
 
 // API routes
@@ -83,6 +139,7 @@ app.use('/api/public', publicRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/earnings', earningsRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/push-notifications', require('./routes/pushNotifications'));
 app.use('/api/calls', require('./routes/calls'));
 
@@ -96,7 +153,7 @@ app.use('*', (req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  // Error logging handled by logger (already logged above)
   
   res.status(err.status || 500).json({
     status: 'error',
@@ -135,14 +192,14 @@ const activeCalls = new Map();
 const callTimeouts = new Map(); // Store call timeout IDs
 
 io.on('connection', (socket) => {
-  console.log('🔌 New client connected:', socket.id);
+  // Socket connection logging removed for production
   
   // Join user's personal room
   socket.on('join', (userId) => {
     if (userId) {
       socket.join(userId);
       socket.userId = userId;
-      console.log(`Socket ${socket.id} joined room ${userId}`);
+      // Socket room joining logging removed for production
     }
   });
 
@@ -150,7 +207,7 @@ io.on('connection', (socket) => {
   
   // Initiate call
   socket.on('call:initiate', async ({ bookingId, callerId, callerName, receiverId, receiverName }) => {
-    console.log('📞 Call initiated:', { bookingId, from: callerId, to: receiverId });
+    // Call initiation logging removed for production
     
     activeCalls.set(bookingId, {
       callerId,
@@ -163,7 +220,7 @@ io.on('connection', (socket) => {
     const timeoutId = setTimeout(() => {
       const call = activeCalls.get(bookingId);
       if (call && call.status === 'ringing') {
-        console.log('📞 Call timeout for booking:', bookingId);
+        // Call timeout logging removed for production
         
         // Notify caller about timeout
         io.to(call.callerId).emit('call:ended', { 
@@ -192,7 +249,7 @@ io.on('connection', (socket) => {
 
   // Accept call
   socket.on('call:accept', ({ bookingId, receiverId }) => {
-    console.log('📞 Call accepted:', bookingId);
+    // Call accepted logging removed for production
     
     const call = activeCalls.get(bookingId);
     if (call) {
@@ -213,13 +270,13 @@ io.on('connection', (socket) => {
         socketId: socket.id
       });
     } else {
-      console.warn('📞 Call not found for booking:', bookingId);
+      // Call not found logging removed for production
     }
   });
 
   // Reject call
   socket.on('call:reject', ({ bookingId, reason = 'declined' }) => {
-    console.log('📞 Call rejected:', bookingId);
+    // Call rejected logging removed for production
     
     const call = activeCalls.get(bookingId);
     if (call) {
@@ -237,13 +294,7 @@ io.on('connection', (socket) => {
 
   // WebRTC Offer
   socket.on('call:offer', ({ bookingId, offer, to }) => {
-    console.log('📞 WebRTC Offer sent:', { 
-      bookingId, 
-      from: socket.userId, 
-      to, 
-      offerType: offer.type,
-      timestamp: new Date().toISOString()
-    });
+    // WebRTC signaling logging removed for production
     io.to(to).emit('call:offer', {
       bookingId,
       offer,
@@ -253,13 +304,7 @@ io.on('connection', (socket) => {
 
   // WebRTC Answer
   socket.on('call:answer', ({ bookingId, answer, to }) => {
-    console.log('📞 WebRTC Answer sent:', { 
-      bookingId, 
-      from: socket.userId, 
-      to, 
-      answerType: answer.type,
-      timestamp: new Date().toISOString()
-    });
+    // WebRTC answer logging removed for production
     io.to(to).emit('call:answer', {
       bookingId,
       answer,
@@ -269,13 +314,7 @@ io.on('connection', (socket) => {
 
   // ICE Candidate
   socket.on('call:ice-candidate', ({ bookingId, candidate, to }) => {
-    console.log('📞 ICE Candidate sent:', { 
-      bookingId, 
-      from: socket.userId, 
-      to, 
-      candidateType: candidate.candidate,
-      timestamp: new Date().toISOString()
-    });
+    // ICE candidate logging removed for production
     io.to(to).emit('call:ice-candidate', {
       bookingId,
       candidate,
@@ -285,7 +324,7 @@ io.on('connection', (socket) => {
 
   // End call
   socket.on('call:end', ({ bookingId, userId }) => {
-    console.log('📞 Call ended:', bookingId);
+    // Call ended logging removed for production
     
     const call = activeCalls.get(bookingId);
     if (call) {
@@ -309,65 +348,33 @@ io.on('connection', (socket) => {
 
   // Connection error handling
   socket.on('error', (error) => {
-    console.error('❌ Socket error:', { 
-      socketId: socket.id, 
-      userId: socket.userId, 
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
+    // Socket error logging removed for production
   });
 
   // WebRTC connection state events
   socket.on('call:connection-state', ({ bookingId, state, details }) => {
-    console.log('📞 Connection state change:', { 
-      bookingId, 
-      userId: socket.userId, 
-      state, 
-      details,
-      timestamp: new Date().toISOString()
-    });
+    // Connection state logging removed for production
   });
 
   // WebRTC error events
   socket.on('call:error', ({ bookingId, error, details }) => {
-    console.error('📞 WebRTC Error:', { 
-      bookingId, 
-      userId: socket.userId, 
-      error, 
-      details,
-      timestamp: new Date().toISOString()
-    });
+    // WebRTC error logging removed for production
   });
 
   // Call quality metrics
   socket.on('call:quality', ({ bookingId, metrics }) => {
-    console.log('📞 Call quality metrics:', { 
-      bookingId, 
-      userId: socket.userId, 
-      metrics,
-      timestamp: new Date().toISOString()
-    });
+    // Call quality logging removed for production
   });
 
   socket.on('disconnect', (reason) => {
-    console.log('❌ Client disconnected:', { 
-      socketId: socket.id, 
-      userId: socket.userId, 
-      reason,
-      timestamp: new Date().toISOString()
-    });
+    // Client disconnect logging removed for production
     
     // Clean up any active calls for this user
     if (socket.userId) {
       for (const [bookingId, call] of activeCalls.entries()) {
         if (call.callerId === socket.userId || call.receiverId === socket.userId) {
           const otherUserId = call.callerId === socket.userId ? call.receiverId : call.callerId;
-          console.log('📞 Cleaning up call due to disconnect:', { 
-            bookingId, 
-            disconnectedUser: socket.userId, 
-            otherUser: otherUserId,
-            timestamp: new Date().toISOString()
-          });
+          // Call cleanup logging removed for production
           
           io.to(otherUserId).emit('call:ended', { bookingId, reason: 'disconnect' });
           

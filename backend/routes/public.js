@@ -1,6 +1,7 @@
 const express = require('express');
 const { getRow, getRows } = require('../database/connection');
 const DatabaseOptimizer = require('../utils/databaseOptimization');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -21,7 +22,7 @@ router.get('/services', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get services error:', error);
+    logger.error('Get services error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -122,7 +123,7 @@ router.get('/services/:id/providers', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get service providers error:', error);
+    logger.error('Get service providers error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -220,7 +221,7 @@ router.get('/services/:id/providers/:providerId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get provider details error:', error);
+    logger.error('Get provider details error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -253,7 +254,7 @@ router.get('/provider-service/:providerServiceId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get provider service details error:', error);
+    logger.error('Get provider service details error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

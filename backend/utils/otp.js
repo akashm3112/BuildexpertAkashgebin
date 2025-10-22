@@ -3,7 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 // Load environment variables
 require('dotenv').config({ path: './config.env' });
 
-console.log('📱 OTP Service initialized (Console-only mode for development)');
+// OTP Service initialized - console logging enabled for OTP display
 
 // Store OTPs in memory (in production, use Redis)
 const otpStore = new Map();

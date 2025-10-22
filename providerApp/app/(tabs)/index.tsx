@@ -18,9 +18,9 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MapPin, Search, CheckCircle, Clock } from 'lucide-react-native';
+import { SERVICE_CATEGORIES } from '@/constants/serviceCategories';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
-import { SERVICE_CATEGORIES } from '@/constants/serviceCategories';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/constants/api';
@@ -53,15 +53,29 @@ const ServiceCard = ({ item, onPress, isRegistered, getServiceName }: any) => {
   const serviceName = getServiceName(item.id);
   const isLongText = serviceName && serviceName.length > 15; // Adjust this threshold as needed
   
+  // Get service details from SERVICE_CATEGORIES to check if it's free
+  const serviceDetails = SERVICE_CATEGORIES.find(service => service.id === item.id);
+  const isFreeService = serviceDetails?.basePrice === 0; // Check if service is free
+  
   
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
       <Image source={typeof item.image === 'string' ? { uri: item.image } : item.image} style={styles.cardImage} />
+      
+      {/* Registered Checkmark */}
       {isRegistered && (
-        <View style={styles.tickIconBox}>
+        <View style={[styles.tickIconBox, isFreeService && styles.tickIconBoxWithFreeBadge]}>
           <CheckCircle size={18} color="#FFFFFF" />
         </View>
       )}
+      
+      {/* Free Badge */}
+      {isFreeService && (
+        <View style={[styles.freeBadge, isRegistered && styles.freeBadgeWithCheckmark]}>
+          <Text style={styles.freeBadgeText}>FREE</Text>
+        </View>
+      )}
+      
       <View style={styles.overlay}>
         <Text style={styles.cardText} numberOfLines={isLongText ? 2 : 1}>
           {serviceName || 'Unknown Service'}
@@ -1008,7 +1022,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: getResponsiveSpacing(16, 20, 24),
+    flexGrow: 1,
   },
   header: {
     flexDirection: 'row',
@@ -1454,19 +1468,64 @@ const styles = StyleSheet.create({
   },
   tickIconBox: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: getResponsiveSpacing(6, 6, 6),
+    right: getResponsiveSpacing(6, 6, 6),
     zIndex: 10,
     backgroundColor: '#10B981',
-    borderRadius: 16,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
+    borderRadius: getResponsiveSpacing(16, 16, 16),
+    padding: getResponsiveSpacing(4, 4, 4),
     borderWidth: 3,
     borderColor: '#FFFFFF',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  freeBadge: {
+    position: 'absolute',
+    top: getResponsiveSpacing(6, 6, 6),
+    right: getResponsiveSpacing(6, 6, 6),
+    zIndex: 10,
+    backgroundColor: '#10B981',
+    borderRadius: getResponsiveSpacing(8, 8, 8),
+    paddingHorizontal: getResponsiveSpacing(8, 8, 8),
+    paddingVertical: getResponsiveSpacing(4, 4, 4),
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  freeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: 'Inter-Bold',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  tickIconBoxWithFreeBadge: {
+    top: getResponsiveSpacing(6, 6, 6),
+    right: getResponsiveSpacing(6, 6, 6),
+  },
+  freeBadgeWithCheckmark: {
+    top: getResponsiveSpacing(6, 6, 6),
+    right: getResponsiveSpacing(50, 50, 50), // Move left to avoid overlap with checkmark
   },
   addLocationSheet: {
     backgroundColor: '#fff',

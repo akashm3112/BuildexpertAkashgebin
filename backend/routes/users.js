@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { query, getRow, getRows } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const { uploadImage } = require('../utils/cloudinary');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -46,7 +47,9 @@ router.delete('/delete-account', async (req, res) => {
     
     // Delete images from Cloudinary if any exist
     if (imagesToDelete.length > 0) {
-      console.log('Deleting', imagesToDelete.length, 'images from Cloudinary...');
+      logger.info('Deleting images from Cloudinary', {
+        count: imagesToDelete.length
+      });
       
       // Extract public IDs from Cloudinary URLs
       const publicIds = imagesToDelete.map(url => {
@@ -63,9 +66,13 @@ router.delete('/delete-account', async (req, res) => {
         const { deleteMultipleImages } = require('../utils/cloudinary');
         const deleteResult = await deleteMultipleImages(publicIds);
         if (deleteResult.success) {
-          console.log('Successfully deleted', deleteResult.deleted, 'images from Cloudinary');
+          logger.info('Successfully deleted images from Cloudinary', {
+            count: deleteResult.deleted
+          });
         } else {
-          console.error('Failed to delete some images from Cloudinary:', deleteResult.errors);
+          logger.error('Failed to delete some images from Cloudinary', {
+            errors: deleteResult.errors
+          });
         }
       }
     }
@@ -98,7 +105,7 @@ router.delete('/delete-account', async (req, res) => {
       message: 'Account and all related data deleted successfully.'
     });
   } catch (error) {
-    console.error('Delete account error:', error);
+    logger.error('Delete account error', { error: error.message, userId: req.user.id });
     res.status(500).json({
       status: 'error',
       message: 'Failed to delete account.'
@@ -130,7 +137,7 @@ router.get('/profile', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get profile error:', error);
+    logger.error('Get profile error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -183,16 +190,15 @@ router.put('/profile', [
 
     // Handle profile picture upload to Cloudinary
     if (profilePicUrl !== undefined) {
-      console.log('🔍 Profile picture update requested. Value:', profilePicUrl);
-      console.log('🔍 Current user profile_pic_url:', req.user.profile_pic_url);
+      // Profile picture debug logging removed for production
       
       // Handle profile picture deletion (empty string or null)
       if (profilePicUrl === '' || profilePicUrl === null) {
-        console.log('🗑️ Deleting profile picture...');
+        // Profile picture deletion logging removed for production
         
         // Delete old profile picture from Cloudinary if it exists
         if (req.user.profile_pic_url && req.user.profile_pic_url.includes('cloudinary.com')) {
-          console.log('Deleting profile picture from Cloudinary...');
+          logger.info('Deleting profile picture from Cloudinary');
           const { deleteImage } = require('../utils/cloudinary');
           
           // Extract public ID from Cloudinary URL
@@ -204,9 +210,11 @@ router.put('/profile', [
             
             const deleteResult = await deleteImage(publicId);
             if (deleteResult.success) {
-              console.log('Successfully deleted profile picture from Cloudinary');
+              logger.info('Successfully deleted profile picture from Cloudinary');
             } else {
-              console.error('Failed to delete profile picture from Cloudinary:', deleteResult.error);
+              logger.error('Failed to delete profile picture from Cloudinary', {
+                error: deleteResult.error
+              });
             }
           }
         }
@@ -214,23 +222,23 @@ router.put('/profile', [
         updateFields.push(`profile_pic_url = $${paramCount}`);
         updateValues.push('');
         paramCount++;
-        console.log('🗑️ Profile picture deletion fields added to update query');
+        // Profile picture deletion logging removed for production
       } else {
         // Handle profile picture upload (new image)
         let cloudinaryUrl = profilePicUrl;
         
         // Check if it's a new image that needs to be uploaded (base64 or file URI)
         if (profilePicUrl.startsWith('data:image/') || profilePicUrl.startsWith('file://')) {
-          console.log('Uploading profile picture to Cloudinary...');
+          logger.info('Uploading profile picture to Cloudinary');
           const uploadResult = await uploadImage(profilePicUrl, 'buildxpert/profile-pictures');
           
           if (uploadResult.success) {
             cloudinaryUrl = uploadResult.url;
-            console.log('Successfully uploaded profile picture to Cloudinary');
+            logger.info('Successfully uploaded profile picture to Cloudinary');
             
             // Delete old profile picture from Cloudinary if it exists
             if (req.user.profile_pic_url && req.user.profile_pic_url.includes('cloudinary.com')) {
-              console.log('Deleting old profile picture from Cloudinary...');
+              logger.info('Deleting old profile picture from Cloudinary');
               const { deleteImage } = require('../utils/cloudinary');
               
               // Extract public ID from old Cloudinary URL
@@ -242,14 +250,18 @@ router.put('/profile', [
                 
                 const deleteResult = await deleteImage(publicId);
                 if (deleteResult.success) {
-                  console.log('Successfully deleted old profile picture from Cloudinary');
+                  logger.info('Successfully deleted old profile picture from Cloudinary');
                 } else {
-                  console.error('Failed to delete old profile picture from Cloudinary:', deleteResult.error);
+                  logger.error('Failed to delete old profile picture from Cloudinary', {
+                    error: deleteResult.error
+                  });
                 }
               }
             }
           } else {
-            console.error('Failed to upload profile picture to Cloudinary:', uploadResult.error);
+            logger.error('Failed to upload profile picture to Cloudinary', {
+              error: uploadResult.error
+            });
             return res.status(500).json({
               status: 'error',
               message: 'Failed to upload profile picture'
@@ -271,8 +283,7 @@ router.put('/profile', [
     }
 
     updateValues.push(req.user.id);
-    console.log('🔍 Final update query:', `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramCount}`);
-    console.log('🔍 Update values:', updateValues);
+    // Debug query logging removed for production
     
     const result = await query(`
       UPDATE users 
@@ -282,7 +293,7 @@ router.put('/profile', [
     `, updateValues);
 
     const updatedUser = result.rows[0];
-    console.log('🔍 Updated user profile_pic_url:', updatedUser.profile_pic_url);
+    // Profile picture update logging removed for production
 
     res.json({
       status: 'success',
@@ -302,7 +313,7 @@ router.put('/profile', [
     });
 
   } catch (error) {
-    console.error('Update profile error:', error);
+    logger.error('Update profile error', { error: error.message, stack: error.stack });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -328,7 +339,7 @@ router.get('/addresses', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get addresses error:', error);
+    logger.error('Get addresses error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -380,7 +391,7 @@ router.post('/addresses', [
     });
 
   } catch (error) {
-    console.error('Add address error:', error);
+    logger.error('Add address error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -464,7 +475,7 @@ router.put('/addresses/:id', [
     });
 
   } catch (error) {
-    console.error('Update address error:', error);
+    logger.error('Update address error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -496,7 +507,7 @@ router.delete('/addresses/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Delete address error:', error);
+    logger.error('Delete address error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

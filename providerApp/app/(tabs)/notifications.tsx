@@ -194,7 +194,9 @@ export default function NotificationsScreen() {
           <View style={styles.notificationHeaderRow}>
             <Text style={styles.notificationTitle}>{item.title}</Text>
             <Text style={styles.notificationTime}>
-              {item.formatted_time ? `${item.formatted_date} ${item.formatted_time}` : format(new Date(item.created_at), 'MMM d, yyyy h:mm a')}
+              {item.formatted_time && item.formatted_date 
+                ? `${item.formatted_date} ${item.formatted_time}` 
+                : format(new Date(item.created_at), 'MMM d, yyyy h:mm a')}
             </Text>
           </View>
           <Text style={styles.notificationMessage}>{item.message}</Text>
@@ -312,9 +314,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   notificationsList: {
+    flexGrow: 1,
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),
     paddingTop: getResponsiveSpacing(12, 16, 20),
-    paddingBottom: getResponsiveSpacing(16, 20, 24),
   },
   notificationCard: {
     flexDirection: 'row',

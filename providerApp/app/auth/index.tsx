@@ -83,20 +83,42 @@ function AuthScreen() {
     setLoading(true);
     
     try {
-      // Try provider login first, then admin login if that fails
-      let response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'provider' })
-      });
+      // Check if this is admin credentials first
+      const isAdminCredentials = formData.phone === '9999999999';
       
-      // If provider login fails, try admin login
-      if (!response.ok) {
+      let response;
+      if (isAdminCredentials) {
+        // Try admin login first for admin phone number
         response = await fetch(`${API_BASE_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'admin' })
         });
+        
+        // If admin login fails, try provider login as fallback
+        if (!response.ok) {
+          response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'provider' })
+          });
+        }
+      } else {
+        // Try provider login first for non-admin phone numbers
+        response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'provider' })
+        });
+        
+        // If provider login fails, try admin login as fallback
+        if (!response.ok) {
+          response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'admin' })
+          });
+        }
       }
       
       const data = await response.json();
@@ -107,12 +129,34 @@ function AuthScreen() {
           ...data.data.user,
           token: data.data.token
         };
+        
+        console.log('🔐 Login successful!');
+        console.log('   User ID:', userData.id);
+        console.log('   Phone:', userData.phone);
+        console.log('   Role:', userData.role);
+        console.log('   Role type:', typeof userData.role);
+        console.log('   Is admin?', userData.role === 'admin');
+        
+        // Save to context and wait for completion
         await login(userData);
+        
+        // Small delay to ensure AsyncStorage write completes
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         showModal('Welcome Back!', 'Successfully logged in', 'success');
         
-        // Redirect to main tabs
-        router.replace('/(tabs)');
+        // Redirect based on user role with explicit logging
+        if (userData.role === 'admin') {
+          console.log('👑 Redirecting admin to /admin/dashboard');
+          setTimeout(() => {
+            router.replace('/admin/dashboard');
+          }, 300);
+        } else {
+          console.log('👷 Redirecting provider to /(tabs)');
+          setTimeout(() => {
+            router.replace('/(tabs)');
+          }, 300);
+        }
       } else {
         showModal('Login Failed', data.message || 'Invalid phone number or password', 'error');
       }

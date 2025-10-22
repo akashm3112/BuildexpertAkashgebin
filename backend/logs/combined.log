@@ -1,0 +1,107 @@
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"9999900000","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:44:14"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 11:44:30"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 11:44:33"}
+{"error":"role is not defined","level":"error","message":"Verify OTP error","service":"buildxpert-api","stack":"ReferenceError: role is not defined\n    at C:\\Users\\admistrator\\Downloads\\BuildexpertAkashgebin-master\\BuildexpertAkashgebin-master\\backend\\routes\\auth.js:308:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-22 11:44:33"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 11:45:00"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 11:45:03"}
+{"error":"role is not defined","level":"error","message":"Verify OTP error","service":"buildxpert-api","stack":"ReferenceError: role is not defined\n    at C:\\Users\\admistrator\\Downloads\\BuildexpertAkashgebin-master\\BuildexpertAkashgebin-master\\backend\\routes\\auth.js:308:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-22 11:45:03"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"9999900000","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:48:20"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 11:48:30"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 11:48:32"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"9999900000","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:48:32"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:48:33","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:48:34","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:48:34","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-10-22 11:48:34","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:48:36","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:48:36","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-10-22 11:48:36","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:48:46","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:48:46","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:48:46","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-10-22 11:48:46","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:48:46","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-10-22 11:48:46","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:48:50","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:48:50","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-10-22 11:48:50","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:49:10","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:49:10","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-10-22 11:49:10","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:49:12","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:49:12","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-10-22 11:49:12","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:50:20","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:50:20","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:50:20","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-10-22 11:50:20","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:50:21","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-10-22 11:50:21","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Uploading working proof images to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 11:51:01"}
+{"count":1,"level":"info","message":"Successfully uploaded images to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 11:51:04"}
+{"level":"info","message":"Labor service registered for free - activated immediately","providerServiceId":"f58581b0-a2dc-4666-b4e4-48284331bb49","service":"buildxpert-api","timestamp":"2025-10-22 11:51:05"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:51:15","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:51:15","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:51:15","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:51:15","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-10-22 11:51:15","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-10-22 11:51:15","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:51:20","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:51:20","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-10-22 11:51:20","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:51:24","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:51:25","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-10-22 11:51:25","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:51:26","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:51:27","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-10-22 11:51:27","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:51:39","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:51:40","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-10-22 11:51:40","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:51:45","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:51:46","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-10-22 11:51:46","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:51:47","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:51:48","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-10-22 11:51:48","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-10-22 11:51:53","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-10-22 11:51:53","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-10-22 11:51:53","userId":"3c201c39-001e-454f-b83c-069e74b8531c"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:07","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:07","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:07","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:07","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:07","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:07","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:08","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:08","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:09","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:09","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:09","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:09","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:57","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:52:57","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:44","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:44","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:44","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:44","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:44","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:44","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:45","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:45","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:45","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:45","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:45","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:45","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:48","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:57:48","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:59:38","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:59:38","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:59:40","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-10-22 11:59:40","userId":"7cd164e1-9181-4a0c-b19f-ec5090fa7a65"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"9999988888","role":"user","service":"buildxpert-api","timestamp":"2025-10-22 12:15:46"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 12:15:55"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-10-22 12:15:58"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"9999988888","role":"user","service":"buildxpert-api","timestamp":"2025-10-22 12:15:58"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"user","service":"buildxpert-api","timestamp":"2025-10-22 12:15:58","userId":"88f33b93-8abb-4f92-ac46-5f48cea91a4d"}
+{"bookingId":"615f480c-fa30-47f9-b007-d738aa76847b","level":"info","message":"📅 Booking: Push notification sent to provider","providerId":"3c201c39-001e-454f-b83c-069e74b8531c","service":"buildxpert-api","timestamp":"2025-10-22 12:25:34"}

@@ -7,6 +7,7 @@ const { sendNotification, sendAutoNotification } = require('../utils/notificatio
 const { emitEarningsUpdate } = require('../utils/earnings');
 const { pushNotificationService, NotificationTemplates } = require('../utils/pushNotifications');
 const DatabaseOptimizer = require('../utils/databaseOptimization');
+const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
 
 const router = express.Router();
@@ -53,11 +54,8 @@ router.post('/', [
     }
 
     // Check if appointment date is in the future
-    console.log('DEBUG appointmentDate:', appointmentDate);
-    console.log('DEBUG appointmentTime:', appointmentTime);
+    // Debug logging removed for production
     const appointmentDateTime = new Date(`${appointmentDate} ${appointmentTime}`);
-    console.log('DEBUG appointmentDateTime:', appointmentDateTime.toString());
-    console.log('DEBUG server now:', new Date().toString());
     if (appointmentDateTime <= new Date()) {
       return res.status(400).json({
         status: 'error',
@@ -99,7 +97,10 @@ router.post('/', [
       };
       
       await pushNotificationService.sendToUser(providerUserId, providerNotification);
-      console.log('📱 Push notification sent to provider for new booking');
+      logger.booking('Push notification sent to provider', {
+        bookingId: newBooking.id,
+        providerId: providerUserId
+      });
     }
     
     if (customerUserId) {
@@ -140,7 +141,7 @@ router.post('/', [
         
         return { formattedDate, formattedTime };
       } catch (error) {
-        console.error('Error formatting appointment date/time:', error);
+        logger.error('Error formatting appointment date/time', { error: error.message });
         return { formattedDate: dateStr, formattedTime: timeStr };
       }
     };
@@ -176,7 +177,7 @@ router.post('/', [
     });
 
   } catch (error) {
-    console.error('Create booking error:', error);
+    logger.error('Create booking error', { error: error.message, stack: error.stack });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -208,7 +209,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get bookings error:', error);
+    logger.error('Get bookings error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -262,7 +263,7 @@ router.get('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get booking details error:', error);
+    logger.error('Get booking details error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -364,7 +365,9 @@ router.put('/:id/cancel', [
         }
       };
       await pushNotificationService.sendToUser(req.user.id, userPushNotification);
-      console.log('📱 Push notification sent to user for booking cancellation');
+      logger.booking('Push notification sent to user for cancellation', {
+        bookingId: id
+      });
     }
 
     // Notify provider about the cancellation
@@ -390,7 +393,9 @@ router.put('/:id/cancel', [
           }
         };
         await pushNotificationService.sendToUser(providerService.provider_user_id, providerPushNotification);
-        console.log('📱 Push notification sent to provider for booking cancellation');
+        logger.booking('Push notification sent to provider for cancellation', {
+          bookingId: id
+        });
       }
 
       // Emit earnings update to provider when booking is cancelled
@@ -404,7 +409,7 @@ router.put('/:id/cancel', [
     });
 
   } catch (error) {
-    console.error('Cancel booking error:', error);
+    logger.error('Cancel booking error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -510,7 +515,7 @@ router.post('/:id/rate', [
     });
 
   } catch (error) {
-    console.error('Rate booking error:', error);
+    logger.error('Rate booking error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -565,6 +570,38 @@ router.post('/:id/report', [
 
     const updatedBooking = result.rows[0];
 
+    // Also create an entry in user_reports_providers table for admin dashboard
+    try {
+      // Get provider ID from the booking
+      const providerService = await getRow(`
+        SELECT provider_id FROM provider_services WHERE id = $1
+      `, [booking.provider_service_id]);
+      
+      if (providerService) {
+        // Get the provider's user ID
+        const providerProfile = await getRow(`
+          SELECT user_id FROM provider_profiles WHERE id = $1
+        `, [providerService.provider_id]);
+        
+        if (providerProfile) {
+          await query(`
+            INSERT INTO user_reports_providers 
+            (reported_by_user_id, reported_provider_id, report_type, description, status)
+            VALUES ($1, $2, $3, $4, $5)
+          `, [
+            req.user.id,
+            providerProfile.user_id,
+            reportReason,
+            reportDescription,
+            'open'
+          ]);
+        }
+      }
+    } catch (reportError) {
+      // Log error but don't fail the request
+      logger.error('Failed to create user_reports_providers entry', { error: reportError.message });
+    }
+
     // Note: Provider notification removed - providers will not be notified when they are reported
 
     // Also notify the user that their report was submitted
@@ -582,7 +619,7 @@ router.post('/:id/report', [
     });
 
   } catch (error) {
-    console.error('Report booking error:', error);
+    logger.error('Report booking error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'

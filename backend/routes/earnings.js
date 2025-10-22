@@ -1,6 +1,7 @@
 const express = require('express');
 const { getRows } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -97,7 +98,7 @@ router.get('/', requireRole('provider'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get earnings error:', error);
+    logger.error('Get earnings error', { error: error.message });
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch earnings data'

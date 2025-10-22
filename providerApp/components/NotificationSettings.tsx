@@ -55,10 +55,6 @@ export default function NotificationSettings({ onClose }: NotificationSettingsPr
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Bell size={24} color="#3B82F6" />
-        <Text style={styles.headerTitle}>Notification Settings</Text>
-      </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Vibration</Text>
@@ -158,15 +154,9 @@ export default function NotificationSettings({ onClose }: NotificationSettingsPr
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    margin: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 20,
   },
   header: {
     flexDirection: 'row',
@@ -181,7 +171,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: isSmallScreen ? 16 : 18,
@@ -190,11 +180,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   settingCard: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   settingRow: {
     flexDirection: 'row',
@@ -230,13 +225,18 @@ const styles = StyleSheet.create({
   },
   intensityButton: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#D1D5DB',
-    minWidth: 60,
+    minWidth: 70,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    elevation: 1,
   },
   intensityButtonActive: {
     backgroundColor: '#3B82F6',
@@ -256,15 +256,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#3B82F6',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 12,
     gap: 8,
     shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   testButtonDisabled: {
     backgroundColor: '#9CA3AF',
@@ -276,6 +276,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: 8,
+    marginBottom: 20,
   },
   footerText: {
     fontSize: 12,

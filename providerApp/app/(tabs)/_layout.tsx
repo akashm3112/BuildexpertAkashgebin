@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter, useSegments } from 'expo-router';
 import { Home, User, FileText, Calendar, Bell } from 'lucide-react-native';
 import { View, Text, StyleSheet, BackHandler } from 'react-native';
 import { useNotifications } from '@/context/NotificationContext';
@@ -8,17 +8,27 @@ import { useEffect } from 'react';
 export default function TabLayout() {
   const { unreadCount } = useNotifications();
   const { t } = useLanguage();
+  const router = useRouter();
+  const segments = useSegments();
 
-  // Handle back button press - prevent going back to admin screens
+  // Handle back button press - navigate to home tab when on other tabs
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Always prevent back navigation from provider tabs
-      // This ensures provider users can't accidentally navigate back to admin screens
-      return true;
+      // Get current route segments
+      const currentRoute = segments.join('/');
+      
+      // If we're on home tab, prevent back navigation (exit app)
+      if (currentRoute === '(tabs)' || currentRoute === '(tabs)/index') {
+        return true; // Prevent back navigation, let Android handle app exit
+      }
+      
+      // If we're on any other tab, navigate to home tab
+      router.push('/(tabs)');
+      return true; // Prevent default back behavior
     });
 
     return () => backHandler.remove();
-  }, []);
+  }, [segments, router]);
   
   return (
     <Tabs
