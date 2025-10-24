@@ -26,6 +26,7 @@ import {
 import { Modal } from '@/components/common/Modal';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useLabourAccess } from '@/context/LabourAccessContext';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/constants/api';
@@ -114,6 +115,7 @@ export default function BookingScreen() {
   const { providerId } = useLocalSearchParams<{ providerId: string }>();
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { labourAccessStatus } = useLabourAccess();
   const [selectedDate, setSelectedDate] = useState(0);
   const [selectedTime, setSelectedTime] = useState('');
   const [selectedService, setSelectedService] = useState('');
@@ -202,6 +204,33 @@ export default function BookingScreen() {
     if (!token) {
       showAlert(t('booking.authenticationRequired'), t('booking.loginToBook'), 'error');
       return;
+    }
+
+    // Check labour access for labour services
+    if (provider.service_name?.toLowerCase().includes('labors') || provider.service_name?.toLowerCase().includes('labour')) {
+      if (!labourAccessStatus?.hasAccess) {
+        showAlert(
+          'Labour Service Access Required',
+          'You need to pay ₹99 for 7-day access to book labour services. Would you like to proceed with payment?',
+          'warning',
+          [
+            {
+              text: 'Pay Now',
+              onPress: () => {
+                setShowAlertModal(false);
+                router.push('/labour-payment' as any);
+              },
+              style: 'primary'
+            },
+            {
+              text: 'Cancel',
+              onPress: () => setShowAlertModal(false),
+              style: 'secondary'
+            }
+          ]
+        );
+        return;
+      }
     }
 
     setLoading(true);
@@ -441,6 +470,22 @@ export default function BookingScreen() {
             </View>
           </View>
         </View>
+
+        {/* Labour Access Status (for labour services) */}
+        {(provider.service_name?.toLowerCase().includes('labors') || provider.service_name?.toLowerCase().includes('labour')) && (
+          <View style={styles.labourAccessCard}>
+            <View style={styles.labourAccessHeader}>
+              <CreditCard size={20} color="#3B82F6" />
+              <Text style={styles.labourAccessTitle}>Labour Service Access</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.labourAccessButton}
+              onPress={() => router.push('/labour-access' as any)}
+            >
+              <Text style={styles.labourAccessButtonText}>View Access Status & History</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Service Selection */}
         <View style={styles.section}>
@@ -1002,6 +1047,37 @@ const styles = StyleSheet.create({
   bookButtonText: {
     color: '#FFFFFF',
     fontSize: getResponsiveSpacing(14, 16, 18),
+    fontWeight: '600',
+  },
+  labourAccessCard: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  labourAccessHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  labourAccessTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1E40AF',
+    marginLeft: 8,
+  },
+  labourAccessButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  labourAccessButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

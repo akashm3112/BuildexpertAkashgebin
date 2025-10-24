@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io as socketIOClient } from 'socket.io-client';
 import { router } from 'expo-router';
 import { API_BASE_URL } from '@/constants/api';
-import { Bell, Search, Filter, Calendar, Clock, MapPin, X, Check, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Bell, Search, Filter, Calendar, Clock, MapPin, X, Check, ChevronDown, ChevronUp, CreditCard } from 'lucide-react-native';
 import { SafeView } from '@/components/SafeView';
 
 const getBookingStatuses = (t: any) => [t('bookings.all'), t('bookings.upcoming'), t('bookings.completed'), t('bookings.cancelled')];
@@ -365,17 +365,17 @@ export default function BookingsScreen() {
              <Text style={styles.title}>{t('bookings.title')}</Text>
              <Text style={styles.subtitle}>{t('bookings.subtitle')}</Text>
            </View>
-                       <TouchableOpacity 
-              style={styles.notificationButton}
-              onPress={() => setShowFilterModal(true)}
-            >
-              <Filter size={24} color={countActiveFilters() > 0 ? "#3B82F6" : "#64748B"} />
-              {countActiveFilters() > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{countActiveFilters()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+           <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => setShowFilterModal(true)}
+          >
+            <Filter size={24} color={countActiveFilters() > 0 ? "#3B82F6" : "#64748B"} />
+            {countActiveFilters() > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{countActiveFilters()}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
          </View>
        </View>
 
@@ -419,6 +419,17 @@ export default function BookingsScreen() {
           }
                      ListHeaderComponent={
              <View>
+               {/* Labour Access Button */}
+               <View style={styles.labourAccessSection}>
+                 <TouchableOpacity 
+                   style={styles.labourAccessButton}
+                   onPress={() => router.push('/labour-access-simple' as any)}
+                 >
+                   <CreditCard size={20} color="#3B82F6" />
+                   <Text style={styles.labourAccessButtonText}>Labour Service Access</Text>
+                 </TouchableOpacity>
+               </View>
+
                {/* Enhanced Filter Section */}
                <View style={styles.filterSection}>
                                    <View style={styles.filterHeader}>
@@ -1190,5 +1201,60 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: getResponsiveFontSize(18, 20, 22),
     flexShrink: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  labourButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  labourButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3B82F6',
+    marginLeft: 6,
+  },
+  labourAccessSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#F0F9FF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  labourAccessButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  labourAccessButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3B82F6',
+    marginLeft: 12,
   },
 });

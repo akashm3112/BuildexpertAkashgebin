@@ -1201,5 +1201,599 @@ router.get('/events/:transactionId', auth, async (req, res) => {
   }
 });
 
+/**
+ * @route   POST /api/payments/initiate-labour-payment
+ * @desc    Initiate Paytm payment for labour service access (User)
+ * @access  Private (User only)
+ */
+router.post('/initiate-labour-payment', paymentInitiationLimiter, auth, requireRole(['user']), async (req, res) => {
+  const startTime = Date.now();
+  let transactionId = null;
+  let lockKey = null;
+  
+  try {
+    logger.payment('Labour payment initiation started', {
+      userId: req.user.id,
+      body: req.body,
+      timestamp: new Date().toISOString()
+    });
+
+    const { amount, serviceCategory, serviceName } = req.body;
+
+    if (!amount || amount !== 99) {
+      logger.payment('Labour payment initiation failed - invalid amount', {
+        userId: req.user.id,
+        amount
+      });
+      
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid amount. Labour service access costs ₹99 for 7 days.'
+      });
+    }
+
+    // SECURITY CHECK 1: Check for duplicate payments (Idempotency)
+    const duplicate = await PaymentSecurity.checkDuplicateLabourPayment(req.user.id);
+    if (duplicate) {
+      logger.payment('Duplicate labour payment attempt blocked', {
+        userId: req.user.id,
+        existingOrderId: duplicate.order_id,
+        existingStatus: duplicate.status
+      });
+      return res.status(409).json({
+        status: 'error',
+        message: 'A labour service payment is already in progress or completed',
+        existingOrderId: duplicate.order_id,
+        existingStatus: duplicate.status
+      });
+    }
+
+    // SECURITY CHECK 2: Acquire payment lock (prevent concurrent payments)
+    const lock = await PaymentSecurity.acquirePaymentLock(req.user.id, 'labour-service');
+    if (!lock.acquired) {
+      logger.payment('Labour payment lock acquisition failed', {
+        userId: req.user.id
+      });
+      return res.status(409).json({
+        status: 'error',
+        message: lock.message
+      });
+    }
+    lockKey = lock.lockKey;
+
+    // Extract client information
+    const clientInfo = PaymentLogger.extractClientInfo(req);
+    const paymentFlowId = PaymentLogger.generatePaymentFlowId();
+
+    // Generate unique order ID
+    const orderId = `LABOUR_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    
+    // Create payment record with enhanced data
+    const result = await query(`
+      INSERT INTO labour_payment_transactions 
+      (order_id, user_id, amount, status, payment_method, service_name,
+       payment_flow_id, user_agent, ip_address, device_info, created_at)
+      VALUES ($1, $2, $3, 'pending', 'paytm', $4, $5, $6, $7, $8, NOW())
+      RETURNING id
+    `, [
+      orderId, 
+      req.user.id, 
+      amount, 
+      serviceName,
+      paymentFlowId,
+      clientInfo.userAgent,
+      clientInfo.ipAddress,
+      JSON.stringify(clientInfo.deviceInfo)
+    ]);
+
+    transactionId = result.rows[0].id;
+
+    // Log payment initiation event
+    await PaymentLogger.logPaymentEvent(transactionId, 'labour_payment_initiated', {
+      orderId,
+      amount,
+      serviceName,
+      serviceCategory,
+      paymentFlowId,
+      clientInfo
+    }, req.user.id, req);
+
+    // Prepare Paytm parameters
+    const paytmParams = {
+      MID: PAYTM_CONFIG.MID,
+      WEBSITE: PAYTM_CONFIG.WEBSITE,
+      CHANNEL_ID: PAYTM_CONFIG.CHANNEL_ID,
+      INDUSTRY_TYPE_ID: PAYTM_CONFIG.INDUSTRY_TYPE_ID,
+      ORDER_ID: orderId,
+      CUST_ID: req.user.id,
+      TXN_AMOUNT: amount.toString(),
+      CALLBACK_URL: PAYTM_CONFIG.CALLBACK_URL,
+      EMAIL: req.user.email || '',
+      MOBILE_NO: req.user.phone || ''
+    };
+
+    // Generate checksum
+    const checksum = generateChecksum(paytmParams, PAYTM_CONFIG.MERCHANT_KEY);
+    paytmParams.CHECKSUMHASH = checksum;
+
+    // In production, return Paytm URL
+    const paytmUrl = process.env.NODE_ENV === 'production'
+      ? 'https://securegw.paytm.in/order/process'
+      : 'https://securegw-stage.paytm.in/order/process';
+
+    const responseTime = Date.now() - startTime;
+
+    // Log successful initiation
+    await PaymentLogger.logPaymentEvent(transactionId, 'labour_payment_initiation_completed', {
+      orderId,
+      paytmUrl,
+      responseTime
+    }, req.user.id, req);
+
+    logger.payment('Labour payment initiated successfully', {
+      orderId,
+      transactionId,
+      amount,
+      userId: req.user.id,
+      responseTime: `${responseTime}ms`
+    });
+
+    // Release payment lock
+    if (lockKey) {
+      await PaymentSecurity.releasePaymentLock(lockKey);
+    }
+
+    res.json({
+      status: 'success',
+      orderId: orderId,
+      paytmUrl: paytmUrl,
+      paytmParams: paytmParams,
+      message: 'Labour payment initiated successfully'
+    });
+
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    
+    logger.error('Labour payment initiation error', {
+      error: error.message,
+      stack: error.stack,
+      userId: req.user?.id,
+      responseTime: `${responseTime}ms`
+    });
+
+    // Release payment lock on error
+    if (lockKey) {
+      await PaymentSecurity.releasePaymentLock(lockKey);
+    }
+
+    // Log initiation failure
+    if (transactionId) {
+      await PaymentLogger.logPaymentEvent(transactionId, 'labour_payment_initiation_failed', {
+        error: error.message,
+        responseTime
+      }, req.user?.id, req);
+    }
+
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to initiate labour payment'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/payments/verify-labour-payment
+ * @desc    Verify Paytm payment and activate labour service access
+ * @access  Private (User only)
+ */
+router.post('/verify-labour-payment', auth, requireRole(['user']), async (req, res) => {
+  try {
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Order ID is required'
+      });
+    }
+
+    // Get payment transaction
+    const transaction = await getRow(`
+      SELECT * FROM labour_payment_transactions
+      WHERE order_id = $1 AND user_id = $2
+    `, [orderId, req.user.id]);
+
+    if (!transaction) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Transaction not found'
+      });
+    }
+
+    // Check if transaction is already processed
+    if (transaction.status === 'completed') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Payment already processed'
+      });
+    }
+
+    if (transaction.status === 'failed') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Payment has already failed'
+      });
+    }
+
+    // Verify payment with Paytm API
+    const paymentVerification = await verifyPaytmPayment(orderId, transaction.id);
+
+    if (paymentVerification.success) {
+      // USE DATABASE TRANSACTION for atomicity
+      const client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        // Get existing labour access to check if it's a renewal
+        const existingAccessResult = await client.query(`
+          SELECT labour_access_start_date, labour_access_end_date, labour_access_status
+          FROM users
+          WHERE id = $1
+        `, [req.user.id]);
+        
+        const existingAccess = existingAccessResult.rows[0];
+
+        let startDate, endDate;
+        
+        if (existingAccess && existingAccess.labour_access_status === 'active' && existingAccess.labour_access_end_date) {
+          // Renewal: Start new period after current expiry
+          const currentEndDate = new Date(existingAccess.labour_access_end_date);
+          startDate = currentEndDate;
+          endDate = new Date(currentEndDate);
+          endDate.setDate(endDate.getDate() + 7);
+        } else {
+          // New activation or expired access: Start immediately
+          startDate = new Date();
+          endDate = new Date();
+          endDate.setDate(endDate.getDate() + 7);
+        }
+
+        // Update user labour access status
+        await client.query(`
+          UPDATE users
+          SET labour_access_status = 'active',
+              labour_access_start_date = $1,
+              labour_access_end_date = $2,
+              updated_at = NOW()
+          WHERE id = $3
+        `, [startDate, endDate, req.user.id]);
+
+        // Update payment transaction with success details
+        await client.query(`
+          UPDATE labour_payment_transactions
+          SET status = 'completed',
+              payment_gateway_response = $1,
+              completed_at = NOW(),
+              transaction_id = $2,
+              updated_at = NOW()
+          WHERE order_id = $3
+        `, [
+          JSON.stringify(paymentVerification.paytmResponse), 
+          paymentVerification.transactionId,
+          orderId
+        ]);
+
+        // Commit transaction
+        await client.query('COMMIT');
+        
+        logger.payment('Labour payment completed successfully with transaction', {
+          orderId,
+          transactionId: paymentVerification.transactionId,
+          userId: req.user.id
+        });
+        
+      } catch (transactionError) {
+        // Rollback on any error
+        await client.query('ROLLBACK');
+        logger.error('Labour payment transaction rollback', {
+          orderId,
+          error: transactionError.message,
+          userId: req.user.id
+        });
+        throw transactionError;
+      } finally {
+        client.release();
+      }
+
+      // Log payment success event
+      await PaymentLogger.logPaymentEvent(transaction.id, 'labour_payment_completed', {
+        orderId,
+        paytmTransactionId: paymentVerification.transactionId,
+        amount: paymentVerification.amount,
+        responseCode: paymentVerification.responseCode,
+        responseMessage: paymentVerification.responseMessage,
+        serviceActivated: true,
+        startDate,
+        endDate,
+        responseTime: paymentVerification.responseTime
+      }, req.user.id, req);
+
+      // Log service activation
+      await PaymentLogger.logPaymentEvent(transaction.id, 'labour_service_activated', {
+        userId: req.user.id,
+        startDate,
+        endDate,
+        validityDays: 7,
+        isRenewal: existingAccess && existingAccess.labour_access_status === 'active'
+      }, req.user.id, req);
+
+      // Send success notification
+      await sendNotification(
+        req.user.id,
+        'Labour Service Access Activated! 🎉',
+        `Your labour service access is now active until ${endDate.toLocaleDateString()}. You will receive a reminder before expiry.`,
+        'user'
+      );
+
+      logger.payment('Labour payment successful and service activated', {
+        orderId,
+        transactionId: transaction.id,
+        paytmTransactionId: paymentVerification.transactionId,
+        amount: paymentVerification.amount,
+        userId: req.user.id
+      });
+
+      res.json({
+        status: 'success',
+        message: 'Payment verified and labour service access activated',
+        data: {
+          startDate: startDate,
+          endDate: endDate,
+          validity: 7,
+          transactionId: paymentVerification.transactionId,
+          amount: paymentVerification.amount
+        }
+      });
+
+    } else {
+      // Payment failed
+      try {
+        // Update payment transaction with failure details
+        await query(`
+          UPDATE labour_payment_transactions
+          SET status = 'failed',
+              payment_gateway_response = $1,
+              completed_at = NOW(),
+              error_details = $2,
+              updated_at = NOW()
+          WHERE order_id = $3
+        `, [
+          JSON.stringify({
+            verified: false,
+            error: paymentVerification.error,
+            paytmResponse: paymentVerification.paytmResponse
+          }),
+          JSON.stringify({
+            error: paymentVerification.error,
+            responseCode: paymentVerification.responseCode,
+            responseMessage: paymentVerification.responseMessage,
+            responseTime: paymentVerification.responseTime
+          }),
+          orderId
+        ]);
+
+        // Log payment failure event
+        await PaymentLogger.logPaymentEvent(transaction.id, 'labour_payment_failed', {
+          orderId,
+          error: paymentVerification.error,
+          responseCode: paymentVerification.responseCode,
+          responseMessage: paymentVerification.responseMessage,
+          paytmResponse: paymentVerification.paytmResponse,
+          responseTime: paymentVerification.responseTime
+        }, req.user.id, req);
+
+        // Send failure notification
+        await sendNotification(
+          req.user.id,
+          'Labour Payment Failed ❌',
+          `Your labour service payment could not be processed. Please try again or contact support if the issue persists.`,
+          'user'
+        );
+
+        logger.payment('Labour payment failed', {
+          orderId,
+          transactionId: transaction.id,
+          error: paymentVerification.error,
+          responseCode: paymentVerification.responseCode,
+          userId: req.user.id
+        });
+
+        res.status(400).json({
+          status: 'error',
+          message: paymentVerification.error || 'Payment verification failed',
+          details: paymentVerification.responseMessage || 'Unknown error'
+        });
+
+      } catch (dbError) {
+        logger.error('Database error during labour payment failure', {
+          error: dbError.message
+        });
+        res.status(500).json({
+          status: 'error',
+          message: 'Payment failed and error recording failed. Please contact support.'
+        });
+      }
+    }
+
+  } catch (error) {
+    logger.error('Verify labour payment error', { error: error.message });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to verify labour payment'
+    });
+  }
+});
+
+/**
+ * @route   GET /api/payments/labour-access-status
+ * @desc    Get labour service access status for user
+ * @access  Private (User only)
+ */
+router.get('/labour-access-status', auth, requireRole(['user']), async (req, res) => {
+  try {
+    const user = await getRow(`
+      SELECT 
+        labour_access_status,
+        labour_access_start_date,
+        labour_access_end_date,
+        created_at
+      FROM users
+      WHERE id = $1
+    `, [req.user.id]);
+
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    // Check if access is expired
+    let isExpired = false;
+    let daysRemaining = 0;
+    
+    if (user.labour_access_status === 'active' && user.labour_access_end_date) {
+      const endDate = new Date(user.labour_access_end_date);
+      const now = new Date();
+      
+      if (endDate <= now) {
+        isExpired = true;
+        // Update status to expired
+        await query(`
+          UPDATE users 
+          SET labour_access_status = 'expired', updated_at = NOW()
+          WHERE id = $1
+        `, [req.user.id]);
+      } else {
+        const diffTime = endDate.getTime() - now.getTime();
+        daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    res.json({
+      status: 'success',
+      data: {
+        accessStatus: user.labour_access_status,
+        startDate: user.labour_access_start_date,
+        endDate: user.labour_access_end_date,
+        isExpired: isExpired,
+        daysRemaining: daysRemaining,
+        hasAccess: user.labour_access_status === 'active' && !isExpired
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get labour access status error', { error: error.message });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch labour access status'
+    });
+  }
+});
+
+/**
+ * @route   GET /api/payments/labour-transaction-history
+ * @desc    Get labour payment transaction history for user
+ * @access  Private (User only)
+ */
+router.get('/labour-transaction-history', auth, requireRole(['user']), async (req, res) => {
+  try {
+    const transactions = await getRows(`
+      SELECT 
+        lpt.*,
+        u.labour_access_end_date as access_expiry,
+        u.labour_access_status as access_status
+      FROM labour_payment_transactions lpt
+      LEFT JOIN users u ON lpt.user_id = u.id
+      WHERE lpt.user_id = $1
+      ORDER BY lpt.created_at DESC
+      LIMIT 50
+    `, [req.user.id]);
+
+    res.json({
+      status: 'success',
+      data: { transactions }
+    });
+
+  } catch (error) {
+    logger.error('Get labour transaction history error', { error: error.message });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch labour transaction history'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/payments/check-labour-access
+ * @desc    Manually trigger labour access checks (Admin only)
+ * @access  Private (Admin only)
+ */
+router.post('/check-labour-access', auth, requireRole(['admin']), async (req, res) => {
+  try {
+    const LabourAccessManager = require('../services/labourAccessManager');
+    
+    const results = await LabourAccessManager.runAllChecks();
+    
+    logger.info('Manual labour access check completed', {
+      adminId: req.user.id,
+      results
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Labour access checks completed',
+      data: results
+    });
+
+  } catch (error) {
+    logger.error('Manual labour access check error', { error: error.message });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to run labour access checks'
+    });
+  }
+});
+
+/**
+ * @route   GET /api/payments/labour-access-stats
+ * @desc    Get labour access statistics (Admin only)
+ * @access  Private (Admin only)
+ */
+router.get('/labour-access-stats', auth, requireRole(['admin']), async (req, res) => {
+  try {
+    const LabourAccessManager = require('../services/labourAccessManager');
+    
+    const stats = await LabourAccessManager.getAccessStatistics();
+    const expiringUsers = await LabourAccessManager.getExpiringUsers(2);
+    
+    res.json({
+      status: 'success',
+      data: {
+        statistics: stats,
+        expiringUsers: expiringUsers
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get labour access stats error', { error: error.message });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch labour access statistics'
+    });
+  }
+});
+
 module.exports = router;
 

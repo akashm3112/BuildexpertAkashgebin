@@ -16,12 +16,13 @@ import {
   Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ArrowLeft, Search, Star, MapPin, Filter, Heart, Phone, MessageCircle, X, FileSliders as Sliders, AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, Search, Star, MapPin, Filter, Heart, Phone, MessageCircle, X, FileSliders as Sliders, AlertTriangle, CreditCard, Lock } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import Toast from 'react-native-toast-message';
 import { API_BASE_URL } from '@/constants/api';
 import { SafeView } from '@/components/SafeView';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Responsive design utilities
 const { width: screenWidth } = Dimensions.get('window');
@@ -74,6 +75,29 @@ export default function ServiceListingScreen() {
   const [tempFilters, setTempFilters] = useState(filters);
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState<string>('Services');
+  const [labourAccessStatus, setLabourAccessStatus] = useState<any>(null);
+  const [showLabourPaymentModal, setShowLabourPaymentModal] = useState(false);
+
+  // Check labour access status
+  const checkLabourAccess = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/payments/labour-access-status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLabourAccessStatus(data.data);
+      }
+    } catch (error) {
+      console.error('Error checking labour access:', error);
+    }
+  };
 
   useEffect(() => {
     const fetchServiceUuids = async () => {
@@ -103,6 +127,11 @@ export default function ServiceListingScreen() {
             console.log('DEBUG: Found service for category', category, found);
             setServiceId(found.id);
             setCategoryName(found.name.charAt(0).toUpperCase() + found.name.slice(1).replace('-', ' '));
+            
+            // Check labour access if this is a labour service
+            if (found.name === 'labors') {
+              await checkLabourAccess();
+            }
           } else {
             setError('Service category not found');
             setIsLoading(false);
@@ -268,6 +297,13 @@ export default function ServiceListingScreen() {
   };
 
   const handleBookNow = (providerId: string) => {
+    // Check if this is a labour service and user doesn't have access
+    if (categoryName.toLowerCase().includes('labors') || categoryName.toLowerCase().includes('labour')) {
+      if (!labourAccessStatus?.hasAccess) {
+        setShowLabourPaymentModal(true);
+        return;
+      }
+    }
     router.push(`/booking/${providerId}`);
   };
 
@@ -627,6 +663,42 @@ export default function ServiceListingScreen() {
         />
       </View>
 
+      {/* Labour Access Status */}
+      {(categoryName.toLowerCase().includes('labors') || categoryName.toLowerCase().includes('labour')) && (
+        <View style={styles.labourAccessContainer}>
+          {labourAccessStatus?.hasAccess ? (
+            <View style={styles.accessActiveContainer}>
+              <View style={styles.accessActiveHeader}>
+                <Lock size={20} color="#10B981" />
+                <Text style={styles.accessActiveTitle}>Labour Service Access Active</Text>
+              </View>
+              <Text style={styles.accessActiveText}>
+                {labourAccessStatus.daysRemaining > 0 
+                  ? `${labourAccessStatus.daysRemaining} days remaining`
+                  : 'Access expires today'
+                }
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.accessInactiveContainer}>
+              <View style={styles.accessInactiveHeader}>
+                <CreditCard size={20} color="#F59E0B" />
+                <Text style={styles.accessInactiveTitle}>Labour Service Access Required</Text>
+              </View>
+              <Text style={styles.accessInactiveText}>
+                Pay ₹99 for 7-day access to book labour services
+              </Text>
+              <TouchableOpacity 
+                style={styles.payNowButton}
+                onPress={() => setShowLabourPaymentModal(true)}
+              >
+                <Text style={styles.payNowButtonText}>Pay Now</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
+
       <View style={styles.resultsHeader}>
         <Text style={styles.resultsCount}>
           {t('serviceListing.resultsFound', { count: (filteredProviders.length > 0 ? filteredProviders.length : uniqueProviders.length).toString(), category: categoryName.toLowerCase() })}
@@ -777,6 +849,84 @@ export default function ServiceListingScreen() {
           <View style={styles.modalFooter}>
             <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
               <Text style={styles.applyButtonText}>{t('serviceListing.applyFilters')}</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeView>
+      </Modal>
+
+      {/* Labour Payment Modal */}
+      <Modal
+        visible={showLabourPaymentModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowLabourPaymentModal(false)}
+      >
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Labour Service Access</Text>
+            <TouchableOpacity onPress={() => setShowLabourPaymentModal(false)}>
+              <X size={24} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.paymentModalContent}>
+            <View style={styles.paymentInfoContainer}>
+              <CreditCard size={48} color="#3B82F6" />
+              <Text style={styles.paymentTitle}>Access Labour Services</Text>
+              <Text style={styles.paymentDescription}>
+                Pay ₹99 for 7-day access to book skilled labour services including loading, transportation, and site cleaning.
+              </Text>
+            </View>
+
+            <View style={styles.paymentFeatures}>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureIcon}>✓</Text>
+                <Text style={styles.featureText}>7-day unlimited access</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureIcon}>✓</Text>
+                <Text style={styles.featureText}>Skilled labour providers</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureIcon}>✓</Text>
+                <Text style={styles.featureText}>Secure payment via Paytm</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureIcon}>✓</Text>
+                <Text style={styles.featureText}>Expiry reminder notifications</Text>
+              </View>
+            </View>
+
+            <View style={styles.paymentSummary}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Labour Service Access (7 days)</Text>
+                <Text style={styles.summaryValue}>₹99</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Processing Fee</Text>
+                <Text style={styles.summaryValue}>₹0</Text>
+              </View>
+              <View style={[styles.summaryRow, styles.totalRow]}>
+                <Text style={styles.totalLabel}>Total Amount</Text>
+                <Text style={styles.totalValue}>₹99</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.payButton}
+              onPress={() => {
+                setShowLabourPaymentModal(false);
+                router.push('/labour-payment' as any);
+              }}
+            >
+              <Text style={styles.payButtonText}>Pay ₹99 for 7 Days Access</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.cancelButton}
+              onPress={() => setShowLabourPaymentModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </SafeView>
@@ -1234,5 +1384,167 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // Labour Access Styles
+  labourAccessContainer: {
+    marginHorizontal: getResponsiveSpacing(16, 20, 24),
+    marginBottom: getResponsiveSpacing(8, 12, 16),
+  },
+  accessActiveContainer: {
+    backgroundColor: '#ECFDF5',
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  accessActiveHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  accessActiveTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#065F46',
+    marginLeft: 8,
+  },
+  accessActiveText: {
+    fontSize: 14,
+    color: '#047857',
+  },
+  accessInactiveContainer: {
+    backgroundColor: '#FFFBEB',
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  accessInactiveHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  accessInactiveTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#92400E',
+    marginLeft: 8,
+  },
+  accessInactiveText: {
+    fontSize: 14,
+    color: '#B45309',
+    marginBottom: 12,
+  },
+  payNowButton: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  payNowButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Payment Modal Styles
+  paymentModalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  paymentInfoContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  paymentTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  paymentDescription: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  paymentFeatures: {
+    marginBottom: 24,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  featureIcon: {
+    fontSize: 16,
+    color: '#10B981',
+    marginRight: 12,
+    fontWeight: '600',
+  },
+  featureText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  paymentSummary: {
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1E293B',
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 8,
+    marginTop: 8,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  totalValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  payButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  payButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
   },
 });

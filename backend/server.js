@@ -142,6 +142,7 @@ app.use('/api/earnings', earningsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/push-notifications', require('./routes/pushNotifications'));
 app.use('/api/calls', require('./routes/calls'));
+app.use('/api/test', require('./routes/test-labour'));
 
 // 404 handler
 app.use('*', (req, res) => {

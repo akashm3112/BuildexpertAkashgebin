@@ -25,6 +25,22 @@ class PaymentSecurity {
   }
 
   /**
+   * Check for duplicate labour payment attempts (Idempotency)
+   */
+  static async checkDuplicateLabourPayment(userId) {
+    const existingPayment = await getRow(`
+      SELECT * FROM labour_payment_transactions 
+      WHERE user_id = $1 
+        AND status IN ('pending', 'completed')
+        AND created_at > NOW() - INTERVAL '5 minutes'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [userId]);
+
+    return existingPayment;
+  }
+
+  /**
    * Validate payment amount against expected service price
    */
   static async validatePaymentAmount(providerServiceId, amount) {

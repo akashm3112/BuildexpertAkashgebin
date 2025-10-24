@@ -14,6 +14,9 @@ import {
 import { router } from 'expo-router';
 import { API_BASE_URL } from '@/constants/api';
 import { useLanguage } from '@/context/LanguageContext';
+import { useLabourAccess } from '@/context/LabourAccessContext';
+import { CheckCircle } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const getCategoryColor = (categoryId: string) => {
   const colorMap: { [key: string]: string } = {
@@ -149,6 +152,8 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
   const numColumns = 3;
   const [routeToUuidMap, setRouteToUuidMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const { labourAccessStatus } = useLabourAccess();
+  
   
   // Get categories with translated names - use filtered services if provided, otherwise use default
   const categories = filteredServices && filteredServices.length > 0 
@@ -270,9 +275,21 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
                     </View>
                   </TouchableOpacity>
                   <View style={styles.categoryContent}>
-                    <Text style={styles.categoryName} numberOfLines={2}>
-                      {item.name}
-                    </Text>
+                    <View style={styles.categoryNameContainer}>
+                      <Text style={styles.categoryName} numberOfLines={2}>
+                        {item.name}
+                      </Text>
+                      {item.id === 'labor' && labourAccessStatus?.hasAccess && (
+                        <View style={styles.accessIndicator}>
+                          <CheckCircle size={16} color="#10B981" />
+                        </View>
+                      )}
+                      {item.id === 'labor' && !labourAccessStatus?.hasAccess && (
+                        <View style={styles.noAccessIndicator}>
+                          <Text style={styles.noAccessText}>Pay ₹99</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
               </Animated.View>
@@ -356,5 +373,27 @@ const styles = StyleSheet.create({
     color: '#374151',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  categoryNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  accessIndicator: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 2,
+  },
+  noAccessIndicator: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    padding: 4,
+    paddingHorizontal: 8,
+  },
+  noAccessText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#DC2626',
   },
 });
