@@ -272,6 +272,18 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
                         style={styles.categoryImage}
                         resizeMode="cover"
                       />
+                      {/* Pay ₹99 label on top right corner for labor when no access */}
+                      {item.id === 'labor' && !labourAccessStatus?.hasAccess && (
+                        <View style={styles.payLabelBadge}>
+                          <Text style={styles.payLabelBadgeText}>Pay ₹99</Text>
+                        </View>
+                      )}
+                      {/* Access indicator on top right for labor when access granted */}
+                      {item.id === 'labor' && labourAccessStatus?.hasAccess && (
+                        <View style={styles.accessBadge}>
+                          <CheckCircle size={14} color="#10B981" />
+                        </View>
+                      )}
                     </View>
                   </TouchableOpacity>
                   <View style={styles.categoryContent}>
@@ -279,16 +291,6 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
                       <Text style={styles.categoryName} numberOfLines={2}>
                         {item.name}
                       </Text>
-                      {item.id === 'labor' && labourAccessStatus?.hasAccess && (
-                        <View style={styles.accessIndicator}>
-                          <CheckCircle size={16} color="#10B981" />
-                        </View>
-                      )}
-                      {item.id === 'labor' && !labourAccessStatus?.hasAccess && (
-                        <View style={styles.noAccessIndicator}>
-                          <Text style={styles.noAccessText}>Pay ₹99</Text>
-                        </View>
-                      )}
                     </View>
                   </View>
                 </View>
@@ -356,6 +358,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 12,
     overflow: 'hidden',
+    position: 'relative',
   },
   categoryImage: {
     width: '100%',
@@ -385,15 +388,30 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 2,
   },
-  noAccessIndicator: {
+  payLabelBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
     backgroundColor: '#FEF2F2',
-    borderRadius: 8,
-    padding: 4,
+    borderRadius: 6,
     paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    zIndex: 10,
   },
-  noAccessText: {
+  payLabelBadgeText: {
     fontSize: 10,
     fontWeight: '600',
     color: '#DC2626',
+  },
+  accessBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    padding: 4,
+    zIndex: 10,
   },
 });

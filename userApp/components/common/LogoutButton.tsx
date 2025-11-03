@@ -42,7 +42,14 @@ export default function LogoutButton({
       // Perform logout (clears AsyncStorage and user state)
       await logout();
       
-      // Navigate to auth screen
+      // Navigate to auth screen with navigation stack reset (production pattern)
+      try {
+        if (router.dismissAll) {
+          router.dismissAll();
+        }
+      } catch (e) {
+        // dismissAll might not be available in all versions
+      }
       router.replace('/(auth)/login');
       
       console.log('✅ Complete logout successful');

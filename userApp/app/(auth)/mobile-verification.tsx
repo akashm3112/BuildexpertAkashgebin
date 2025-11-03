@@ -78,15 +78,76 @@ export default function MobileVerificationScreen() {
   const handleOtpChange = (value: string, idx: number) => {
     if (isLocked) return; // Prevent input when locked
     
+    // Handle paste (when user pastes 6 digits at once)
+    if (value.length > 1) {
+      const digits = value.slice(0, 6).split('').filter(char => /^\d$/.test(char));
+      if (digits.length > 0) {
+        const newOtp = [...otp];
+        digits.forEach((digit, i) => {
+          if (idx + i < 6) {
+            newOtp[idx + i] = digit;
+          }
+        });
+        setOtp(newOtp);
+        
+        // Focus the last filled input or the next empty one
+        const lastFilledIndex = Math.min(idx + digits.length - 1, 5);
+        const nextEmptyIndex = newOtp.findIndex((val, i) => i > lastFilledIndex && !val);
+        const focusIndex = nextEmptyIndex !== -1 ? nextEmptyIndex : (lastFilledIndex < 5 ? lastFilledIndex + 1 : lastFilledIndex);
+        
+        // Auto-submit if all 6 digits are filled
+        if (newOtp.every(d => d !== '')) {
+          setTimeout(() => {
+            inputRefs.current[focusIndex]?.blur();
+            handleVerifyOtp(newOtp);
+          }, 100);
+        } else {
+          setTimeout(() => {
+            inputRefs.current[focusIndex]?.focus();
+          }, 50);
+        }
+      }
+      return;
+    }
+    
+    // Handle single digit input
     if (/^\d?$/.test(value)) {
       const newOtp = [...otp];
       newOtp[idx] = value;
       setOtp(newOtp);
+      
       if (value && idx < 5) {
-        inputRefs.current[idx + 1]?.focus?.();
+        // Move to next input when digit is entered
+        setTimeout(() => {
+          inputRefs.current[idx + 1]?.focus();
+        }, 50);
+      } else if (!value) {
+        // When digit is deleted, focus stays on current field (backspace will handle navigation)
+        // This allows user to edit the current field
       }
-      if (!value && idx > 0) {
-        inputRefs.current[idx - 1]?.focus?.();
+      
+      // Auto-submit when all 6 digits are filled
+      if (value && newOtp.every(d => d !== '')) {
+        setTimeout(() => {
+          inputRefs.current[idx]?.blur();
+          handleVerifyOtp(newOtp);
+        }, 300);
+      }
+    }
+  };
+
+  const handleKeyPress = (e: any, idx: number) => {
+    // Handle backspace key - when pressing backspace on an empty field, go to previous field
+    if (e.nativeEvent.key === 'Backspace') {
+      if (!otp[idx] && idx > 0) {
+        // If current field is empty and backspace is pressed, go to previous field and clear it
+        const newOtp = [...otp];
+        newOtp[idx - 1] = '';
+        setOtp(newOtp);
+        setTimeout(() => {
+          inputRefs.current[idx - 1]?.focus();
+          inputRefs.current[idx - 1]?.setNativeProps?.({ text: '' });
+        }, 50);
       }
     }
   };
@@ -102,13 +163,14 @@ export default function MobileVerificationScreen() {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = async (otpOverride?: string[]) => {
     if (isLocked) {
       showModal('Account Locked', `Too many failed attempts. Please try again in ${formatTime(lockoutTimer)}`, 'error');
       return;
     }
 
-    const otpString = otp.join('');
+    const otpToVerify = otpOverride || otp;
+    const otpString = otpToVerify.join('');
     if (otpString.length !== 6) {
       showModal('Invalid OTP', 'Please enter the 6-digit OTP sent to your mobile number.', 'error');
       return;
@@ -334,11 +396,14 @@ export default function MobileVerificationScreen() {
                   ]}
                   value={digit}
                   onChangeText={(value) => handleOtpChange(value, index)}
+                  onKeyPress={(e) => handleKeyPress(e, index)}
                   keyboardType="numeric"
-                  maxLength={1}
+                  maxLength={6}
                   textAlign="center"
                   autoFocus={index === 0}
                   editable={!isLocked}
+                  selectTextOnFocus={true}
+                  contextMenuHidden={true}
                 />
               ))}
             </View>

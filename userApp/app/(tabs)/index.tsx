@@ -10,11 +10,14 @@ import {
   TouchableOpacity,
   Animated,
   Modal as RNModal,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, MapPin, X, Navigation, Edit2, Plus, Clock } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
+import { useLabourAccess } from '@/context/LabourAccessContext';
 import { Modal } from '@/components/common/Modal';
 import { SafeView } from '@/components/SafeView';
 
@@ -50,6 +53,8 @@ const SAVED_LOCATIONS = [
 
 export default function HomeScreen() {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const { labourAccessStatus } = useLabourAccess();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = Dimensions.get('window');
   const fadeAnim = React.useRef(new Animated.Value(1)).current;
@@ -89,6 +94,8 @@ export default function HomeScreen() {
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [filteredServices, setFilteredServices] = useState(SERVICE_CATEGORIES);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [alertConfig, setAlertConfig] = useState<{
     title: string;
     message: string;
@@ -302,6 +309,23 @@ export default function HomeScreen() {
   // Load recent searches on component mount
   useEffect(() => {
     loadRecentSearches();
+  }, []);
+
+  // Handle pull-to-refresh
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Trigger refresh by updating refresh key
+      // This will cause child components to re-fetch data
+      setRefreshKey(prev => prev + 1);
+      
+      // Wait a bit for components to refresh
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Error refreshing home screen:', error);
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   // Handle orientation changes for responsive spacing
@@ -552,6 +576,16 @@ export default function HomeScreen() {
           style={styles.scrollView} 
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: getResponsivePadding() }]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#3B82F6']} // Android
+              tintColor="#3B82F6" // iOS
+              title="Pull to refresh" // iOS
+              titleColor="#64748B" // iOS
+            />
+          }
         >
           {/* Services Grid */}
           <View style={[styles.sectionContainer, styles.firstSection]}>
@@ -564,7 +598,7 @@ export default function HomeScreen() {
             { marginBottom: getResponsiveSpacing(8, 12, 16) } // Add bottom margin for separation
           ]}>
             <Text style={styles.sectionTitle}>{t('home.featuredProfessionals')}</Text>
-            <FeaturedProviders />
+            <FeaturedProviders key={`featured-${refreshKey}`} />
           </View>
           
           {/* Recent Bookings - with responsive spacing */}
@@ -576,7 +610,7 @@ export default function HomeScreen() {
             }
           ]}>
             <Text style={styles.sectionTitle}>{t('home.recentBookings')}</Text>
-            <RecentBookings />
+            <RecentBookings key={`bookings-${refreshKey}`} />
           </View>
         </ScrollView>
       </Animated.View>

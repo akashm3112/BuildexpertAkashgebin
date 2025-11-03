@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface LabourAccessData {
@@ -30,50 +31,37 @@ export const useLabourAccess = () => {
 
 export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [labourAccessStatus, setLabourAccessStatus] = useState<LabourAccessData | null>(null);
+  const appState = useRef(AppState.currentState);
 
   const checkLabourAccess = async () => {
     try {
-      console.log('🔍 Checking labour access from context...');
-      
       const localAccessData = await AsyncStorage.getItem('labour_access_status');
       if (localAccessData) {
         const parsedData = JSON.parse(localAccessData);
-        console.log('📊 Local labour access data:', parsedData);
-        
-        // Check if access is still valid
         const now = new Date();
         const endDate = new Date(parsedData.endDate);
-        
         if (endDate > now) {
-          // Update days remaining
           const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
           parsedData.daysRemaining = daysRemaining;
           setLabourAccessStatus(parsedData);
-          console.log('✅ Labour access is active:', parsedData);
         } else {
-          // Access expired, remove from local storage
           await AsyncStorage.removeItem('labour_access_status');
           setLabourAccessStatus(null);
-          console.log('❌ Labour access expired');
         }
       } else {
         setLabourAccessStatus(null);
-        console.log('❌ No labour access found');
       }
     } catch (error) {
-      console.error('❌ Error checking labour access:', error);
+      console.error('Error checking labour access:', error);
       setLabourAccessStatus(null);
     }
   };
 
   const grantLabourAccess = async () => {
     try {
-      console.log('🎉 Granting labour access...');
-      
       const startDate = new Date();
       const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 7); // 7 days from now
-      
+      endDate.setDate(endDate.getDate() + 7);
       const labourAccessData: LabourAccessData = {
         hasAccess: true,
         accessStatus: 'active',
@@ -82,14 +70,10 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
         daysRemaining: 7,
         isExpired: false
       };
-      
-      // Store in AsyncStorage
       await AsyncStorage.setItem('labour_access_status', JSON.stringify(labourAccessData));
       setLabourAccessStatus(labourAccessData);
-      
-      console.log('✅ Labour access granted successfully!');
     } catch (error) {
-      console.error('❌ Error granting labour access:', error);
+      console.error('Error granting labour access:', error);
     }
   };
 
@@ -97,24 +81,25 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       await AsyncStorage.removeItem('labour_access_status');
       setLabourAccessStatus(null);
-      console.log('🗑️ Labour access cleared');
     } catch (error) {
-      console.error('❌ Error clearing labour access:', error);
+      console.error('Error clearing labour access:', error);
     }
   };
 
-  // Check labour access on mount
   useEffect(() => {
     checkLabourAccess();
   }, []);
 
-  // Check labour access every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
       checkLabourAccess();
-    }, 30000);
+    }
+    appState.current = nextAppState;
+  };
 
-    return () => clearInterval(interval);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
   }, []);
 
   const value: LabourAccessContextType = {

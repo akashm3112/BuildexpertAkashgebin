@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { ArrowLeft, CreditCard, CheckCircle, RefreshCw } from 'lucide-react-native';
 import { SafeView } from '@/components/SafeView';
 import { API_BASE_URL } from '@/constants/api';
@@ -18,20 +18,68 @@ export default function LabourAccessSimpleScreen() {
   const router = useRouter();
   const { labourAccessStatus, checkLabourAccess } = useLabourAccess();
   const [loading, setLoading] = useState(true);
+  const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
-    checkLabourAccess();
+    const fetchData = async () => {
+      try {
+        // First check local storage (fast)
+        await checkLabourAccess();
+        
+        // Also fetch from API to ensure we have latest data
+        const token = await AsyncStorage.getItem('token');
+        if (token) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/payments/labour-access-status`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.status === 'success' && data.data) {
+                // Store API data in AsyncStorage and update context
+                await AsyncStorage.setItem('labour_access_status', JSON.stringify(data.data));
+                // The context will pick it up on next check
+                await checkLabourAccess();
+              }
+            }
+          } catch (apiError) {
+            // If API fails, still show local data
+            console.log('API fetch failed, using local data:', apiError);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching labour access:', error);
+      } finally {
+        // Mark that we've done the initial check
+        setHasChecked(true);
+      }
+    };
+    
+    fetchData();
   }, []);
 
-  // Refresh labour access when screen comes into focus
+  // Update loading state after initial check completes
   useEffect(() => {
-    const interval = setInterval(() => {
+    if (!hasChecked && labourAccessStatus !== null) {
+      // After first check completes (status is set, even if null), stop loading
+      const timer = setTimeout(() => {
+        setHasChecked(true);
+        setLoading(false);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [labourAccessStatus, hasChecked]);
+
+  // Refresh labour access when screen comes into focus (not periodically)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Only check when screen is focused, not periodically
       checkLabourAccess();
-    }, 3000); // Check every 3 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
+    }, [])
+  );
 
   if (loading) {
     return (

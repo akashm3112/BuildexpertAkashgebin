@@ -177,3 +177,35 @@
 {"amount":99,"level":"info","message":"💰 Payment: Labour payment initiated successfully","orderId":"LABOUR_1761296618494_hlbsvq","responseTime":"1353ms","service":"buildxpert-api","timestamp":"2025-10-24 14:33:41","transactionId":"3b920d5a-607a-4903-89fd-77a59f954bc5","userId":"9d53795a-5b01-407f-bc64-d009b0c02773"}
 {"body":{"amount":99,"serviceCategory":"labour","serviceName":"Labour Service Access"},"level":"info","message":"💰 Payment: Labour payment initiation started","service":"buildxpert-api","timestamp":"2025-10-24T09:04:18.595Z","userId":"9d53795a-5b01-407f-bc64-d009b0c02773"}
 {"existingOrderId":"LABOUR_1761296618494_hlbsvq","existingStatus":"pending","level":"info","message":"💰 Payment: Duplicate labour payment attempt blocked","service":"buildxpert-api","timestamp":"2025-10-24 14:34:18","userId":"9d53795a-5b01-407f-bc64-d009b0c02773"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"9880689796","role":"user","service":"buildxpert-api","timestamp":"2025-11-02 19:29:13"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-02 19:29:31"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-02 19:29:35"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"9880689796","role":"user","service":"buildxpert-api","timestamp":"2025-11-02 19:29:35"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"user","service":"buildxpert-api","timestamp":"2025-11-02 19:29:35","userId":"90bb7d29-1f64-46f7-adf6-9708baea9d4d"}
+{"bookingId":"e77ce224-eb18-4b65-b749-2573841c5f9c","level":"info","message":"📅 Booking: Push notification sent to provider","providerId":"aeaccfce-b4fc-4e92-882f-710e7b5ce177","service":"buildxpert-api","timestamp":"2025-11-02 19:32:06"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"6361884443","role":"user","service":"buildxpert-api","timestamp":"2025-11-02 19:34:35"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-02 19:34:46"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-02 19:34:49"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"6361884443","role":"user","service":"buildxpert-api","timestamp":"2025-11-02 19:34:49"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"user","service":"buildxpert-api","timestamp":"2025-11-02 19:34:49","userId":"6a9a2229-6bb5-4061-8835-fcde696a4d7b"}
+{"count":1,"level":"info","message":"Deleting images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-02 19:38:09"}
+{"count":1,"level":"info","message":"Successfully deleted images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-02 19:38:11"}
+{"bookingId":"3c749085-0abe-4669-a8fe-98018598c77a","level":"info","message":"📅 Booking: Push notification sent to provider","providerId":"a98cb8b9-8a46-4a7f-94ff-5de9b6a1385b","service":"buildxpert-api","timestamp":"2025-11-03 10:00:19"}
+{"bookingId":"3c749085-0abe-4669-a8fe-98018598c77a","level":"info","message":"📅 Booking: Push notification sent to user for cancellation","service":"buildxpert-api","timestamp":"2025-11-03 10:05:47"}
+{"bookingId":"3c749085-0abe-4669-a8fe-98018598c77a","level":"info","message":"📅 Booking: Push notification sent to provider for cancellation","service":"buildxpert-api","timestamp":"2025-11-03 10:05:48"}
+{"count":1,"level":"info","message":"Deleting images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:14:45"}
+{"count":1,"level":"info","message":"Successfully deleted images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:14:47"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"6977643111","role":"user","service":"buildxpert-api","timestamp":"2025-11-03 10:15:33"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:19:51"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:19:55"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"6977643111","role":"user","service":"buildxpert-api","timestamp":"2025-11-03 10:19:55"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"user","service":"buildxpert-api","timestamp":"2025-11-03 10:19:56","userId":"94aada13-7766-44de-833b-459b84f43f4e"}
+{"count":1,"level":"info","message":"Deleting images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:20:25"}
+{"count":1,"level":"info","message":"Successfully deleted images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:20:27"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"9644978888","role":"user","service":"buildxpert-api","timestamp":"2025-11-03 10:22:53"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:23:00"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:23:05"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"9644978888","role":"user","service":"buildxpert-api","timestamp":"2025-11-03 10:23:05"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"user","service":"buildxpert-api","timestamp":"2025-11-03 10:23:05","userId":"f04294bd-a994-4027-b780-cde841d4d58b"}
+{"count":1,"level":"info","message":"Deleting images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:23:23"}
+{"count":1,"level":"info","message":"Successfully deleted images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:23:25"}

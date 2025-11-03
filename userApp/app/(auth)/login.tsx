@@ -11,10 +11,12 @@ import {
   ActivityIndicator,
   BackHandler,
   Image,
+  Dimensions,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
-import { Eye, EyeOff, Mail, Lock, AlertCircle, Phone, CheckCircle2 } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Phone, CheckCircle2, ShieldCheck } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import { Modal as CustomModal } from '@/components/common/Modal';
 import { useAuth } from '@/context/AuthContext';
@@ -48,16 +50,122 @@ export default function LoginScreen() {
   const [remainingAttempts, setRemainingAttempts] = useState(5);
   const [isLocked, setIsLocked] = useState(false);
   const [lockoutTimer, setLockoutTimer] = useState(0);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const otpRefs = useRef<Array<TextInput | null>>([]);
+  const resetPasswordRef = useRef<TextInput | null>(null);
+  const resetConfirmRef = useRef<TextInput | null>(null);
+
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const otpAnimations = useRef(
+    Array(6).fill(null).map(() => new Animated.Value(0))
+  ).current;
+
+  // Responsive design utilities
+  const { width: screenWidth } = Dimensions.get('window');
+  const isSmallScreen = screenWidth < 375;
+  const isMediumScreen = screenWidth >= 375 && screenWidth < 414;
+  const isLargeScreen = screenWidth >= 414;
+
+  const getResponsiveSpacing = (small: number, medium: number, large: number) => {
+    if (isSmallScreen) return small;
+    if (isMediumScreen) return medium;
+    return large;
+  };
+
+  const getResponsiveFontSize = (small: number, medium: number, large: number) => {
+    if (isSmallScreen) return small;
+    if (isMediumScreen) return medium;
+    return large;
+  };
+
+  // Create responsive styles using component's responsive functions
+  const forgotPasswordStyles = React.useMemo(
+    () => createForgotPasswordStyles(getResponsiveSpacing, getResponsiveFontSize),
+    [screenWidth]
+  );
+
+  // Animate modal entrance
+  useEffect(() => {
+    if (showForgotModal) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.9);
+      slideAnim.setValue(20);
+    }
+  }, [showForgotModal]);
+
+  // Animate step transitions
+  useEffect(() => {
+    const stepProgress = {
+      mobile: 0,
+      otp: 33,
+      reset: 66,
+      success: 100,
+    };
+    
+    Animated.timing(progressAnim, {
+      toValue: stepProgress[forgotStep],
+      duration: 400,
+      useNativeDriver: false,
+    }).start();
+
+    // Animate OTP inputs
+    if (forgotStep === 'otp') {
+      otpAnimations.forEach((anim, idx) => {
+        Animated.sequence([
+          Animated.delay(idx * 50),
+          Animated.spring(anim, {
+            toValue: 1,
+            tension: 50,
+            friction: 7,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    } else {
+      otpAnimations.forEach(anim => anim.setValue(0));
+    }
+  }, [forgotStep]);
 
   useEffect(() => {
     if (user) {
       router.replace('/(tabs)');
     }
+    // Prevent back navigation on login screen - production pattern
+    // This ensures users can't navigate back to authenticated screens after logout/account deletion
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Prevent going back to splash or previous screens if logged in
-      if (user) return true;
-      return false;
+      // If user is logged in, redirect to home (shouldn't happen on login screen but safety check)
+      if (user) {
+        router.replace('/(tabs)');
+        return true; // Prevent default back behavior
+      }
+      // If user is not logged in, prevent going back to authenticated screens
+      // This is production behavior - login screen is the entry point after logout/account deletion
+      // Returning true prevents navigation back, ensuring users can't access deleted account or authenticated routes
+      return true; // Always prevent back navigation from login screen
     });
     return () => backHandler.remove();
   }, [user]);
@@ -284,12 +392,68 @@ export default function LoginScreen() {
   };
 
   const handleOtpInput = (text: string, idx: number) => {
+    // Handle paste (when user pastes 6 digits at once)
+    if (text.length > 1) {
+      const digits = text.slice(0, 6).split('').filter(char => /^\d$/.test(char));
+      if (digits.length > 0) {
+        const newOtp = [...forgotOtp];
+        digits.forEach((digit, i) => {
+          if (idx + i < 6) {
+            newOtp[idx + i] = digit;
+          }
+        });
+        setForgotOtp(newOtp);
+        
+        // Focus the last filled input
+        const lastFilledIndex = Math.min(idx + digits.length - 1, 5);
+        const focusIndex = lastFilledIndex < 5 ? lastFilledIndex + 1 : lastFilledIndex;
+        
+        // Auto-submit if all 6 digits are filled
+        if (newOtp.every(d => d !== '')) {
+          setTimeout(() => {
+            otpRefs.current[focusIndex]?.blur();
+            handleVerifyOtp();
+          }, 100);
+        } else {
+          setTimeout(() => {
+            otpRefs.current[focusIndex]?.focus();
+          }, 50);
+        }
+      }
+      return;
+    }
+
+    // Handle single digit input
     if (!/^[0-9]?$/.test(text)) return;
     const newOtp = [...forgotOtp];
     newOtp[idx] = text;
     setForgotOtp(newOtp);
     if (text && idx < 5) {
-      otpRefs.current[idx + 1]?.focus();
+      setTimeout(() => {
+        otpRefs.current[idx + 1]?.focus();
+      }, 50);
+    }
+    
+    // Auto-submit when all 6 digits are filled
+    if (text && newOtp.every(d => d !== '')) {
+      setTimeout(() => {
+        otpRefs.current[idx]?.blur();
+        handleVerifyOtp();
+      }, 300);
+    }
+  };
+
+  const handleOtpKeyPress = (e: any, idx: number) => {
+    // Handle backspace key - when pressing backspace on an empty field, go to previous field
+    if (e.nativeEvent.key === 'Backspace') {
+      if (!forgotOtp[idx] && idx > 0) {
+        const newOtp = [...forgotOtp];
+        newOtp[idx - 1] = '';
+        setForgotOtp(newOtp);
+        setTimeout(() => {
+          otpRefs.current[idx - 1]?.focus();
+        }, 50);
+      }
     }
   };
 
@@ -304,6 +468,8 @@ export default function LoginScreen() {
     setResetPassword('');
     setResetConfirm('');
     setResetLoading(false);
+    setShowResetPassword(false);
+    setShowResetConfirm(false);
     setResendTimer(0);
     setResetToken(null);
     setRemainingAttempts(5);
@@ -362,7 +528,7 @@ export default function LoginScreen() {
       <CustomModal
         visible={showForgotModal}
         onClose={resetForgotState}
-        title="Reset Password"
+        title={forgotStep === 'success' ? 'Password Reset Successful!' : ''}
         type={forgotStep === 'success' ? 'success' : 'info'}
         buttons={
           forgotStep === 'mobile' ? [
@@ -379,153 +545,319 @@ export default function LoginScreen() {
           ]
         }
       >
-        <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, alignItems: 'center', maxWidth: 340, width: '100%', alignSelf: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}>
-          {forgotStep === 'mobile' && (
-            <>
-              <View style={{ backgroundColor: '#EFF6FF', borderRadius: 20, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-                <Phone size={20} color="#3B82F6" />
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#1E293B', marginBottom: 4 }}>Verify Mobile</Text>
-              <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12, textAlign: 'center' }}>
-                Enter your registered mobile number to receive an OTP.
-              </Text>
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 8,
-                  padding: 10,
-                  fontSize: 15,
-                  color: '#1E293B',
-                  backgroundColor: '#FFFFFF',
-                  marginBottom: 6,
-                  width: 180,
-                  textAlign: 'center',
-                  letterSpacing: 1,
-                }}
-                placeholder="Mobile number"
-                placeholderTextColor="#94A3B8"
-                value={forgotMobile}
-                onChangeText={text => setForgotMobile(text.replace(/\D/g, '').slice(0, 10))}
-                keyboardType="number-pad"
-                maxLength={10}
-                autoFocus
-                editable={!otpLoading}
+        <Animated.View 
+          style={[
+            forgotPasswordStyles.container,
+            {
+              opacity: fadeAnim,
+              transform: [
+                { scale: scaleAnim },
+                { translateY: slideAnim }
+              ]
+            }
+          ]}
+        >
+          {/* Progress Indicator */}
+          <View style={forgotPasswordStyles.progressContainer}>
+            <View style={forgotPasswordStyles.progressBar}>
+              <Animated.View 
+                style={[
+                  forgotPasswordStyles.progressFill,
+                  {
+                    width: progressAnim.interpolate({
+                      inputRange: [0, 100],
+                      outputRange: ['0%', '100%'],
+                    })
+                  }
+                ]}
               />
-            </>
-          )}
-          {forgotStep === 'otp' && (
-            <>
-              <View style={{ backgroundColor: '#FEF9C3', borderRadius: 20, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-                <Lock size={20} color="#F59E0B" />
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#1E293B', marginBottom: 4 }}>Enter OTP</Text>
-              <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12, textAlign: 'center' }}>
-                Enter the 6-digit OTP sent to <Text style={{ color: '#3B82F6', fontWeight: '500' }}>+91 {forgotMobile}</Text>
-              </Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 10 }}>
-                {forgotOtp.map((digit, idx) => (
-                  <TextInput
-                    key={idx}
-                    ref={ref => { otpRefs.current[idx] = ref; }}
-                    style={{
-                      width: 40,
-                      height: 44,
-                      borderWidth: 1,
-                      borderColor: '#CBD5E1',
-                      borderRadius: 8,
-                      textAlign: 'center',
-                      fontSize: 18,
-                      fontWeight: '500',
-                      marginHorizontal: 3,
-                      backgroundColor: '#FFFFFF',
-                      color: '#1E293B',
-                    }}
-                    value={digit}
-                    onChangeText={text => handleOtpInput(text, idx)}
-                    keyboardType="number-pad"
-                    maxLength={1}
+            </View>
+            <View style={forgotPasswordStyles.progressDots}>
+              {['mobile', 'otp', 'reset', 'success'].map((step, idx) => {
+                const stepIndex = ['mobile', 'otp', 'reset', 'success'].indexOf(forgotStep);
+                const isActive = idx <= stepIndex;
+                const isCurrent = idx === stepIndex;
+                return (
+                  <View
+                    key={step}
+                    style={[
+                      forgotPasswordStyles.progressDot,
+                      isActive && forgotPasswordStyles.progressDotActive,
+                      isCurrent && forgotPasswordStyles.progressDotCurrent,
+                    ]}
                   />
+                );
+              })}
+            </View>
+          </View>
+
+          {forgotStep === 'mobile' && (
+            <Animated.View 
+              style={[
+                forgotPasswordStyles.stepContainer,
+                { opacity: fadeAnim }
+              ]}
+            >
+              <Animated.View 
+                style={[
+                  forgotPasswordStyles.iconContainer,
+                  forgotPasswordStyles.blueIcon,
+                  {
+                    transform: [{
+                      scale: scaleAnim.interpolate({
+                        inputRange: [0.9, 1],
+                        outputRange: [0.9, 1],
+                      })
+                    }]
+                  }
+                ]}
+              >
+                <Phone size={getResponsiveFontSize(22, 24, 26)} color="#3B82F6" />
+              </Animated.View>
+              <Text style={[forgotPasswordStyles.stepTitle, { fontSize: getResponsiveFontSize(18, 19, 20) }]}>
+                Verify Mobile Number
+              </Text>
+              <Text style={[forgotPasswordStyles.stepDescription, { fontSize: getResponsiveFontSize(13, 14, 15) }]}>
+                Enter your registered mobile number to receive a verification code.
+              </Text>
+              <View style={[forgotPasswordStyles.inputWrapper, forgotPasswordStyles.inputWrapperElevated]}>
+                <View style={forgotPasswordStyles.inputIconWrapper}>
+                  <Phone size={20} color="#3B82F6" />
+                </View>
+                <TextInput
+                  style={[forgotPasswordStyles.input, { fontSize: getResponsiveFontSize(15, 16, 17) }]}
+                  placeholder="Enter mobile number"
+                  placeholderTextColor="#94A3B8"
+                  value={forgotMobile}
+                  onChangeText={text => setForgotMobile(text.replace(/\D/g, '').slice(0, 10))}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  autoFocus
+                  editable={!otpLoading}
+                />
+              </View>
+            </Animated.View>
+          )}
+          
+          {forgotStep === 'otp' && (
+            <Animated.View 
+              style={[
+                forgotPasswordStyles.stepContainer,
+                { opacity: fadeAnim }
+              ]}
+            >
+              <Animated.View 
+                style={[
+                  forgotPasswordStyles.iconContainer,
+                  forgotPasswordStyles.amberIcon,
+                  {
+                    transform: [{
+                      scale: scaleAnim.interpolate({
+                        inputRange: [0.9, 1],
+                        outputRange: [0.9, 1],
+                      })
+                    }]
+                  }
+                ]}
+              >
+                <ShieldCheck size={getResponsiveFontSize(22, 24, 26)} color="#F59E0B" />
+              </Animated.View>
+              <Text style={[forgotPasswordStyles.stepTitle, { fontSize: getResponsiveFontSize(18, 19, 20) }]}>
+                Enter Verification Code
+              </Text>
+              <Text style={[forgotPasswordStyles.stepDescription, { fontSize: getResponsiveFontSize(13, 14, 15) }]}>
+                We've sent a 6-digit code to{'\n'}
+                <Text style={forgotPasswordStyles.phoneHighlight}>+91 {forgotMobile}</Text>
+              </Text>
+              <View style={forgotPasswordStyles.otpContainer}>
+                {forgotOtp.map((digit, idx) => (
+                  <Animated.View
+                    key={idx}
+                    style={{
+                      transform: [
+                        {
+                          scale: otpAnimations[idx].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.8, 1],
+                          })
+                        },
+                        {
+                          translateY: otpAnimations[idx].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [20, 0],
+                          })
+                        }
+                      ],
+                      opacity: otpAnimations[idx],
+                    }}
+                  >
+                    <TextInput
+                      ref={ref => { otpRefs.current[idx] = ref; }}
+                      style={[
+                        forgotPasswordStyles.otpInput,
+                        digit && forgotPasswordStyles.otpInputFilled,
+                        isLocked && forgotPasswordStyles.otpInputDisabled,
+                        {
+                          width: getResponsiveSpacing(44, 48, 52),
+                          height: getResponsiveSpacing(52, 56, 60),
+                          fontSize: getResponsiveFontSize(18, 20, 22),
+                        }
+                      ]}
+                      value={digit}
+                      onChangeText={text => handleOtpInput(text, idx)}
+                      onKeyPress={(e) => handleOtpKeyPress(e, idx)}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      textAlign="center"
+                      autoFocus={idx === 0 && forgotOtp.every(d => !d)}
+                      editable={!isLocked}
+                      selectTextOnFocus={true}
+                      contextMenuHidden={true}
+                    />
+                  </Animated.View>
                 ))}
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                <Text style={{ fontSize: 12, color: '#64748B' }}>Didn't receive code?</Text>
+              <View style={forgotPasswordStyles.resendContainer}>
+                <Text style={[forgotPasswordStyles.resendText, { fontSize: getResponsiveFontSize(12, 13, 14) }]}>
+                  Didn't receive code?{' '}
+                </Text>
                 {resendTimer > 0 ? (
-                  <Text style={{ marginLeft: 6, color: '#94A3B8', fontSize: 12 }}>Resend in {resendTimer}s</Text>
+                  <View style={forgotPasswordStyles.timerBadge}>
+                    <Text style={[forgotPasswordStyles.timerText, { fontSize: getResponsiveFontSize(12, 13, 14) }]}>
+                      {resendTimer}s
+                    </Text>
+                  </View>
                 ) : (
-                  <TouchableOpacity onPress={handleSendOtp} style={{ marginLeft: 6 }} disabled={otpLoading}>
-                    <Text style={{ color: '#3B82F6', fontWeight: '500', fontSize: 12 }}>{otpLoading ? 'Sending...' : 'Resend OTP'}</Text>
+                  <TouchableOpacity 
+                    onPress={handleSendOtp} 
+                    disabled={otpLoading}
+                    style={forgotPasswordStyles.resendButton}
+                  >
+                    <Text style={[forgotPasswordStyles.resendLink, { fontSize: getResponsiveFontSize(12, 13, 14) }]}>
+                      {otpLoading ? 'Sending...' : 'Resend OTP'}
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
-            </>
+            </Animated.View>
           )}
+          
           {forgotStep === 'reset' && (
-            <>
-              <View style={{ backgroundColor: '#DCFCE7', borderRadius: 20, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-                <Lock size={20} color="#22C55E" />
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#1E293B', marginBottom: 4 }}>Set New Password</Text>
-              <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12, textAlign: 'center' }}>
-                Enter and confirm your new password below.
+            <Animated.View 
+              style={[
+                forgotPasswordStyles.stepContainer,
+                { opacity: fadeAnim }
+              ]}
+            >
+              <Animated.View 
+                style={[
+                  forgotPasswordStyles.iconContainer,
+                  forgotPasswordStyles.greenIcon,
+                  {
+                    transform: [{
+                      scale: scaleAnim.interpolate({
+                        inputRange: [0.9, 1],
+                        outputRange: [0.9, 1],
+                      })
+                    }]
+                  }
+                ]}
+              >
+                <Lock size={getResponsiveFontSize(22, 24, 26)} color="#10B981" />
+              </Animated.View>
+              <Text style={[forgotPasswordStyles.stepTitle, { fontSize: getResponsiveFontSize(18, 19, 20) }]}>
+                Set New Password
               </Text>
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 8,
-                  padding: 10,
-                  fontSize: 15,
-                  color: '#1E293B',
-                  backgroundColor: '#FFFFFF',
-                  marginBottom: 6,
-                  width: 180,
-                  textAlign: 'center',
-                }}
-                placeholder="New password"
-                placeholderTextColor="#94A3B8"
-                value={resetPassword}
-                onChangeText={setResetPassword}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  borderRadius: 8,
-                  padding: 10,
-                  fontSize: 15,
-                  color: '#1E293B',
-                  backgroundColor: '#FFFFFF',
-                  marginBottom: 6,
-                  width: 180,
-                  textAlign: 'center',
-                }}
-                placeholder="Confirm new password"
-                placeholderTextColor="#94A3B8"
-                value={resetConfirm}
-                onChangeText={setResetConfirm}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </>
+              <Text style={[forgotPasswordStyles.stepDescription, { fontSize: getResponsiveFontSize(13, 14, 15) }]}>
+                Create a strong password for your account. Make sure it's at least 6 characters long.
+              </Text>
+              <View style={[forgotPasswordStyles.inputWrapper, forgotPasswordStyles.inputWrapperElevated]}>
+                <View style={forgotPasswordStyles.inputIconWrapper}>
+                  <Lock size={20} color="#10B981" />
+                </View>
+                <TextInput
+                  ref={resetPasswordRef}
+                  style={[forgotPasswordStyles.input, { fontSize: getResponsiveFontSize(15, 16, 17) }]}
+                  placeholder="New password"
+                  placeholderTextColor="#94A3B8"
+                  value={resetPassword}
+                  onChangeText={setResetPassword}
+                  secureTextEntry={!showResetPassword}
+                  autoCapitalize="none"
+                  autoFocus
+                />
+                <TouchableOpacity
+                  style={forgotPasswordStyles.eyeIcon}
+                  onPress={() => setShowResetPassword(!showResetPassword)}
+                >
+                  {showResetPassword ? (
+                    <EyeOff size={20} color="#64748B" />
+                  ) : (
+                    <Eye size={20} color="#64748B" />
+                  )}
+                </TouchableOpacity>
+              </View>
+              <View style={[forgotPasswordStyles.inputWrapper, forgotPasswordStyles.inputWrapperElevated, { 
+                marginTop: getResponsiveSpacing(14, 16, 18)
+              }]}>
+                <View style={forgotPasswordStyles.inputIconWrapper}>
+                  <Lock size={20} color="#10B981" />
+                </View>
+                <TextInput
+                  ref={resetConfirmRef}
+                  style={[forgotPasswordStyles.input, { fontSize: getResponsiveFontSize(15, 16, 17) }]}
+                  placeholder="Confirm new password"
+                  placeholderTextColor="#94A3B8"
+                  value={resetConfirm}
+                  onChangeText={setResetConfirm}
+                  secureTextEntry={!showResetConfirm}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={forgotPasswordStyles.eyeIcon}
+                  onPress={() => setShowResetConfirm(!showResetConfirm)}
+                >
+                  {showResetConfirm ? (
+                    <EyeOff size={20} color="#64748B" />
+                  ) : (
+                    <Eye size={20} color="#64748B" />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
           )}
+          
           {forgotStep === 'success' && (
-            <>
-              <View style={{ backgroundColor: '#ECFDF5', borderRadius: 20, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-                <CheckCircle2 size={22} color="#10B981" />
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#1E293B', marginBottom: 4 }}>Password Reset!</Text>
-              <Text style={{ fontSize: 14, color: '#10B981', textAlign: 'center', marginVertical: 8 }}>
-                Your password has been reset successfully. You can now log in with your new password.
+            <Animated.View 
+              style={[
+                forgotPasswordStyles.stepContainer,
+                { opacity: fadeAnim }
+              ]}
+            >
+              <Text style={[forgotPasswordStyles.successMessage, { fontSize: getResponsiveFontSize(14, 15, 16) }]}>
+                Your password has been reset successfully.{'\n'}
+                You can now log in with your new password.
               </Text>
-            </>
+            </Animated.View>
           )}
+          
           {!!otpError && (
-            <Text style={{ color: '#EF4444', fontSize: 13, marginTop: 6, textAlign: 'center' }}>{otpError}</Text>
+            <Animated.View 
+              style={[
+                forgotPasswordStyles.errorContainer, 
+                { 
+                  marginTop: getResponsiveSpacing(16, 20, 24),
+                  opacity: fadeAnim,
+                }
+              ]}
+            >
+              <AlertCircle size={16} color="#EF4444" />
+              <Text style={[forgotPasswordStyles.errorText, { fontSize: getResponsiveFontSize(12, 13, 14) }]}>
+                {otpError}
+              </Text>
+            </Animated.View>
           )}
-        </View>
+        </Animated.View>
       </CustomModal>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -713,3 +1045,296 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+// Forgot Password Modal Styles - Using responsive helper functions defined in component
+// Note: Some values are fixed in StyleSheet, responsive values applied via inline styles in JSX
+const createForgotPasswordStyles = (getSpacing: (s: number, m: number, l: number) => number, getFontSize: (s: number, m: number, l: number) => number) => StyleSheet.create({
+  container: {
+    width: '100%',
+    paddingTop: getSpacing(0, 0, 0),
+    paddingBottom: getSpacing(4, 6, 8),
+    alignItems: 'center',
+  },
+  progressContainer: {
+    width: '100%',
+    marginBottom: getSpacing(24, 28, 32),
+    paddingHorizontal: getSpacing(8, 10, 12),
+  },
+  progressBar: {
+    height: 3,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: getSpacing(12, 14, 16),
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#3B82F6',
+    borderRadius: 10,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  progressDots: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  progressDot: {
+    width: getSpacing(8, 10, 12),
+    height: getSpacing(8, 10, 12),
+    borderRadius: getSpacing(4, 5, 6),
+    backgroundColor: '#E2E8F0',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+  },
+  progressDotActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  progressDotCurrent: {
+    transform: [{ scale: 1.3 }],
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  stepContainer: {
+    alignItems: 'center',
+    width: '100%',
+    justifyContent: 'center',
+  },
+  iconContainer: {
+    width: getSpacing(64, 72, 80),
+    height: getSpacing(64, 72, 80),
+    borderRadius: getSpacing(32, 36, 40),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: getSpacing(20, 24, 28),
+    marginTop: getSpacing(0, 0, 0),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  blueIcon: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+  },
+  amberIcon: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  greenIcon: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 2,
+    borderColor: '#10B981',
+  },
+  successIcon: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 2,
+    borderColor: '#10B981',
+  },
+  stepTitle: {
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: getSpacing(10, 12, 14),
+    textAlign: 'center',
+    paddingHorizontal: getSpacing(4, 6, 8),
+  },
+  stepDescription: {
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: getFontSize(20, 22, 24),
+    marginBottom: getSpacing(24, 28, 32),
+    paddingHorizontal: getSpacing(8, 10, 12),
+  },
+  phoneHighlight: {
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: getSpacing(14, 16, 18),
+    height: getSpacing(52, 56, 60),
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    width: '100%',
+    alignSelf: 'center',
+  },
+  inputWrapperElevated: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+    borderColor: '#CBD5E1',
+  },
+  inputIconWrapper: {
+    width: getSpacing(36, 40, 44),
+    height: getSpacing(36, 40, 44),
+    borderRadius: getSpacing(10, 12, 14),
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: getSpacing(12, 14, 16),
+  },
+  inputIcon: {
+    marginRight: getSpacing(10, 12, 14),
+  },
+  input: {
+    flex: 1,
+    color: '#1E293B',
+    fontWeight: '500',
+    paddingVertical: 0,
+  },
+  eyeIcon: {
+    padding: getSpacing(4, 6, 8),
+    marginLeft: getSpacing(8, 10, 12),
+  },
+  otpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: getSpacing(20, 24, 28),
+    gap: getSpacing(8, 10, 12),
+    width: '100%',
+    paddingHorizontal: getSpacing(4, 6, 8),
+  },
+  otpInput: {
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    fontWeight: '600',
+    color: '#1E293B',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  otpInputFilled: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 2.5,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  otpInputDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    color: '#94A3B8',
+  },
+  resendContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: getSpacing(0, 0, 0),
+    width: '100%',
+    paddingHorizontal: getSpacing(4, 6, 8),
+  },
+  resendText: {
+    color: '#64748B',
+  },
+  timerBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: getSpacing(10, 12, 14),
+    paddingVertical: getSpacing(4, 6, 8),
+    borderRadius: getSpacing(12, 14, 16),
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  timerText: {
+    color: '#64748B',
+    fontWeight: '600',
+    fontSize: getFontSize(11, 12, 13),
+  },
+  resendButton: {
+    paddingHorizontal: getSpacing(10, 12, 14),
+    paddingVertical: getSpacing(4, 6, 8),
+    borderRadius: getSpacing(12, 14, 16),
+    backgroundColor: '#EFF6FF',
+  },
+  resendLink: {
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  successMessage: {
+    color: '#10B981',
+    textAlign: 'center',
+    lineHeight: getFontSize(20, 22, 24),
+    fontWeight: '500',
+    paddingHorizontal: getSpacing(8, 10, 12),
+    marginTop: getSpacing(4, 6, 8),
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: getSpacing(12, 14, 16),
+    marginTop: getSpacing(12, 14, 16),
+    borderWidth: 1.5,
+    borderColor: '#FEE2E2',
+    width: '100%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#EF4444',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  errorText: {
+    color: '#EF4444',
+    marginLeft: getSpacing(6, 8, 10),
+    flex: 1,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+});
+
+// Styles are created dynamically in the component using useMemo

@@ -91,6 +91,7 @@ export default function ProfileScreen() {
   const [statsLoading, setStatsLoading] = useState(true);
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [refreshing, setRefreshing] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Privacy & Security Settings
   const [privacySettings, setPrivacySettings] = useState({
@@ -588,7 +589,17 @@ export default function ProfileScreen() {
       'warning',
       [
         { text: t('alerts.logout.cancel'), onPress: () => setShowAlertModal(false), style: 'secondary' },
-        { text: t('alerts.logout.confirm'), onPress: async () => { await logout(); router.replace('/(auth)/login'); }, style: 'destructive' }
+        { text: t('alerts.logout.confirm'), onPress: async () => { 
+          await logout(); 
+          try {
+            if (router.dismissAll) {
+              router.dismissAll();
+            }
+          } catch (e) {
+            // dismissAll might not be available in all versions
+          }
+          router.replace('/(auth)/login'); 
+        }, style: 'destructive' }
       ]
     );
   };
@@ -623,6 +634,7 @@ export default function ProfileScreen() {
           text: t('alerts.deleteAccount.confirm'),
           onPress: async () => {
             setShowAlertModal(false);
+            setDeleteLoading(true);
             try {
               let token = user?.token;
               if (!token) {
@@ -630,6 +642,7 @@ export default function ProfileScreen() {
                 token = storedToken || undefined;
               }
               if (!token) {
+                setDeleteLoading(false);
                 showAlert('Error', t('alerts.error.noToken'), 'error');
                 return;
               }
@@ -639,14 +652,27 @@ export default function ProfileScreen() {
               });
               if (response.ok) {
                 await logout();
+                setDeleteLoading(false);
                 showAlert('Account Deleted', 'Your account and all related data have been deleted.', 'success');
-                // Redirect to login or welcome screen
-                router.replace('/(auth)/login');
+                // Redirect to login screen with navigation stack reset (production pattern)
+                setTimeout(() => {
+                  // Clear any modals/routes in stack, then replace to login
+                  try {
+                    if (router.dismissAll) {
+                      router.dismissAll();
+                    }
+                  } catch (e) {
+                    // dismissAll might not be available in all versions
+                  }
+                  router.replace('/(auth)/login');
+                }, 1500);
               } else {
                 const data = await response.json();
+                setDeleteLoading(false);
                 showAlert('Error', data.message || t('alerts.error.deleteFailed'), 'error');
               }
             } catch (error) {
+              setDeleteLoading(false);
               showAlert('Error', t('alerts.error.deleteFailed'), 'error');
             }
           },
@@ -939,9 +965,19 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>{t('profile.logout')}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleDeleteAccount}>
-          <Trash2 size={20} color="#EF4444" style={{ marginRight: 10 }} />
-          <Text style={styles.logoutText}>{t('profile.deleteAccount')}</Text>
+        <TouchableOpacity 
+          style={[styles.logoutButton, deleteLoading && styles.logoutButtonDisabled]} 
+          onPress={handleDeleteAccount}
+          disabled={deleteLoading}
+        >
+          {deleteLoading ? (
+            <ActivityIndicator size="small" color="#EF4444" style={{ marginRight: 10 }} />
+          ) : (
+            <Trash2 size={20} color="#EF4444" style={{ marginRight: 10 }} />
+          )}
+          <Text style={styles.logoutText}>
+            {deleteLoading ? 'Deleting Account...' : t('profile.deleteAccount')}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.footer}>
@@ -1299,6 +1335,22 @@ export default function ProfileScreen() {
         type={alertConfig.type}
         buttons={alertConfig.buttons}
       />
+
+      {/* Delete Account Loading Overlay */}
+      <RNModal
+        visible={deleteLoading}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+      >
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#EF4444" />
+            <Text style={styles.loadingText}>Deleting your account...</Text>
+            <Text style={styles.loadingSubtext}>This may take a few moments</Text>
+          </View>
+        </View>
+      </RNModal>
     </SafeView>
   );
 }
@@ -1639,11 +1691,14 @@ const styles = StyleSheet.create({
     paddingVertical: getResponsiveSpacing(14, 16, 18),
     borderRadius: getResponsiveSpacing(10, 12, 14),
   },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#F9FAFB',
+  },
   logoutText: {
     fontSize: getResponsiveFontSize(14, 16, 18),
     fontWeight: '500',
     color: '#EF4444',
-    marginLeft: getResponsiveSpacing(6, 8, 10),
   },
   footer: {
     alignItems: 'center',
@@ -1652,6 +1707,45 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: getResponsiveFontSize(10, 12, 14),
     color: '#94A3B8',
+  },
+  // Loading Overlay Styles
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    minWidth: 280,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  loadingText: {
+    fontSize: getResponsiveFontSize(16, 17, 18),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  loadingSubtext: {
+    fontSize: getResponsiveFontSize(13, 14, 15),
+    fontWeight: '400',
+    color: '#64748B',
+    marginTop: 8,
+    textAlign: 'center',
   },
   // Modal Styles
   modalContainer: {

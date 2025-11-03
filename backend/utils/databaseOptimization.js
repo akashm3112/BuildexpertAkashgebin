@@ -70,7 +70,7 @@ class DatabaseOptimizer {
       FROM bookings b
       JOIN provider_services ps ON b.provider_service_id = ps.id
       JOIN provider_profiles pp ON ps.provider_id = pp.id
-      JOIN users u ON ${userType === 'user' ? 'b.user_id' : 'pp.user_id'} = u.id
+      JOIN users u ON ${userType === 'user' ? 'pp.user_id' : 'b.user_id'} = u.id
       JOIN services_master sm ON ps.service_id = sm.id
       LEFT JOIN ratings r ON r.booking_id = b.id
       ${whereClause}
