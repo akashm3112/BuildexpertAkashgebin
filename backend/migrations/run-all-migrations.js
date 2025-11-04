@@ -12,6 +12,10 @@ const addPaymentTransactionsTable = require('./002-add-payment-transactions-tabl
 const addPaymentLoggingTables = require('./003-add-payment-logging-tables');
 const addCallMaskingTables = require('./004-add-call-masking-tables');
 const addPushNotificationTables = require('./005-add-push-notification-tables');
+const { up: addPaymentLocksTable } = require('./006-add-payment-locks-table');
+const separateReportTables = require('./007-separate-report-tables');
+const addLabourPaymentTables = require('./008-add-labour-payment-tables');
+const addMissingProviderColumns = require('./009-add-missing-provider-columns');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -48,6 +52,34 @@ const migrations = [
     name: 'Add Push Notification Tables',
     description: 'Creates push notification infrastructure tables',
     function: addPushNotificationTables,
+    required: false
+  },
+  {
+    id: '006',
+    name: 'Add Payment Locks Table',
+    description: 'Creates payment_locks table for preventing concurrent payment attempts',
+    function: addPaymentLocksTable,
+    required: false
+  },
+  {
+    id: '007',
+    name: 'Separate Report Tables',
+    description: 'Creates separate tables for provider_reports_users and user_reports_providers',
+    function: separateReportTables,
+    required: false
+  },
+  {
+    id: '008',
+    name: 'Add Labour Payment Tables',
+    description: 'Creates labour_payment_transactions table and adds labour access columns to users',
+    function: addLabourPaymentTables,
+    required: false
+  },
+  {
+    id: '009',
+    name: 'Add Missing Provider Columns',
+    description: 'Adds missing columns (state, city, business_name, experience_years, rating, total_reviews) to provider_profiles table',
+    function: addMissingProviderColumns,
     required: false
   }
 ];
@@ -118,18 +150,14 @@ const runMigration = async (migration) => {
   console.log(`📝 Description: ${migration.description}`);
   
   try {
-    const result = await migration.function();
+    // Execute the migration function
+    await migration.function();
     const executionTime = Date.now() - startTime;
     
-    if (result.success) {
-      await recordMigration(migration, true, null, executionTime);
-      console.log(`✅ Migration ${migration.id} completed successfully (${executionTime}ms)`);
-      return { success: true, executionTime };
-    } else {
-      await recordMigration(migration, false, result.error, executionTime);
-      console.error(`❌ Migration ${migration.id} failed: ${result.error}`);
-      return { success: false, error: result.error, executionTime };
-    }
+    // If we get here, migration was successful
+    await recordMigration(migration, true, null, executionTime);
+    console.log(`✅ Migration ${migration.id} completed successfully (${executionTime}ms)`);
+    return { success: true, executionTime };
   } catch (error) {
     const executionTime = Date.now() - startTime;
     await recordMigration(migration, false, error.message, executionTime);

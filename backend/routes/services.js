@@ -202,7 +202,10 @@ router.get('/:id/providers', async (req, res) => {
     let paramCount = 3;
 
     if (state) {
-      whereClause += ` AND pp.state = $${paramCount}`;
+      whereClause += ` AND EXISTS (
+        SELECT 1 FROM addresses a 
+        WHERE a.user_id = u.id AND a.type = 'home' AND a.state = $${paramCount}
+      )`;
       queryParams.push(state);
       paramCount++;
     }
@@ -220,10 +223,12 @@ router.get('/:id/providers', async (req, res) => {
         ps.service_charge_unit,
         ps.working_proof_urls,
         ps.payment_start_date,
-        ps.payment_end_date
+        ps.payment_end_date,
+        a.state as state
       FROM provider_services ps
       JOIN provider_profiles pp ON ps.provider_id = pp.id
       JOIN users u ON pp.user_id = u.id
+      LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
       ${whereClause}
       ORDER BY pp.years_of_experience DESC, ps.created_at DESC
       LIMIT $${paramCount} OFFSET $${paramCount + 1}
@@ -234,6 +239,8 @@ router.get('/:id/providers', async (req, res) => {
       SELECT COUNT(*) as total
       FROM provider_services ps
       JOIN provider_profiles pp ON ps.provider_id = pp.id
+      JOIN users u ON pp.user_id = u.id
+      LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
       ${whereClause}
     `, queryParams);
 

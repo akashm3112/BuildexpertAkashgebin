@@ -773,9 +773,8 @@ router.get('/reports', requireRole(['admin']), async (req, res) => {
         pr.*,
         u.full_name as provider_name,
         u.phone as provider_phone
-      FROM provider_reports pr
-      JOIN provider_profiles pp ON pr.provider_id = pp.id
-      JOIN users u ON pp.user_id = u.id
+      FROM provider_reports_users pr
+      JOIN users u ON pr.provider_id = u.id
       ${whereClause}
       ORDER BY pr.created_at DESC
       LIMIT $${paramCount} OFFSET $${paramCount + 1}
@@ -784,7 +783,7 @@ router.get('/reports', requireRole(['admin']), async (req, res) => {
     // Get total count
     const countResult = await getRow(`
       SELECT COUNT(*) as total
-      FROM provider_reports pr
+      FROM provider_reports_users pr
       ${whereClause}
     `, queryParams);
 
@@ -821,7 +820,7 @@ router.get('/my-reports', async (req, res) => {
     const { page = 1, limit = 10, status } = req.query;
     const offset = (page - 1) * limit;
 
-    let whereClause = 'WHERE pr.provider_id = (SELECT id FROM provider_profiles WHERE user_id = $1)';
+    let whereClause = 'WHERE pr.provider_id = $1';
     let queryParams = [req.user.id];
     let paramCount = 2;
 
@@ -834,7 +833,7 @@ router.get('/my-reports', async (req, res) => {
     const reports = await getRows(`
       SELECT 
         pr.*
-      FROM provider_reports pr
+      FROM provider_reports_users pr
       ${whereClause}
       ORDER BY pr.created_at DESC
       LIMIT $${paramCount} OFFSET $${paramCount + 1}
@@ -843,8 +842,8 @@ router.get('/my-reports', async (req, res) => {
     // Get total count
     const countResult = await getRow(`
       SELECT COUNT(*) as total
-      FROM provider_reports pr
-      WHERE pr.provider_id = (SELECT id FROM provider_profiles WHERE user_id = $1)
+      FROM provider_reports_users pr
+      WHERE pr.provider_id = $1
       ${status ? 'AND pr.status = $2' : ''}
     `, status ? [req.user.id, status] : [req.user.id]);
 
@@ -893,7 +892,7 @@ router.put('/reports/:id/status', [
     const { status } = req.body;
 
     const result = await query(`
-      UPDATE provider_reports 
+      UPDATE provider_reports_users 
       SET status = $1
       WHERE id = $2
       RETURNING *

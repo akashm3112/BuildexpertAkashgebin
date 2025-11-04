@@ -209,3 +209,10 @@
 {"level":"info","message":"🔐 Auth: User created successfully","role":"user","service":"buildxpert-api","timestamp":"2025-11-03 10:23:05","userId":"f04294bd-a994-4027-b780-cde841d4d58b"}
 {"count":1,"level":"info","message":"Deleting images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:23:23"}
 {"count":1,"level":"info","message":"Successfully deleted images from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-03 10:23:25"}
+{"error":"Connection terminated unexpectedly","level":"error","message":"Login error","service":"buildxpert-api","timestamp":"2025-11-04 10:51:08"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"9535228888","role":"user","service":"buildxpert-api","timestamp":"2025-11-04 11:09:17"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-04 11:09:32"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-04 11:09:35"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"9535228888","role":"user","service":"buildxpert-api","timestamp":"2025-11-04 11:09:35"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"user","service":"buildxpert-api","timestamp":"2025-11-04 11:09:35","userId":"92e89d56-44c4-4496-9641-b0f247e3c713"}
+{"level":"info","message":"No providers found","paymentStatus":"active","service":"buildxpert-api","serviceId":"8417b826-a3d3-4c0d-888e-e75bb98cc321","state":"all","timestamp":"2025-11-04 11:24:17","totalInDb":0}

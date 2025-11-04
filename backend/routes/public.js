@@ -44,7 +44,7 @@ router.get('/services/:id/providers', async (req, res) => {
     let paramCount = 3;
 
     if (state) {
-      whereClause += ` AND pp.state = $${paramCount}`;
+      whereClause += ` AND a.state = $${paramCount}`;
       queryParams.push(state);
       paramCount++;
     }
@@ -103,11 +103,24 @@ router.get('/services/:id/providers', async (req, res) => {
       SELECT COUNT(*) as total
       FROM provider_services ps
       JOIN provider_profiles pp ON ps.provider_id = pp.id
+      JOIN users u ON pp.user_id = u.id
+      JOIN services_master sm ON ps.service_id = sm.id
+      LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
       ${whereClause}
     `, queryParams);
 
     const total = parseInt(countResult.total);
     const totalPages = Math.ceil(total / limit);
+
+    // Log if no providers found for debugging
+    if (updatedProviders.length === 0) {
+      logger.info('No providers found', { 
+        serviceId: id, 
+        paymentStatus: 'active',
+        state: state || 'all',
+        totalInDb: total
+      });
+    }
 
     res.json({
       status: 'success',
@@ -123,10 +136,15 @@ router.get('/services/:id/providers', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Get service providers error', { error: error.message });
+    logger.error('Get service providers error', { 
+      error: error.message, 
+      stack: error.stack,
+      serviceId: req.params.id 
+    });
     res.status(500).json({
       status: 'error',
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

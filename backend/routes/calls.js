@@ -120,22 +120,38 @@ router.post('/log', [
       connectionQuality,
       errorDetails,
       endReason,
-      metrics
+      metrics,
+      sessionId,
+      callSid,
+      callerPhone
     } = req.body;
     const userId = req.user.id;
+
+    // Get user's phone number if callerPhone not provided
+    let userPhone = callerPhone;
+    if (!userPhone) {
+      const userResult = await query('SELECT phone FROM users WHERE id = $1', [userId]);
+      userPhone = userResult.rows[0]?.phone || 'unknown';
+    }
+
+    // Generate sessionId and callSid if not provided
+    const finalSessionId = sessionId || `SESSION_${Date.now()}_${userId}`;
+    const finalCallSid = callSid || `CALL_${Date.now()}_${userId}`;
 
     // Enhanced call logging with additional details
     await query(`
       INSERT INTO call_logs (
-        booking_id, caller_type, caller_id, call_status, duration, 
+        booking_id, session_id, call_sid, caller_type, caller_phone, call_status, call_duration, 
         connection_quality, error_details, end_reason, metrics, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
     `, [
-      bookingId, 
+      bookingId,
+      finalSessionId,
+      finalCallSid,
       callerType, 
-      userId, 
+      userPhone,
       status, 
-      duration,
+      duration || 0, // call_duration column
       connectionQuality ? JSON.stringify(connectionQuality) : null,
       errorDetails ? JSON.stringify(errorDetails) : null,
       endReason,

@@ -44,11 +44,11 @@ async function migrateReportTables() {
     `);
     console.log('✅ Indexes created');
 
-    // Step 2: Rename existing provider_reports to user_reports_providers
-    console.log('\n📋 Step 2: Renaming provider_reports to user_reports_providers...');
+    // Step 2: Create or rename user_reports_providers table
+    console.log('\n📋 Step 2: Setting up user_reports_providers table...');
     
     // Check if user_reports_providers already exists
-    const tableCheck = await query(`
+    const userReportsCheck = await query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
@@ -56,11 +56,41 @@ async function migrateReportTables() {
       );
     `);
     
-    if (!tableCheck.rows[0].exists) {
-      await query(`ALTER TABLE provider_reports RENAME TO user_reports_providers;`);
-      console.log('✅ Table renamed to user_reports_providers');
+    // Check if provider_reports exists (old table name)
+    const providerReportsCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'provider_reports'
+      );
+    `);
+    
+    if (!userReportsCheck.rows[0].exists) {
+      if (providerReportsCheck.rows[0].exists) {
+        // Rename existing table
+        await query(`ALTER TABLE provider_reports RENAME TO user_reports_providers;`);
+        console.log('✅ Table renamed from provider_reports to user_reports_providers');
+      } else {
+        // Create new table if neither exists
+        await query(`
+          CREATE TABLE IF NOT EXISTS user_reports_providers (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            reported_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            reported_provider_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            incident_date DATE NOT NULL,
+            incident_time TIME,
+            incident_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            evidence JSONB,
+            status TEXT CHECK (status IN ('open', 'resolved', 'closed')) DEFAULT 'open',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+        `);
+        console.log('✅ Created user_reports_providers table');
+      }
     } else {
-      console.log('⚠️  user_reports_providers already exists, skipping rename');
+      console.log('⚠️  user_reports_providers already exists, skipping');
     }
 
     // Step 3: Update indexes and constraints for renamed table
@@ -107,19 +137,22 @@ async function migrateReportTables() {
     console.error('❌ Migration failed:', error.message);
     console.error(error);
     throw error;
-  } finally {
-    await pool.end();
   }
 }
 
-// Run migration
-migrateReportTables()
-  .then(() => {
-    console.log('\n🎉 Migration script completed');
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error('\n💥 Migration script failed:', error);
-    process.exit(1);
-  });
+module.exports = migrateReportTables;
+
+// Run migration if called directly
+if (require.main === module) {
+  migrateReportTables()
+    .then(() => {
+      console.log('\n🎉 Migration script completed');
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('\n💥 Migration script failed:', error);
+      process.exit(1);
+    });
+}
+
 

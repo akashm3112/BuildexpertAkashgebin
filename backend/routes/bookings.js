@@ -584,14 +584,18 @@ router.post('/:id/report', [
         `, [providerService.provider_id]);
         
         if (providerProfile) {
+          // Get booking date for incident_date
+          const bookingDate = booking.appointment_date || new Date().toISOString().split('T')[0];
+          
           await query(`
             INSERT INTO user_reports_providers 
-            (reported_by_user_id, reported_provider_id, report_type, description, status)
-            VALUES ($1, $2, $3, $4, $5)
+            (reported_by_user_id, reported_provider_id, incident_date, incident_type, description, status)
+            VALUES ($1, $2, $3, $4, $5, $6)
           `, [
             req.user.id,
             providerProfile.user_id,
-            reportReason,
+            bookingDate,
+            reportReason || 'other', // incident_type (required)
             reportDescription,
             'open'
           ]);

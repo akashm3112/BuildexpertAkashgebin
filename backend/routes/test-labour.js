@@ -28,8 +28,8 @@ router.post('/grant-labour-access', auth, async (req, res) => {
     // Create a test transaction record
     const transactionQuery = `
       INSERT INTO labour_payment_transactions (
-        user_id, order_id, amount, status, created_at, completed_at, transaction_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        user_id, order_id, amount, status, service_name, payment_method, created_at, completed_at, transaction_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `;
 
     const orderId = 'TEST_' + Date.now();
@@ -41,6 +41,8 @@ router.post('/grant-labour-access', auth, async (req, res) => {
       orderId,
       99,
       'completed',
+      'labors', // Service name for labour access
+      'paytm', // Payment method
       now,
       now,
       transactionId

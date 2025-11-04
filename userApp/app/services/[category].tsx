@@ -186,6 +186,15 @@ export default function ServiceListingScreen() {
         if (data.status === 'success' && Array.isArray(data.data.providers)) {
           const rawProviders = data.data.providers;
           console.log('DEBUG: Raw providers array:', rawProviders);
+          
+          // If no providers found, set empty array instead of error
+          if (rawProviders.length === 0) {
+            console.log('DEBUG: No providers found for this service');
+            setProviders([]);
+            setIsLoading(false);
+            return;
+          }
+          
           // Fetch ratings for each provider
           const providersWithRatings = await Promise.all(
             rawProviders.map(async (provider: Provider) => {

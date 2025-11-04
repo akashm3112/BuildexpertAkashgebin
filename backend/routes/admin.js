@@ -379,7 +379,7 @@ router.delete('/users/:id', auth, requireRole(['admin']), async (req, res) => {
     await query('DELETE FROM notifications WHERE user_id = $1', [id]);
     
     // Delete reports made by this user
-    await query('DELETE FROM provider_reports WHERE reported_by_user_id = $1', [id]);
+    await query('DELETE FROM user_reports_providers WHERE reported_by_user_id = $1', [id]);
     
     // Delete bookings (this will cascade to ratings)
     await query('DELETE FROM bookings WHERE user_id = $1', [id]);
@@ -427,7 +427,7 @@ router.delete('/providers/:id', auth, requireRole(['admin']), async (req, res) =
     await query('DELETE FROM notifications WHERE user_id = $1', [id]);
     
     // Delete provider reports (reports about this provider and reports made by this provider)
-    await query('DELETE FROM provider_reports WHERE reported_provider_id = $1 OR reported_by_user_id = $1', [id]);
+    await query('DELETE FROM user_reports_providers WHERE reported_provider_id = $1 OR reported_by_user_id = $1', [id]);
     
     // Delete bookings first (to avoid foreign key constraint)
     if (providerProfile) {

@@ -8,12 +8,16 @@ const completeSeed = async () => {
 
     // 1. Create admin user
     const hashedAdminPassword = await bcrypt.hash('admin123', 12);
-    await query(`
-      INSERT INTO users (full_name, email, phone, password, role, is_verified)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT (phone, role) DO NOTHING
-    `, ['Admin User', 'admin@buildxpert.com', '9999999999', hashedAdminPassword, 'admin', true]);
-    console.log('✅ Admin user created/verified');
+    const adminExists = await getRows('SELECT id FROM users WHERE phone = $1 AND role = $2', ['9999999999', 'admin']);
+    if (adminExists.length === 0) {
+      await query(`
+        INSERT INTO users (full_name, email, phone, password, role, is_verified)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, ['Admin User', 'admin@buildxpert.com', '9999999999', hashedAdminPassword, 'admin', true]);
+      console.log('✅ Admin user created');
+    } else {
+      console.log('⏭️  Admin user already exists');
+    }
 
     // 2. Create sample users for testing
     const sampleUsers = [
@@ -52,12 +56,16 @@ const completeSeed = async () => {
     ];
 
     for (const user of sampleUsers) {
-      await query(`
-        INSERT INTO users (full_name, email, phone, password, role, is_verified)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (phone, role) DO NOTHING
-      `, [user.full_name, user.email, user.phone, user.password, user.role, user.is_verified]);
-      console.log(`✅ Created/verified user: ${user.full_name}`);
+      const userExists = await getRows('SELECT id FROM users WHERE phone = $1', [user.phone]);
+      if (userExists.length === 0) {
+        await query(`
+          INSERT INTO users (full_name, email, phone, password, role, is_verified)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [user.full_name, user.email, user.phone, user.password, user.role, user.is_verified]);
+        console.log(`✅ Created user: ${user.full_name}`);
+      } else {
+        console.log(`⏭️  User already exists: ${user.full_name}`);
+      }
     }
 
     // 3. Create provider profiles for provider users
