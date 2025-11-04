@@ -30,25 +30,58 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
-app.use(cors({
-  origin: [
-    'http://localhost:3000', 
-    'http://localhost:8081', 
-    'http://localhost:19006',
-    'http://192.168.1.8:5000',
-    'http://192.168.1.8:5000',
-    'http://192.168.1.8:3000',
-    'http://192.168.1.8:3000',
-    'http://192.168.1.8:8081',
-    'http://192.168.1.8:8081',
-    'http://192.168.1.8:19006',
-    'http://192.168.1.8:19006'
-  ],
+// CORS configuration - Professional production-ready setup
+// Allowed origins are configured via ALLOWED_ORIGINS environment variable
+// Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000,https://app.example.com
+const getAllowedOrigins = () => {
+  if (!process.env.ALLOWED_ORIGINS) {
+    console.error('❌ ERROR: ALLOWED_ORIGINS environment variable is not set.');
+    console.error('   Please set ALLOWED_ORIGINS in your config.env file.');
+    console.error('   Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000');
+    process.exit(1);
+  }
+  
+  // Parse comma-separated origins from environment variable
+  const origins = process.env.ALLOWED_ORIGINS
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(origin => origin.length > 0); // Remove empty strings
+  
+  if (origins.length === 0) {
+    console.error('❌ ERROR: ALLOWED_ORIGINS contains no valid origins.');
+    process.exit(1);
+  }
+  
+  return origins;
+};
+
+const allowedOrigins = getAllowedOrigins();
+
+// CORS configuration with origin validation
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, Postman, curl, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Validate origin against allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      const error = new Error(`CORS: Origin ${origin} is not allowed`);
+      console.warn(`⚠️  CORS blocked: ${origin}`);
+      callback(error);
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400 // 24 hours - cache preflight requests
+};
+
+app.use(cors(corsOptions));
 
 // Compression middleware
 app.use(compression());
@@ -168,19 +201,7 @@ const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:3000', 
-      'http://localhost:8081', 
-      'http://localhost:19006',
-      'http://192.168.1.8:5000',
-      'http://192.168.1.8:5000',
-      'http://192.168.1.8:3000',
-      'http://192.168.1.8:3000',
-      'http://192.168.1.8:8081',
-      'http://192.168.1.8:8081',
-      'http://192.168.1.8:19006',
-      'http://192.168.1.8:19006'
-    ],
+    origin: allowedOrigins, // Use same origins as Express CORS configuration
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   },
@@ -395,11 +416,11 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 BuildXpert API server running on port ${PORT}`);
-  console.log(`📱 Environment: ${process.env.NODE_ENV}`);
+  console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 Network access: http://192.168.0.106:${PORT}/health`);
   console.log(`📊 API Documentation: http://localhost:${PORT}/api`);
-  
+  console.log(`🌐 Allowed CORS origins: ${allowedOrigins.join(', ')}`);
+
   // Start background services
   console.log('🔧 Starting background services...');
   serviceExpiryManager.start();
