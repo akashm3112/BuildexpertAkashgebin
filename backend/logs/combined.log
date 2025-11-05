@@ -1,0 +1,238 @@
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"6397846394","role":"user","service":"buildxpert-api","timestamp":"2025-11-04 23:29:03"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-04 23:29:14"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-04 23:29:18"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"6397846394","role":"user","service":"buildxpert-api","timestamp":"2025-11-04 23:29:18"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"user","service":"buildxpert-api","timestamp":"2025-11-04 23:29:18","userId":"c07679ad-6000-4340-8df9-d68c8009c7f9"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"6361884365","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:37:09"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-05 10:37:23"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-05 10:37:26"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"6361884365","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:37:26"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:37:26","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:37:27","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:37:27","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:37:27","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:37:29","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:37:29","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:37:29","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:37:43","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:37:43","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:37:43","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:37:43","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:37:43","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:37:43","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:37:47","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:37:48","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:37:48","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:38:00","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:38:01","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:38:01","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:38:02","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:38:02","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:38:02","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:38:09","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:38:09","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:38:09","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:38:17","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:38:17","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:38:17","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:38:24","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:38:24","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:38:24","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 10:38:26","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 10:38:27","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 10:38:27","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:31:17","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:31:18","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:31:18","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:31:19","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:31:19","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:31:19","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:31:24","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:31:24","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:31:24","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:31:24","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:31:24","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:31:24","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:31:31","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:31:31","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:31:31","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:31:38","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:31:38","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:31:38","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:34:44","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:34:44","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:34:44","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:34:44","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:34:44","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:34:44","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:34:56","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:34:56","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:34:56","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:34:56","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:34:56","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:34:56","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:03","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:03","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:03","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:03","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:03","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:03","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:12","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:12","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:12","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:12","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:12","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:12","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:19","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:19","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:19","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:38","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:38","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:38","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:38","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:39","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:39","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:41","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:41","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:41","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:41","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:41","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:41","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:35:46","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:35:46","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:35:46","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:01","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:01","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:01","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:12","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:13","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:13","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:14","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:14","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:14","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:15","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:15","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:15","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:15","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:15","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:15","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:19","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:19","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:19","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:21","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:21","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:21","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:29","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:29","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:29","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:37","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:37","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:37","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:47","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:47","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:47","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:49","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:49","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:49","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:36:58","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:36:58","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:36:58","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:37:00","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:37:00","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:37:00","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:37:01","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:37:01","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:37:01","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:37:10","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:37:10","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:37:10","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:37:37","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:37:38","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:37:38","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:37:39","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:37:39","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:37:39","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:37:39","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:37:39","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:37:39","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:37:49","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:37:49","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:37:49","userId":"c9814f69-37d1-4393-87c4-05c63176df0f"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:42:37","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:42:37","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:42:37","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:42:37","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:42:37","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:42:37","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:43:27","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:43:27","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:43:27","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:43:29","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:43:29","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:43:29","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:43:35","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:43:35","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:43:35","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:43:43","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:43:44","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:43:44","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:43:49","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:43:49","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:43:49","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:43:51","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:43:51","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:43:51","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:47:39","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:47:39","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:47:39","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:48:16","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:48:17","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:48:17","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:48:18","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:48:19","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:48:19","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:48:19","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:48:19","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:48:19","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:50:46","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:50:46","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:50:46","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:50:47","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:50:47","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:50:47","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:50:47","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:50:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:50:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:50:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:50:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:50:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:50:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:50:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:50:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:50:50","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:50:50","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:50:50","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:57:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:57:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:57:48","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:57:49","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:57:49","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:57:49","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:57:50","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:57:50","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:57:50","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:57:50","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:57:50","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:57:50","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:57:56","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:57:56","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:57:56","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 11:58:20","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 11:58:20","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 11:58:20","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 12:11:11","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 12:11:11","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 12:11:11","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-05 12:11:12","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-05 12:11:13","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-05 12:11:13","userId":"52dc7956-d5e8-45e8-88b6-cfda3f102aad"}

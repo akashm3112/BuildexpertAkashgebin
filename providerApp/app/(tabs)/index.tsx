@@ -15,6 +15,7 @@ import {
   StatusBar,
   ScrollView,
   RefreshControl,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MapPin, Search, CheckCircle, Clock } from 'lucide-react-native';
@@ -40,48 +41,54 @@ const getResponsiveSpacing = (small: number, medium: number, large: number) => {
   return large;
 };
 
-const CARD_SIZE = (screenWidth - getResponsiveSpacing(32, 40, 48)) / 3 * 0.95;
-const CARD_HEIGHT = CARD_SIZE * 1.0;
-
-const ServiceCard = ({ item, onPress, isRegistered, getServiceName }: any) => {
+const ServiceCard = ({ item, onPress, isRegistered, getServiceName, itemWidth }: any) => {
   // Add null checks to prevent errors
   if (!item || !item.id) {
     return null;
   }
   
-  
   const serviceName = getServiceName(item.id);
-  const isLongText = serviceName && serviceName.length > 15; // Adjust this threshold as needed
   
   // Get service details from SERVICE_CATEGORIES to check if it's free
   const serviceDetails = SERVICE_CATEGORIES.find(service => service.id === item.id);
   const isFreeService = serviceDetails?.basePrice === 0; // Check if service is free
   
-  
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-      <Image source={typeof item.image === 'string' ? { uri: item.image } : item.image} style={styles.cardImage} />
-      
-      {/* Registered Checkmark */}
-      {isRegistered && (
-        <View style={[styles.tickIconBox, isFreeService && styles.tickIconBoxWithFreeBadge]}>
-          <CheckCircle size={18} color="#FFFFFF" />
+    <View style={[styles.categoryWrapper, { width: itemWidth }]}>
+      <TouchableOpacity
+        style={styles.categoryItem}
+        activeOpacity={0.8}
+        onPress={onPress}
+      >
+        <View style={styles.imageContainer}>
+          <Image
+            source={typeof item.image === 'string' ? { uri: item.image } : item.image}
+            style={styles.categoryImage}
+            resizeMode="cover"
+          />
+          {/* Registered Checkmark */}
+          {isRegistered && (
+            <View style={[styles.tickIconBox, isFreeService && styles.tickIconBoxWithFreeBadge]}>
+              <CheckCircle size={14} color="#FFFFFF" />
+            </View>
+          )}
+          
+          {/* Free Badge */}
+          {isFreeService && (
+            <View style={[styles.freeBadge, isRegistered && styles.freeBadgeWithCheckmark]}>
+              <Text style={styles.freeBadgeText}>FREE</Text>
+            </View>
+          )}
         </View>
-      )}
-      
-      {/* Free Badge */}
-      {isFreeService && (
-        <View style={[styles.freeBadge, isRegistered && styles.freeBadgeWithCheckmark]}>
-          <Text style={styles.freeBadgeText}>FREE</Text>
+      </TouchableOpacity>
+      <View style={styles.categoryContent}>
+        <View style={styles.categoryNameContainer}>
+          <Text style={styles.categoryName} numberOfLines={2}>
+            {serviceName || 'Unknown Service'}
+          </Text>
         </View>
-      )}
-      
-      <View style={styles.overlay}>
-        <Text style={styles.cardText} numberOfLines={isLongText ? 2 : 1}>
-          {serviceName || 'Unknown Service'}
-        </Text>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 
@@ -89,6 +96,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { width: screenWidth } = useWindowDimensions();
   const [search, setSearch] = useState('');
   
   const [searchFocused, setSearchFocused] = useState(false);
@@ -874,42 +882,48 @@ export default function HomeScreen() {
         </View>
       </View>
       
-      {/* Spacer for consistent gap */}
+            {/* Spacer for consistent gap */}
       <View style={{ height: 12 }} />
       {/* Grid */}
       <View style={styles.gridContainer}>
-        {Array.from({ length: Math.ceil(filteredServices.length / 3) }, (_, rowIndex) => {
-          const startIndex = rowIndex * 3;
-          const endIndex = Math.min(startIndex + 3, filteredServices.length);
-          const rowItems = filteredServices.slice(startIndex, endIndex);
-          const isLastRow = rowIndex === Math.ceil(filteredServices.length / 3) - 1;
-          const itemsInRow = rowItems.length;
+        {(() => {
+          const numColumns = 3;
+          const itemWidth = (screenWidth - 40 - (numColumns - 1) * 12) / numColumns;
+          const rows = [];
           
-          return (
-            <View 
-              key={rowIndex} 
-              style={[
-                styles.rowWrapper,
-                isLastRow && itemsInRow < 3 && styles.centeredRow
-              ]}
-            >
-              {rowItems.map((item, itemIndex) => {
-                if (!item || !item.id) return null;
-                
-                const isRegistered = registeredServices.includes(item.id);
-                return (
-                  <ServiceCard
-                    key={item.id}
-                    item={item}
-                    onPress={() => handleServicePress(item.id)}
-                    isRegistered={isRegistered}
-                    getServiceName={getServiceName}
-                  />
-                );
-              })}
-            </View>
-          );
-        })}
+          for (let i = 0; i < filteredServices.length; i += numColumns) {
+            const rowItems = filteredServices.slice(i, i + numColumns);
+            const isLastRow = i + numColumns >= filteredServices.length;
+            const hasSingleItem = isLastRow && rowItems.length === 1;
+
+            rows.push(
+              <View
+                key={i}
+                style={[
+                  styles.row,
+                  hasSingleItem && styles.centeredRow
+                ]}
+              >
+                {rowItems.map((item) => {
+                  if (!item || !item.id) return null;
+
+                  const isRegistered = registeredServices.includes(item.id);
+                  return (
+                    <ServiceCard
+                      key={item.id}
+                      item={item}
+                      onPress={() => handleServicePress(item.id)}
+                      isRegistered={isRegistered}
+                      getServiceName={getServiceName}
+                      itemWidth={itemWidth}
+                    />
+                  );
+                })}
+              </View>
+            );
+          }
+          return rows;
+        })()}
         {filteredServices.length === 0 && (
           <View style={styles.emptySearchResults}>
             <Search size={48} color="#9CA3AF" />
@@ -1212,58 +1226,69 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   gridContainer: {
-    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingHorizontal: 20,
     paddingBottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  rowWrapper: {
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
-    width: '100%',
+    marginBottom: 12,
   },
   centeredRow: {
     justifyContent: 'center',
-    gap: 16,
   },
-  card: {
-    width: CARD_SIZE,
-    height: CARD_HEIGHT,
-    borderRadius: getResponsiveSpacing(10, 11, 12),
+  categoryWrapper: {
+    alignItems: 'center',
+  },
+  categoryItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#fff',
-    elevation: 2,
+    height: 100,
+    width: '100%',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: '#CBD5E1',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
+        shadowOpacity: 0.1,
         shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
       },
     }),
   },
-  cardImage: {
+  imageContainer: {
+    height: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  categoryImage: {
     width: '100%',
     height: '100%',
   },
-  overlay: {
-    position: 'absolute',
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    width: '100%',
-    paddingVertical: getResponsiveSpacing(4, 5, 6),
-    paddingHorizontal: getResponsiveSpacing(3, 4, 5),
+  categoryContent: {
+    paddingTop: 8,
     alignItems: 'center',
-    minHeight: getResponsiveSpacing(28, 30, 32),
+    justifyContent: 'center',
+    width: '100%',
   },
-  cardText: {
-    color: '#fff',
-    fontSize: getResponsiveSpacing(10, 11, 12),
+  categoryName: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#374151',
     textAlign: 'center',
-    lineHeight: getResponsiveSpacing(14, 15, 16),
-    flexShrink: 1,
+    lineHeight: 16,
+  },
+  categoryNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   sectionTitle: {
     fontSize: getResponsiveSpacing(16, 17, 18),

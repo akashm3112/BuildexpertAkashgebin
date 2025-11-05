@@ -462,7 +462,8 @@ router.post('/resend-otp', [otpRequestLimiter,
 // @desc    Start forgot password - send OTP to phone
 // @access  Public
 router.post('/forgot-password', [otpRequestLimiter,
-  body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number')
+  body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number'),
+  body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -471,9 +472,13 @@ router.post('/forgot-password', [otpRequestLimiter,
     }
     // Clean phone number by removing any country code prefix
     const phone = req.body.phone.replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '');
-    const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, 'user']);
+    // Default to 'user' role if not provided (for backward compatibility)
+    const role = req.body.role || 'user';
+    
+    // Check if user exists with the specified role
+    const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
     if (!user) {
-      return res.status(404).json({ status: 'error', message: 'User not found' });
+      return res.status(404).json({ status: 'error', message: `${role === 'user' ? 'User' : role === 'provider' ? 'Provider' : 'Admin'} not found` });
     }
     const otp = generateOTP();
     const result = await sendOTP(phone, otp);
@@ -489,7 +494,9 @@ router.post('/forgot-password', [otpRequestLimiter,
 // @route   POST /api/auth/forgot-password/verify
 // @desc    Verify OTP and create password reset session token
 // @access  Public
-router.post('/forgot-password/verify', [otpVerifyLimiter, ...validateOTP], async (req, res) => {
+router.post('/forgot-password/verify', [otpVerifyLimiter, ...validateOTP,
+  body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -498,13 +505,16 @@ router.post('/forgot-password/verify', [otpVerifyLimiter, ...validateOTP], async
     const { otp } = req.body;
     // Clean phone number by removing any country code prefix
     const phone = req.body.phone.replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '');
+    // Default to 'user' role if not provided (for backward compatibility)
+    const role = req.body.role || 'user';
+    
     const otpResult = verifyOTP(phone, otp);
     if (!otpResult.valid) {
       return res.status(400).json({ status: 'error', message: otpResult.message });
     }
-    const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, 'user']);
+    const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
     if (!user) {
-      return res.status(404).json({ status: 'error', message: 'User not found' });
+      return res.status(404).json({ status: 'error', message: `${role === 'user' ? 'User' : role === 'provider' ? 'Provider' : 'Admin'} not found` });
     }
     const session = createPasswordResetSession(phone);
     return res.json({ status: 'success', message: 'OTP verified', data: { resetToken: session.token, expiresAt: session.expiryTime } });
@@ -520,7 +530,8 @@ router.post('/forgot-password/verify', [otpVerifyLimiter, ...validateOTP], async
 router.post('/forgot-password/reset', [
   body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number'),
   body('resetToken').notEmpty().withMessage('Reset token is required'),
-  body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+  body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -530,13 +541,16 @@ router.post('/forgot-password/reset', [
     const { resetToken, newPassword } = req.body;
     // Clean phone number by removing any country code prefix
     const phone = req.body.phone.replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '');
+    // Default to 'user' role if not provided (for backward compatibility)
+    const role = req.body.role || 'user';
+    
     const sessionValid = validatePasswordResetSession(phone, resetToken);
     if (!sessionValid.valid) {
       return res.status(400).json({ status: 'error', message: sessionValid.message });
     }
-    const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, 'user']);
+    const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
     if (!user) {
-      return res.status(404).json({ status: 'error', message: 'User not found' });
+      return res.status(404).json({ status: 'error', message: `${role === 'user' ? 'User' : role === 'provider' ? 'Provider' : 'Admin'} not found` });
     }
     const hashed = await bcrypt.hash(newPassword, 12);
     await query('UPDATE users SET password = $1 WHERE id = $2', [hashed, user.id]);
