@@ -51,11 +51,16 @@ export default function TabLayout() {
       
       // If we're on home tab, prevent back navigation (exit app)
       if (currentRoute === '(tabs)' || currentRoute === '(tabs)/index') {
-        return true; // Prevent back navigation, let Android handle app exit
+        return false; // Allow default back behavior (exit app on Android)
       }
       
       // If we're on any other tab, navigate to home tab
-      router.push('/(tabs)');
+      try {
+        router.replace('/(tabs)');
+      } catch (e) {
+        // If navigation fails, allow default back behavior
+        return false;
+      }
       return true; // Prevent default back behavior
     });
 

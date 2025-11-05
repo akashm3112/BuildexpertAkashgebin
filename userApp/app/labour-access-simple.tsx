@@ -23,7 +23,8 @@ export default function LabourAccessSimpleScreen() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // First check local storage (fast)
+        setLoading(true);
+        // First check local storage (fast) - this will update context
         await checkLabourAccess();
         
         // Also fetch from API to ensure we have latest data
@@ -46,32 +47,26 @@ export default function LabourAccessSimpleScreen() {
               }
             }
           } catch (apiError) {
-            // If API fails, still show local data
+            // If API fails, still show local data - this is fine
             console.log('API fetch failed, using local data:', apiError);
           }
+        } else {
+          // No token - still show UI with local data (if any)
+          console.log('No token found, using local data only');
         }
       } catch (error) {
+        // Even if checkLabourAccess fails, show the UI
         console.error('Error fetching labour access:', error);
       } finally {
-        // Mark that we've done the initial check
+        // Always stop loading and show UI, regardless of success/failure
         setHasChecked(true);
+        setLoading(false);
       }
     };
     
     fetchData();
-  }, []);
-
-  // Update loading state after initial check completes
-  useEffect(() => {
-    if (!hasChecked && labourAccessStatus !== null) {
-      // After first check completes (status is set, even if null), stop loading
-      const timer = setTimeout(() => {
-        setHasChecked(true);
-        setLoading(false);
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [labourAccessStatus, hasChecked]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Refresh labour access when screen comes into focus (not periodically)
   useFocusEffect(

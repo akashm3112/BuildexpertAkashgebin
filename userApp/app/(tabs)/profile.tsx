@@ -591,13 +591,6 @@ export default function ProfileScreen() {
         { text: t('alerts.logout.cancel'), onPress: () => setShowAlertModal(false), style: 'secondary' },
         { text: t('alerts.logout.confirm'), onPress: async () => { 
           await logout(); 
-          try {
-            if (router.dismissAll) {
-              router.dismissAll();
-            }
-          } catch (e) {
-            // dismissAll might not be available in all versions
-          }
           router.replace('/(auth)/login'); 
         }, style: 'destructive' }
       ]
@@ -654,16 +647,8 @@ export default function ProfileScreen() {
                 await logout();
                 setDeleteLoading(false);
                 showAlert('Account Deleted', 'Your account and all related data have been deleted.', 'success');
-                // Redirect to login screen with navigation stack reset (production pattern)
+                // Redirect to login screen
                 setTimeout(() => {
-                  // Clear any modals/routes in stack, then replace to login
-                  try {
-                    if (router.dismissAll) {
-                      router.dismissAll();
-                    }
-                  } catch (e) {
-                    // dismissAll might not be available in all versions
-                  }
                   router.replace('/(auth)/login');
                 }, 1500);
               } else {
@@ -881,18 +866,36 @@ export default function ProfileScreen() {
                  </TouchableOpacity>
               </View>
               <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{userProfile.name}</Text>
+                <Text 
+                  style={styles.profileName}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {userProfile.name}
+                </Text>
                 <View style={styles.profileDetails}>
                   {userProfile.location ? (
                     <View style={styles.detailItem}>
                       <View style={styles.detailIconContainer}>
                         <MapPin size={16} color="#64748B" />
                       </View>
-                      <Text style={styles.detailText}>{userProfile.location}</Text>
+                      <Text 
+                        style={styles.detailText}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {userProfile.location}
+                      </Text>
                     </View>
                   ) : null}
                   <View style={styles.detailItem}>
-                    <Text style={styles.detailText}>{userProfile.email}</Text>
+                    <Text 
+                      style={styles.detailText}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {userProfile.email}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -963,21 +966,6 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <LogOut size={20} color="#EF4444" />
           <Text style={styles.logoutText}>{t('profile.logout')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.logoutButton, deleteLoading && styles.logoutButtonDisabled]} 
-          onPress={handleDeleteAccount}
-          disabled={deleteLoading}
-        >
-          {deleteLoading ? (
-            <ActivityIndicator size="small" color="#EF4444" style={{ marginRight: 10 }} />
-          ) : (
-            <Trash2 size={20} color="#EF4444" style={{ marginRight: 10 }} />
-          )}
-          <Text style={styles.logoutText}>
-            {deleteLoading ? 'Deleting Account...' : t('profile.deleteAccount')}
-          </Text>
         </TouchableOpacity>
 
         <View style={styles.footer}>
@@ -1076,6 +1064,24 @@ export default function ProfileScreen() {
                 onChangeText={(text) => setUserProfile(prev => ({ ...prev, location: text }))}
                 placeholder={t('editProfile.locationPlaceholder')}
               />
+            </View>
+
+            {/* Delete Account Button */}
+            <View style={styles.deleteAccountSection}>
+              <TouchableOpacity 
+                style={[styles.deleteAccountButton, deleteLoading && styles.deleteAccountButtonDisabled]} 
+                onPress={handleDeleteAccount}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (
+                  <ActivityIndicator size="small" color="#EF4444" style={{ marginRight: 10 }} />
+                ) : (
+                  <Trash2 size={20} color="#EF4444" style={{ marginRight: 10 }} />
+                )}
+                <Text style={styles.deleteAccountButtonText}>
+                  {deleteLoading ? 'Deleting Account...' : t('profile.deleteAccount')}
+                </Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </SafeView>
@@ -1532,12 +1538,14 @@ const styles = StyleSheet.create({
   profileInfo: {
     marginLeft: getResponsiveSpacing(16, 20, 24),
     flex: 1,
+    minWidth: 0, // Allows flex item to shrink below content size
   },
   profileName: {
     fontSize: getResponsiveFontSize(20, 24, 28),
     fontWeight: '700',
     color: '#1E293B',
     marginBottom: getResponsiveSpacing(8, 12, 16),
+    width: '100%', // Ensure text takes full available width for truncation
   },
   notificationButton: {
     width: getResponsiveSpacing(40, 44, 48),
@@ -1576,6 +1584,8 @@ const styles = StyleSheet.create({
     alignItems: 'baseline', // Use baseline alignment for better text-icon alignment
     minHeight: getResponsiveSpacing(20, 22, 24), // Ensure consistent height
     paddingVertical: getResponsiveSpacing(2, 3, 4), // Add vertical padding for better spacing
+    minWidth: 0, // Allows flex item to shrink below content size for truncation
+    flex: 1, // Allow item to take available space
   },
   detailIconContainer: {
     width: getResponsiveSpacing(18, 20, 22), // Slightly larger to accommodate size 16 icon
@@ -1590,6 +1600,7 @@ const styles = StyleSheet.create({
     marginLeft: getResponsiveSpacing(6, 8, 10), // Increased margin for better spacing
     fontWeight: '500',
     flex: 1, // Allow text to take remaining space
+    minWidth: 0, // Allows flex item to shrink below content size for truncation
     lineHeight: getResponsiveSpacing(16, 18, 20), // Better line height for alignment
     textAlignVertical: 'center', // Ensure text is vertically centered
     includeFontPadding: false, // Remove extra font padding on Android
@@ -1848,6 +1859,30 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(10, 12, 14),
     color: '#64748B',
     marginTop: getResponsiveSpacing(2, 4, 6),
+  },
+  deleteAccountSection: {
+    marginTop: getResponsiveSpacing(24, 28, 32),
+    marginBottom: getResponsiveSpacing(16, 20, 24),
+    paddingTop: getResponsiveSpacing(20, 24, 28),
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+  },
+  deleteAccountButtonDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#F9FAFB',
+  },
+  deleteAccountButtonText: {
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '500',
+    color: '#EF4444',
   },
   // Privacy & Security Styles
   privacySection: {

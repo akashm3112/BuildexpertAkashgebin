@@ -614,9 +614,9 @@ function AuthScreen() {
       router.replace('/(tabs)');
     }
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Prevent going back to splash or previous screens if logged in
-      if (user) return true;
-      return false;
+      // Prevent going back to previous screens (especially after logout/account deletion)
+      // Always prevent back navigation from auth screen to ensure users can't access protected screens
+      return true;
     });
     return () => backHandler.remove();
   }, [user]);

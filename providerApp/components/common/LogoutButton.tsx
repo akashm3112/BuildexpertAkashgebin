@@ -44,14 +44,15 @@ export default function LogoutButton({
       // Add a small delay to ensure logout completes before navigation
       setTimeout(() => {
         try {
-          router.replace('/auth');
+          // Navigate to root index which will handle auth redirect and prevent back navigation
+          router.replace('/');
           console.log('✅ Complete logout successful');
           onLogoutComplete?.();
         } catch (navError) {
           console.error('❌ Navigation error during logout:', navError);
           // Fallback: try to navigate to root
           try {
-            router.push('/auth');
+            router.push('/');
           } catch (fallbackError) {
             console.error('❌ Fallback navigation also failed:', fallbackError);
           }
@@ -62,14 +63,15 @@ export default function LogoutButton({
     } catch (error) {
       console.error('❌ Logout error:', error);
       
-      // Even if there's an error, try to navigate to auth
+      // Even if there's an error, try to navigate to root
       setTimeout(() => {
         try {
-          router.replace('/auth');
+          // Navigate to root index which will handle auth redirect and prevent back navigation
+          router.replace('/');
         } catch (navError) {
           console.error('❌ Navigation error during logout:', navError);
           try {
-            router.push('/auth');
+            router.push('/');
           } catch (fallbackError) {
             console.error('❌ Fallback navigation also failed:', fallbackError);
           }

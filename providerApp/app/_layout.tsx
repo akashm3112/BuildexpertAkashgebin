@@ -19,7 +19,7 @@ import * as SplashScreen from 'expo-splash-screen';
  * 
  * NAVIGATION FIXES IMPLEMENTED:
  * - BackHandler prevents cross-role navigation
- * - router.dismissAll() clears navigation stack on logout
+ * - router.replace() properly handles navigation stack reset on logout (no dismissAll needed)
  * - Proper role-based routing in index.tsx
  * 
  * IMPORTANT: Back button behavior is now properly isolated between roles

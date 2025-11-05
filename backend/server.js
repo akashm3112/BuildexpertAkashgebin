@@ -420,7 +420,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   console.log(`📊 API Documentation: http://localhost:${PORT}/api`);
   console.log(`🌐 Allowed CORS origins: ${allowedOrigins.join(', ')}`);
-
+  
   // Start background services
   console.log('🔧 Starting background services...');
   serviceExpiryManager.start();

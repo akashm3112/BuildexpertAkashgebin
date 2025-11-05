@@ -66,27 +66,27 @@ const ServiceCard = ({ item, onPress, isRegistered, getServiceName, itemWidth }:
             style={styles.categoryImage}
             resizeMode="cover"
           />
-          {/* Registered Checkmark */}
-          {isRegistered && (
-            <View style={[styles.tickIconBox, isFreeService && styles.tickIconBoxWithFreeBadge]}>
+      {/* Registered Checkmark */}
+      {isRegistered && (
+        <View style={[styles.tickIconBox, isFreeService && styles.tickIconBoxWithFreeBadge]}>
               <CheckCircle size={14} color="#FFFFFF" />
-            </View>
-          )}
-          
-          {/* Free Badge */}
-          {isFreeService && (
-            <View style={[styles.freeBadge, isRegistered && styles.freeBadgeWithCheckmark]}>
-              <Text style={styles.freeBadgeText}>FREE</Text>
-            </View>
-          )}
+        </View>
+      )}
+      
+      {/* Free Badge */}
+      {isFreeService && (
+        <View style={[styles.freeBadge, isRegistered && styles.freeBadgeWithCheckmark]}>
+          <Text style={styles.freeBadgeText}>FREE</Text>
+        </View>
+      )}
         </View>
       </TouchableOpacity>
       <View style={styles.categoryContent}>
         <View style={styles.categoryNameContainer}>
           <Text style={styles.categoryName} numberOfLines={2}>
-            {serviceName || 'Unknown Service'}
-          </Text>
-        </View>
+          {serviceName || 'Unknown Service'}
+        </Text>
+      </View>
       </View>
     </View>
   );
@@ -882,7 +882,7 @@ export default function HomeScreen() {
         </View>
       </View>
       
-            {/* Spacer for consistent gap */}
+      {/* Spacer for consistent gap */}
       <View style={{ height: 12 }} />
       {/* Grid */}
       <View style={styles.gridContainer}>
@@ -895,32 +895,32 @@ export default function HomeScreen() {
             const rowItems = filteredServices.slice(i, i + numColumns);
             const isLastRow = i + numColumns >= filteredServices.length;
             const hasSingleItem = isLastRow && rowItems.length === 1;
-
+          
             rows.push(
-              <View
+            <View 
                 key={i}
-                style={[
+              style={[
                   styles.row,
                   hasSingleItem && styles.centeredRow
-                ]}
-              >
+              ]}
+            >
                 {rowItems.map((item) => {
-                  if (!item || !item.id) return null;
-
-                  const isRegistered = registeredServices.includes(item.id);
-                  return (
-                    <ServiceCard
-                      key={item.id}
-                      item={item}
-                      onPress={() => handleServicePress(item.id)}
-                      isRegistered={isRegistered}
-                      getServiceName={getServiceName}
+                if (!item || !item.id) return null;
+                
+                const isRegistered = registeredServices.includes(item.id);
+                return (
+                  <ServiceCard
+                    key={item.id}
+                    item={item}
+                    onPress={() => handleServicePress(item.id)}
+                    isRegistered={isRegistered}
+                    getServiceName={getServiceName}
                       itemWidth={itemWidth}
-                    />
-                  );
-                })}
-              </View>
-            );
+                  />
+                );
+              })}
+            </View>
+          );
           }
           return rows;
         })()}

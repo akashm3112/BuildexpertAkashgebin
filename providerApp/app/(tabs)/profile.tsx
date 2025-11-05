@@ -373,11 +373,12 @@ export default function ProfileScreen() {
               // Add a small delay to ensure logout completes before navigation
               setTimeout(() => {
                 try {
-                  router.replace('/auth');
+                  // Navigate to root index which will handle auth redirect and prevent back navigation
+                  router.replace('/');
                 } catch (navError) {
                   console.error('Navigation error during logout:', navError);
                   // Fallback: try to navigate to root
-                  router.push('/auth');
+                  router.push('/');
                 }
               }, 100);
               
@@ -422,7 +423,8 @@ export default function ProfileScreen() {
               if (response.ok) {
                 await logout();
                 showAlert(t('alerts.accountDeleted'), t('alerts.accountDeletedMessage'), 'success');
-                router.replace('/auth');
+                // Navigate to root index which will handle auth redirect and prevent back navigation
+                router.replace('/');
               } else {
                 const data = await response.json();
                 showAlert(t('alerts.error'), data.message || t('alerts.failedToDeleteAccount'), 'error');
@@ -1246,10 +1248,6 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <LogOut size={20} color="#EF4444" />
             <Text style={styles.logoutButtonText}>{t('profile.logout')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
-            <Trash2 size={20} color="#EF4444" style={{ marginRight: 10 }} />
-            <Text style={styles.deleteButtonText}>{t('profile.deleteAccount')}</Text>
           </TouchableOpacity>
         </View>
 

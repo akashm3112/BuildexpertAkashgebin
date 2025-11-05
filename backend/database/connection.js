@@ -8,16 +8,18 @@ const pool = new Pool({
   // Connection pool settings
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established
+  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established                                                    
   // Set timezone to IST (India Standard Time)
   timezone: 'Asia/Kolkata'
 });
 
-// Test the connection
+// Set timezone for new connections (no logging - this happens frequently)
 pool.on('connect', (client) => {
-  console.log('✅ Connected to PostgreSQL database');
-  // Set timezone for this connection
-  client.query('SET timezone = "Asia/Kolkata"');
+  // Set timezone for this connection (silently)
+  client.query('SET timezone = "Asia/Kolkata"').catch(err => {
+    // Only log timezone setting errors, not the connection itself
+    console.error('❌ Failed to set timezone for database connection:', err.message);
+  });
 });
 
 pool.on('error', (err) => {
@@ -27,6 +29,25 @@ pool.on('error', (err) => {
     process.exit(-1);
   }
 });
+
+// One-time connection test at startup (only runs once when module is loaded)
+let connectionTested = false;
+(async () => {
+  try {
+    const result = await pool.query('SELECT NOW()');
+    if (!connectionTested) {
+      console.log('✅ Database connection pool initialized successfully');
+      connectionTested = true;
+    }
+  } catch (error) {
+    console.error('❌ Failed to connect to PostgreSQL database:', error.message);
+    console.error('   Please check your DATABASE_URL in config.env');
+    // In production, we might want to retry or exit gracefully
+    if (config.isDevelopment()) {
+      process.exit(1);
+    }
+  }
+})();
 
 // Helper function to execute queries with enhanced error handling
 const query = async (text, params) => {

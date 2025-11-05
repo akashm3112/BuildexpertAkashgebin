@@ -1,11 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ShieldCheck, CheckCircle, Shield, MessageCircle, AlertTriangle, Clock } from 'lucide-react-native';
 import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import { useAuth } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/constants/api';
+
+// Responsive design utilities
+const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 375;
+const isMediumScreen = screenWidth >= 375 && screenWidth < 414;
+const isLargeScreen = screenWidth >= 414;
+
+const getResponsiveSpacing = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
+
+const getResponsiveFontSize = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
 
 export default function OTPVerification() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -50,15 +68,70 @@ export default function OTPVerification() {
   const handleOtpChange = (value: string, idx: number) => {
     if (isLocked) return; // Prevent input when locked
     
-    if (/^\d?$/.test(value)) {
-      const newOtp = [...otp];
-      newOtp[idx] = value;
-      setOtp(newOtp);
-      if (value && idx < 5) {
-        inputRefs.current[idx + 1]?.focus?.();
+    // Handle paste (when user pastes 6 digits at once)
+    if (value.length > 1) {
+      const digits = value.slice(0, 6).split('').filter(char => /^\d$/.test(char));
+      if (digits.length > 0) {
+        const newOtp = [...otp];
+        digits.forEach((digit, i) => {
+          if (idx + i < 6) {
+            newOtp[idx + i] = digit;
+          }
+        });
+        setOtp(newOtp);
+        
+        // Focus the last filled input or the next empty one
+        const lastFilledIndex = Math.min(idx + digits.length - 1, 5);
+        const nextEmptyIndex = newOtp.findIndex((val, i) => i > lastFilledIndex && !val);
+        const focusIndex = nextEmptyIndex !== -1 ? nextEmptyIndex : (lastFilledIndex < 5 ? lastFilledIndex + 1 : lastFilledIndex);
+        
+        // Auto-submit if all 6 digits are filled - pass newOtp directly to avoid state timing issues
+        if (newOtp.every(d => d !== '')) {
+          setTimeout(() => {
+            inputRefs.current[focusIndex]?.blur();
+            handleVerifyOTP(newOtp);
+          }, 100);
+        } else {
+          setTimeout(() => {
+            inputRefs.current[focusIndex]?.focus();
+          }, 50);
+        }
       }
-      if (!value && idx > 0) {
-        inputRefs.current[idx - 1]?.focus?.();
+      return;
+    }
+    
+    // Handle single digit input
+    if (!/^[0-9]?$/.test(value)) return;
+    const newOtp = [...otp];
+    newOtp[idx] = value;
+    setOtp(newOtp);
+    if (value && idx < 5) {
+      setTimeout(() => {
+        inputRefs.current[idx + 1]?.focus();
+      }, 50);
+    }
+
+    // Auto-submit when all 6 digits are filled - pass newOtp directly to avoid state timing issues
+    if (value && newOtp.every(d => d !== '')) {
+      setTimeout(() => {
+        inputRefs.current[idx]?.blur();
+        handleVerifyOTP(newOtp);
+      }, 300);
+    }
+  };
+
+  const handleKeyPress = (e: any, idx: number) => {
+    // Handle backspace key - when pressing backspace on an empty field, go to previous field
+    if (e.nativeEvent.key === 'Backspace') {
+      if (!otp[idx] && idx > 0) {
+        // If current field is empty and backspace is pressed, go to previous field and clear it
+        const newOtp = [...otp];
+        newOtp[idx - 1] = '';
+        setOtp(newOtp);
+        setTimeout(() => {
+          inputRefs.current[idx - 1]?.focus();
+          inputRefs.current[idx - 1]?.setNativeProps?.({ text: '' });
+        }, 50);
       }
     }
   };
@@ -96,23 +169,35 @@ export default function OTPVerification() {
     }
   };
 
-  const handleVerifyOTP = async () => {
+  const handleVerifyOTP = async (otpOverride?: string[]) => {
     if (isLocked) {
       showModal('Account Locked', `Too many failed attempts. Please try again in ${formatTime(lockoutTimer)}`, 'error');
       return;
     }
 
-    const otpValue = otp.join('');
+    // Use provided OTP array or fall back to state (for manual button press)
+    const otpToVerify = otpOverride || otp;
+    const otpValue = otpToVerify.join('').trim();
+    
     if (otpValue.length !== 6) {
       showModal('Invalid OTP', 'Please enter a valid 6-digit OTP', 'error');
       return;
     }
+
+    // Clean phone number (remove country code prefixes, spaces, etc.) to match backend format
+    const cleanPhone = String(phone || '').replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '').replace(/\D/g, '');
+    
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      showModal('Invalid Phone Number', 'Please enter a valid 10-digit phone number', 'error');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp: otpValue })
+        body: JSON.stringify({ phone: cleanPhone, otp: otpValue })
       });
       const data = await response.json();
       setIsLoading(false);
@@ -162,6 +247,14 @@ export default function OTPVerification() {
 
     if (timer > 0) return;
     
+    // Clean phone number (remove country code prefixes, spaces, etc.) to match backend format
+    const cleanPhone = String(phone || '').replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '').replace(/\D/g, '');
+    
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      showModal('Invalid Phone Number', 'Please enter a valid 10-digit phone number', 'error');
+      return;
+    }
+    
     setIsResending(true);
     setSmsStatus('pending');
     try {
@@ -171,7 +264,7 @@ export default function OTPVerification() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          phone: phone as string,
+          phone: cleanPhone,
         }),
       });
 
@@ -264,26 +357,49 @@ export default function OTPVerification() {
               )}
 
               <View style={styles.otpContainer}>
-                {otp.map((digit, index) => (
-                  <TextInput
-                    key={index}
-                    ref={(ref) => {
-                      inputRefs.current[index] = ref;
-                    }}
-                    style={[
-                      styles.otpInput,
-                      digit && styles.otpInputFilled,
-                      isLocked && styles.otpInputDisabled
-                    ]}
-                    value={digit}
-                    onChangeText={(value) => handleOtpChange(value, index)}
-                    keyboardType="numeric"
-                    maxLength={1}
-                    textAlign="center"
-                    autoFocus={index === 0}
-                    editable={!isLocked}
-                  />
-                ))}
+                {otp.map((digit, index) => {
+                  // Calculate responsive width for OTP inputs
+                  // Account for: scrollContent padding (20*2) + card padding (32*2) = 104px total
+                  const scrollContentPadding = 20 * 2; // Left + Right
+                  const cardPadding = 32 * 2; // Left + Right
+                  const totalHorizontalPadding = scrollContentPadding + cardPadding;
+                  const gapSize = getResponsiveSpacing(6, 8, 10); // Responsive gap between inputs
+                  const totalGaps = gapSize * 5; // 5 gaps for 6 inputs
+                  const availableWidth = screenWidth - totalHorizontalPadding - totalGaps;
+                  const inputWidth = availableWidth / 6;
+                  // Ensure minimum 38px for very small screens and maximum 52px for large screens
+                  const responsiveInputWidth = Math.max(38, Math.min(52, inputWidth));
+                  
+                  return (
+                    <TextInput
+                      key={index}
+                      ref={(ref) => {
+                        inputRefs.current[index] = ref;
+                      }}
+                      style={[
+                        styles.otpInput,
+                        {
+                          width: responsiveInputWidth,
+                          height: getResponsiveSpacing(50, 54, 58),
+                          fontSize: getResponsiveFontSize(18, 20, 22),
+                          marginRight: index < 5 ? gapSize : 0, // Add margin except for last input
+                        },
+                        digit && styles.otpInputFilled,
+                        isLocked && styles.otpInputDisabled
+                      ]}
+                      value={digit}
+                      onChangeText={(value) => handleOtpChange(value, index)}
+                      onKeyPress={(e) => handleKeyPress(e, index)}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      textAlign="center"
+                      autoFocus={index === 0 && otp.every(d => !d)}
+                      editable={!isLocked}
+                      selectTextOnFocus={true}
+                      contextMenuHidden={true}
+                    />
+                  );
+                })}
               </View>
 
               <TouchableOpacity
@@ -446,15 +562,15 @@ const styles = StyleSheet.create({
   otpContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 32,
+    paddingHorizontal: 0,
+    width: '100%',
   },
   otpInput: {
-    width: 48,
-    height: 56,
     borderWidth: 2,
     borderColor: '#E2E8F0',
     borderRadius: 12,
-    fontSize: 20,
     fontWeight: '600',
     color: '#1E293B',
     backgroundColor: '#FFFFFF',
