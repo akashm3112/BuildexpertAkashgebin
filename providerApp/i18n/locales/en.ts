@@ -21,7 +21,7 @@ export default {
     supportAndReporting: 'Support & Reporting',
     reportCustomer: 'Report Customer',
     accountSettings: 'Account Settings',
-    editProfile: 'Edit Profile',
+    editProfile: 'Manage Profile',
     notifications: 'Notifications',
     privacyAndSecurity: 'Privacy & Security',
     appPreferences: 'App Preferences',

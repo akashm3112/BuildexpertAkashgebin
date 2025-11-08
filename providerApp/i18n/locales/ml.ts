@@ -52,7 +52,7 @@ export default {
     supportAndReporting: 'സഹായവും റിപ്പോർട്ടിംഗും',
     reportCustomer: 'ഉപഭോക്താവിനെ റിപ്പോർട്ട് ചെയ്യുക',
     accountSettings: 'അക്കൗണ്ട് ക്രമീകരണങ്ങൾ',
-    editProfile: 'പ്രൊഫൈൽ എഡിറ്റ് ചെയ്യുക',
+    editProfile: 'പ്രൊഫൈൽ നിയന്ത്രിക്കുക',
     updatePersonalInfo: 'നിങ്ങളുടെ വ്യക്തിഗത വിവരങ്ങൾ അപ്ഡേറ്റ് ചെയ്യുക',
     notifications: 'അറിയിപ്പുകൾ',
     privacyAndSecurity: 'സ്വകാര്യതയും സുരക്ഷയും',

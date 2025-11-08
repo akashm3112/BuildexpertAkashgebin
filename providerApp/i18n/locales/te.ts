@@ -21,7 +21,7 @@ export default {
     supportAndReporting: 'మద్దతు మరియు నివేదిక',
     reportCustomer: 'వినియోగదారుని నివేదించండి',
     accountSettings: 'ఖాతా సెట్టింగ్‌లు',
-    editProfile: 'ప్రొఫైల్‌ని సవరించండి',
+    editProfile: 'ప్రొఫైల్‌ని నిర్వహించండి',
     notifications: 'నోటిఫికేషన్లు',
     privacyAndSecurity: 'గోప్యత మరియు భద్రత',
     appPreferences: 'యాప్ ప్రాధాన్యతలు',

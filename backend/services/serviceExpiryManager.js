@@ -2,20 +2,13 @@ const cron = require('node-cron');
 const { query, getRows } = require('../database/connection');
 const { sendNotification } = require('../utils/notifications');
 const { pushNotificationService } = require('../utils/pushNotifications');
+const { registry } = require('../utils/memoryLeakPrevention');
 
-/**
- * Service Expiry Management System
- * - Sends notifications 2 days before expiry (day 28)
- * - Deactivates services after 30 days
- */
 class ServiceExpiryManager {
   constructor() {
     this.isRunning = false;
   }
 
-  /**
-   * Start cron jobs for service expiry management
-   */
   start() {
     if (this.isRunning) {
       console.log('⚠️ Service expiry manager is already running');
@@ -37,10 +30,13 @@ class ServiceExpiryManager {
     });
 
     // Run immediately on startup (for testing)
-    setTimeout(() => {
+    this.startupTimeout = setTimeout(() => {
       this.sendExpiryWarnings();
       this.deactivateExpiredServices();
     }, 5000); // Wait 5 seconds after startup
+    
+    // Register with memory leak prevention registry
+    registry.registerCleanup(() => this.stop());
 
     this.isRunning = true;
     console.log('✅ Service expiry manager started successfully');
@@ -196,14 +192,20 @@ class ServiceExpiryManager {
   }
 
   /**
-   * Stop all cron jobs
+   * Stop all cron jobs and timers
    */
   stop() {
     if (this.expiryWarningJob) {
       this.expiryWarningJob.stop();
+      this.expiryWarningJob = null;
     }
     if (this.deactivationJob) {
       this.deactivationJob.stop();
+      this.deactivationJob = null;
+    }
+    if (this.startupTimeout) {
+      clearTimeout(this.startupTimeout);
+      this.startupTimeout = null;
     }
     this.isRunning = false;
     console.log('⏹️ Service expiry manager stopped');

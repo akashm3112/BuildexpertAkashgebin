@@ -7,8 +7,14 @@ const { formatNotificationTimestamp } = require('../utils/timezone');
 const { sendNotification, sendAutoNotification } = require('../utils/notifications');
 const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
+const { serviceRegistrationLimiter, standardLimiter, searchLimiter } = require('../middleware/rateLimiting');
+const { sanitizeBody, sanitizeQuery } = require('../middleware/inputSanitization');
 
 const router = express.Router();
+
+// Apply input sanitization to all routes
+router.use(sanitizeBody());
+router.use(sanitizeQuery());
 
 
 
@@ -378,6 +384,20 @@ router.put('/:id/providers', requireRole(['provider']), async (req, res) => {
       });
     }
 
+    const defaultPricingPlan = await getRow(`
+      SELECT id, plan_name, description, price, currency_code, billing_period, billing_interval
+      FROM service_pricing
+      WHERE service_id = $1
+        AND is_active = TRUE
+        AND (effective_from IS NULL OR effective_from <= NOW())
+        AND (effective_to IS NULL OR effective_to >= NOW())
+      ORDER BY 
+        (CASE WHEN id = $2 THEN 0 ELSE 1 END),
+        priority DESC,
+        effective_from DESC NULLS LAST
+      LIMIT 1
+    `, [service.id, service.default_pricing_plan_id]);
+
     // Get provider profile
     let providerProfile = await getRow('SELECT * FROM provider_profiles WHERE user_id = $1', [req.user.id]);
     if (!providerProfile) {
@@ -682,6 +702,7 @@ router.post('/:id/providers', requireRole(['provider']), [
     }
 
     const newProviderService = serviceResult.rows[0];
+    const serviceBasePrice = parseFloat(defaultPricingPlan?.price ?? service.base_price ?? 0);
 
     // Check if this is a labor service (free registration)
     const isLaborService = serviceName === 'labors' || serviceName === 'labor';
@@ -712,7 +733,9 @@ router.post('/:id/providers', requireRole(['provider']), [
       newProviderService.payment_status = 'pending';
       logger.info('Paid service registered - payment required', {
         providerServiceId: newProviderService.id,
-        amount: amountValidation.service.base_price
+        expectedAmount: serviceBasePrice,
+        pricingPlanId: defaultPricingPlan?.id || service.default_pricing_plan_id,
+        currency: defaultPricingPlan?.currency_code || service.currency_code
       });
     }
 
@@ -796,7 +819,21 @@ router.post('/:id/providers', requireRole(['provider']), [
       status: 'success',
       message: responseMessage,
       data: {
-        providerService: newProviderService,
+        providerService: {
+          ...newProviderService,
+          defaultPricingPlanId: defaultPricingPlan?.id || service.default_pricing_plan_id,
+          pricingPlan: defaultPricingPlan
+            ? {
+                id: defaultPricingPlan.id,
+                name: defaultPricingPlan.plan_name,
+                description: defaultPricingPlan.description,
+                price: parseFloat(defaultPricingPlan.price),
+                currency: defaultPricingPlan.currency_code,
+                billingPeriod: defaultPricingPlan.billing_period,
+                billingInterval: defaultPricingPlan.billing_interval
+              }
+            : null
+        },
         isFreeService: isLaborService
       }
     });

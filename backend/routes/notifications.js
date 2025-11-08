@@ -7,11 +7,17 @@ const { pushNotificationService } = require('../utils/pushNotifications');
 const DatabaseOptimizer = require('../utils/databaseOptimization');
 const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
+const { notificationLimiter, standardLimiter } = require('../middleware/rateLimiting');
+const { sanitizeQuery } = require('../middleware/inputSanitization');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(auth);
+
+// Apply rate limiting and input sanitization
+router.use(notificationLimiter);
+router.use(sanitizeQuery());
 
 // @route   GET /api/notifications
 // @desc    Get all notifications for the logged-in user with pagination

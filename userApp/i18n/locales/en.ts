@@ -166,7 +166,7 @@ export default {
   
   // Profile Screen
   profile: {
-    editProfile: 'Edit Profile',
+    editProfile: 'Manage Profile',
     updatePersonalInfo: 'Update your personal information',
     language: 'Language',
     currentLanguage: 'Current: {language}',

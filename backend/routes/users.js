@@ -4,16 +4,27 @@ const { query, getRow, getRows } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const { uploadImage } = require('../utils/cloudinary');
 const logger = require('../utils/logger');
+const { profileUpdateLimiter, accountDeletionLimiter, standardLimiter } = require('../middleware/rateLimiting');
+const { sanitizeBody } = require('../middleware/inputSanitization');
+const { blacklistAllUserTokens } = require('../utils/tokenBlacklist');
+const { invalidateAllUserSessions } = require('../utils/sessionManager');
+const { logSecurityEvent } = require('../utils/securityAudit');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(auth);
 
+// Apply input sanitization to all routes
+router.use(sanitizeBody());
+
 // @route   DELETE /api/users/delete-account
-// @desc    Delete the current user's account and all related data
+// @desc    Delete the current user's account and all related data (revokes all sessions)
 // @access  Private
-router.delete('/delete-account', async (req, res) => {
+router.delete('/delete-account', accountDeletionLimiter, async (req, res) => {
+  const ipAddress = req.ip || 'unknown';
+  const userAgent = req.headers['user-agent'] || '';
+  
   try {
     const userId = req.user.id;
     
@@ -97,7 +108,22 @@ router.delete('/delete-account', async (req, res) => {
     }
     // Delete addresses
     await query('DELETE FROM addresses WHERE user_id = $1', [userId]);
-    // Delete user
+    
+    // Revoke all sessions and blacklist all tokens before deleting user
+    await blacklistAllUserTokens(userId, 'account_deletion');
+    await invalidateAllUserSessions(userId);
+    
+    // Log security event before deletion
+    await logSecurityEvent(
+      userId,
+      'account_deletion',
+      `Account deleted by user from ${ipAddress}`,
+      ipAddress,
+      userAgent,
+      'warning'
+    );
+    
+    // Delete user (CASCADE will handle related auth security tables)
     await query('DELETE FROM users WHERE id = $1', [userId]);
     
     res.json({
@@ -149,6 +175,7 @@ router.get('/profile', async (req, res) => {
 // @desc    Update user profile
 // @access  Private
 router.put('/profile', [
+  profileUpdateLimiter,
   body('fullName').optional().trim().isLength({ min: 2 }).withMessage('Full name must be at least 2 characters'),
   body('email').optional().isEmail().withMessage('Please enter a valid email'),
   body('profilePicUrl').optional().isString().withMessage('Profile picture URL must be a string')

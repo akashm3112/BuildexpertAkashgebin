@@ -16,6 +16,10 @@ const { up: addPaymentLocksTable } = require('./006-add-payment-locks-table');
 const separateReportTables = require('./007-separate-report-tables');
 const addLabourPaymentTables = require('./008-add-labour-payment-tables');
 const addMissingProviderColumns = require('./009-add-missing-provider-columns');
+const addAuthSecurityTables = require('./010-add-auth-security-tables');
+const updatePushNotificationInfrastructure = require('./011-update-push-notification-infra');
+const updateServicePricingInfrastructure = require('./012-service-pricing-infrastructure');
+const alignServicePricing = require('./013-align-service-pricing');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -81,6 +85,34 @@ const migrations = [
     description: 'Adds missing columns (state, city, business_name, experience_years, rating, total_reviews) to provider_profiles table',
     function: addMissingProviderColumns,
     required: false
+  },
+  {
+    id: '010',
+    name: 'Add Authentication Security Tables',
+    description: 'Creates token blacklist, session management, login attempts, and security events tables for comprehensive auth security',
+    function: addAuthSecurityTables,
+    required: true
+  },
+  {
+    id: '011',
+    name: 'Update Push Notification Infrastructure',
+    description: 'Adds persistent retry queue support and receipt-to-token mapping for Expo push notifications',
+    function: updatePushNotificationInfrastructure,
+    required: true
+  },
+  {
+    id: '012',
+    name: 'Service Pricing Infrastructure',
+    description: 'Adds base pricing metadata, service pricing plans, and payment linkage for provider subscriptions',
+    function: updateServicePricingInfrastructure,
+    required: true
+  },
+  {
+    id: '013',
+    name: 'Align Service Pricing',
+    description: 'Standardises provider subscription pricing to ₹99 and enforces defaults',
+    function: alignServicePricing,
+    required: true
   }
 ];
 

@@ -166,7 +166,7 @@ export default {
   
   // Profile Screen
   profile: {
-    editProfile: 'சுயவிவரத்தைத் திருத்து',
+    editProfile: 'சுயவிவரத்தை நிர்வகிக்கவும்',
     updatePersonalInfo: 'உங்கள் தனிப்பட்ட தகவல்களை புதுப்பிக்கவும்',
     language: 'மொழி',
     currentLanguage: 'தற்போதைய: {language}',

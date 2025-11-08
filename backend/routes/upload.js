@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const { auth } = require('../middleware/auth');
 const { uploadImage, uploadMultipleImages } = require('../utils/cloudinary');
 const logger = require('../utils/logger');
+const { uploadLimiter } = require('../middleware/rateLimiting');
 
 const router = express.Router();
 
@@ -11,10 +12,10 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 5 * 1024 * 1024, // 5MB limit per file
   },
   fileFilter: (req, file, cb) => {
-    // Check file type
+    // Check file type - only allow images
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
@@ -25,6 +26,9 @@ const upload = multer({
 
 // All routes require authentication
 router.use(auth);
+
+// Apply rate limiting to prevent upload abuse
+router.use(uploadLimiter);
 
 // @route   POST /api/upload/single
 // @desc    Upload a single image to Cloudinary

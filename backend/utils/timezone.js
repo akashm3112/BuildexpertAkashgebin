@@ -1,9 +1,3 @@
-/**
- * Utility functions for timezone handling
- */
-
-// Convert UTC timestamp to IST (India Standard Time)
-// NOTE: Database is already set to Asia/Kolkata timezone, so timestamps are already in IST
 const convertToIST = (utcDate) => {
   if (!utcDate) return null;
   

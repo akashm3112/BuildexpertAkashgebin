@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const { getRow } = require('../database/connection');
 const config = require('../utils/config');
+const { isTokenBlacklisted } = require('../utils/tokenBlacklist');
+const { updateSessionActivity, getSession } = require('../utils/sessionManager');
 
 const auth = async (req, res, next) => {
   try {
@@ -35,7 +37,33 @@ const auth = async (req, res, next) => {
       // Error logged - invalid token (error response sent to client)
       return res.status(401).json({
         status: 'error',
-        message: 'Invalid token.'
+        message: 'Invalid token. Token has expired or is malformed.'
+      });
+    }
+    
+    // Check if token has JTI (JWT ID) - required for session tracking
+    if (!decoded.jti) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid token. Missing token identifier.'
+      });
+    }
+    
+    // Check if token is blacklisted
+    const isBlacklisted = await isTokenBlacklisted(decoded.jti);
+    if (isBlacklisted) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Token has been revoked. Please login again.'
+      });
+    }
+    
+    // Verify session exists and is active
+    const session = await getSession(decoded.jti);
+    if (!session || !session.is_active) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Session expired or invalid. Please login again.'
       });
     }
     
@@ -57,7 +85,17 @@ const auth = async (req, res, next) => {
       console.log('User authenticated successfully, role:', user.role);
     }
     
+    // Update session activity (fire and forget - don't wait for it)
+    updateSessionActivity(decoded.jti).catch(err => {
+      // Log error but don't fail the request
+      if (config.isDevelopment()) {
+        console.error('Failed to update session activity:', err);
+      }
+    });
+    
     req.user = user;
+    req.tokenJti = decoded.jti; // Store JTI for logout/session management
+    req.session = session; // Store session data for reference
     next();
   } catch (error) {
     // Error logged - authentication failed (error response sent to client)
@@ -66,7 +104,7 @@ const auth = async (req, res, next) => {
     }
     res.status(401).json({
       status: 'error',
-      message: 'Invalid token.'
+      message: 'Authentication failed. Please login again.'
     });
   }
 };

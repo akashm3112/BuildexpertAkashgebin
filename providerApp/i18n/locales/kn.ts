@@ -21,7 +21,7 @@ export default {
     supportAndReporting: 'ಬೆಂಬಲ ಮತ್ತು ವರದಿ',
     reportCustomer: 'ಗ್ರಾಹಕರನ್ನು ವರದಿ ಮಾಡಿ',
     accountSettings: 'ಖಾತೆ ಸೆಟ್ಟಿಂಗ್‌ಗಳು',
-    editProfile: 'ಪ್ರೊಫೈಲ್ ಸಂಪಾದಿಸಿ',
+    editProfile: 'ಪ್ರೊಫೈಲ್ ನಿರ್ವಹಿಸಿ',
     notifications: 'ಅಧಿಸೂಚನೆಗಳು',
     privacyAndSecurity: 'ಗೌಪ್ಯತೆ ಮತ್ತು ಸುರಕ್ಷತೆ',
     appPreferences: 'ಅಪ್ಲಿಕೇಶನ್ ಆದ್ಯತೆಗಳು',

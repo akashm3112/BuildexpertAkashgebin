@@ -2,12 +2,6 @@ const { getRows, query } = require('../database/connection');
 const { formatNotificationTimestamp } = require('./timezone');
 const getIO = () => require('../server').io;
 
-/**
- * Centralized notification utility with role validation
- * This prevents role separation mistakes by ensuring notifications
- * are always created with the correct role
- */
-
 // Valid roles for notifications
 const VALID_ROLES = ['user', 'provider', 'admin'];
 

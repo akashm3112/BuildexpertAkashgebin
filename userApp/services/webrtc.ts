@@ -169,6 +169,7 @@ class WebRTCService {
 
   // Start a call
   async startCall(callData: CallData) {
+    let serverCallInitiated = false;
     try {
       if (!this.checkWebRTCAvailability()) {
         return;
@@ -176,6 +177,9 @@ class WebRTCService {
 
       console.log('📞 Starting call...', callData);
       this.currentCall = callData;
+
+      await this.ensureServerCallSetup(callData);
+      serverCallInitiated = true;
 
       // Get local audio stream with error handling
       try {
@@ -263,18 +267,15 @@ class WebRTCService {
         }
       };
 
-      // Initiate call via socket
-      this.socket?.emit('call:initiate', {
-        bookingId: callData.bookingId,
-        callerId: callData.callerId,
-        callerName: callData.callerName,
-        receiverId: callData.receiverId,
-        receiverName: callData.receiverName,
-      });
-
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error starting call:', error);
-      this.events.onError?.('Failed to start call');
+      this.events.onError?.(error.message || 'Failed to start call');
+      if (serverCallInitiated) {
+        this.socket?.emit('call:end', {
+          bookingId: callData.bookingId,
+          userId: this.userId,
+        });
+      }
       this.cleanup();
     }
   }
@@ -502,6 +503,25 @@ class WebRTCService {
   // Check if call is active
   isCallActive() {
     return this.peerConnection !== null && this.currentCall !== null;
+  }
+
+  private ensureServerCallSetup(callData: CallData) {
+    return new Promise<void>((resolve, reject) => {
+      if (!this.socket) {
+        reject(new Error('Not connected to call service.'));
+        return;
+      }
+
+      this.socket.emit('call:initiate', { bookingId: callData.bookingId }, (response?: { status: string; message?: string; errorCode?: string }) => {
+        if (!response || response.status === 'success') {
+          resolve();
+        } else {
+          const err = new Error(response.message || 'Failed to start call');
+          (err as any).code = response.errorCode;
+          reject(err);
+        }
+      });
+    });
   }
 }
 

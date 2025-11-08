@@ -9,16 +9,22 @@ const { pushNotificationService, NotificationTemplates } = require('../utils/pus
 const DatabaseOptimizer = require('../utils/databaseOptimization');
 const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
+const { bookingCreationLimiter, standardLimiter } = require('../middleware/rateLimiting');
+const { sanitizeBody } = require('../middleware/inputSanitization');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(auth);
 
+// Apply input sanitization to all routes
+router.use(sanitizeBody());
+
 // @route   POST /api/bookings
 // @desc    Create a new booking
 // @access  Private
 router.post('/', [
+  bookingCreationLimiter,
   body('providerServiceId').isUUID().withMessage('Valid provider service ID is required'),
   body('selectedService').notEmpty().withMessage('Selected service is required'),
   body('appointmentDate').isDate().withMessage('Valid appointment date is required'),
@@ -527,6 +533,7 @@ router.post('/:id/rate', [
 // @desc    Report a booking
 // @access  Private
 router.post('/:id/report', [
+  require('../middleware/rateLimiting').reportLimiter,
   body('reportReason').notEmpty().withMessage('Report reason is required'),
   body('reportDescription').notEmpty().withMessage('Report description is required')
 ], async (req, res) => {

@@ -21,7 +21,7 @@ export default {
     supportAndReporting: 'सहायता और रिपोर्टिंग',
     reportCustomer: 'ग्राहक की रिपोर्ट करें',
     accountSettings: 'खाता सेटिंग्स',
-    editProfile: 'प्रोफाइल संपादित करें',
+    editProfile: 'प्रोफ़ाइल प्रबंधित करें',
     notifications: 'सूचनाएं',
     privacyAndSecurity: 'गोपनीयता और सुरक्षा',
     appPreferences: 'ऐप प्राथमिकताएं',

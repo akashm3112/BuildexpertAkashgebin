@@ -49,32 +49,65 @@ let connectionTested = false;
   }
 })();
 
-// Helper function to execute queries with enhanced error handling
+// Helper function to execute queries with enhanced error handling and retry logic
 const query = async (text, params) => {
   const start = Date.now();
-  try {
-    const res = await pool.query(text, params);
-    const duration = Date.now() - start;
-    
-    // Only log in development mode to avoid performance issues
-    if (config.isDevelopment() && config.get('security.enableQueryLogging')) {
-      console.log('Executed query', { 
-        text: text.substring(0, 100) + (text.length > 100 ? '...' : ''), 
-        duration: `${duration}ms`, 
-        rows: res.rowCount 
+  const maxRetries = 2;
+  let lastError;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await pool.query(text, params);
+      const duration = Date.now() - start;
+      
+      // Only log in development mode to avoid performance issues
+      if (config.isDevelopment() && config.get('security.enableQueryLogging')) {
+        console.log('Executed query', {
+          text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+          duration: `${duration}ms`,
+          rows: res.rowCount,
+          attempt: attempt > 0 ? attempt + 1 : undefined
+        });
+      }
+      
+      return res;
+    } catch (error) {
+      lastError = error;
+      
+      // Check if error is retryable
+      const isRetryable = error.code === 'ECONNREFUSED' || 
+                          error.code === 'ECONNRESET' || 
+                          error.code === '57014' || // Query timeout
+                          error.code === '08003' || // Connection does not exist
+                          error.code === '08006';   // Connection failure
+      
+      const isLastAttempt = attempt === maxRetries;
+      
+      if (!isRetryable || isLastAttempt) {
+        // Log error with appropriate context
+        console.error('Database query error:', {
+          message: error.message,
+          code: error.code,
+          query: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+          params: params ? params.length : 0,
+          attempts: attempt + 1
+        });
+        throw error;
+      }
+      
+      // Log retry
+      console.warn(`Database query failed, retrying (attempt ${attempt + 1}/${maxRetries + 1})`, {
+        error: error.message,
+        code: error.code
       });
+      
+      // Wait before retrying (exponential backoff)
+      const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-    
-    return res;
-  } catch (error) {
-    console.error('Database query error:', {
-      message: error.message,
-      code: error.code,
-      query: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-      params: params ? params.length : 0
-    });
-    throw error;
   }
+  
+  throw lastError;
 };
 
 // Helper function to get a single row

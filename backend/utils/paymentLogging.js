@@ -1,14 +1,7 @@
 const { query } = require('../database/connection');
 
-/**
- * Payment Logging Utilities
- * Comprehensive logging for payment transactions, events, and API interactions
- */
 
 class PaymentLogger {
-  /**
-   * Log payment event
-   */
   static async logPaymentEvent(transactionId, eventType, eventData, userId, req = null) {
     try {
       const ipAddress = req ? req.ip || req.connection?.remoteAddress : null;

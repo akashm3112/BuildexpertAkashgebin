@@ -2,11 +2,15 @@ const express = require('express');
 const { getRows } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const logger = require('../utils/logger');
+const { standardLimiter } = require('../middleware/rateLimiting');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(auth);
+
+// Apply rate limiting
+router.use(standardLimiter);
 
 // @route   GET /api/earnings
 // @desc    Get provider's earnings data

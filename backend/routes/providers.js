@@ -10,12 +10,18 @@ const { pushNotificationService, NotificationTemplates } = require('../utils/pus
 const DatabaseOptimizer = require('../utils/databaseOptimization');
 const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
+const { serviceRegistrationLimiter, profileUpdateLimiter, standardLimiter, searchLimiter } = require('../middleware/rateLimiting');
+const { sanitizeBody, sanitizeQuery } = require('../middleware/inputSanitization');
 
 const router = express.Router();
 
 // All routes require authentication and provider role
 router.use(auth);
 router.use(requireRole(['provider']));
+
+// Apply input sanitization to all routes
+router.use(sanitizeBody());
+router.use(sanitizeQuery());
 
 // @route   GET /api/providers/profile
 // @desc    Get provider profile
@@ -59,6 +65,7 @@ router.get('/profile', async (req, res) => {
 // @desc    Update provider profile
 // @access  Private
 router.put('/profile', [
+  profileUpdateLimiter,
   body('yearsOfExperience').optional().isInt({ min: 0 }).withMessage('Years of experience must be a positive number'),
   body('serviceDescription').optional().notEmpty().withMessage('Service description cannot be empty'),
   body('isEngineeringProvider').optional().isBoolean().withMessage('isEngineeringProvider must be a boolean'),
@@ -620,6 +627,7 @@ router.put('/bookings/:id/status', [
 // @desc    Report a customer (for providers)
 // @access  Private (Providers only)
 router.post('/report-customer', [
+  require('../middleware/rateLimiting').reportLimiter,
   body('customerName').notEmpty().withMessage('Customer name is required'),
   body('incidentDate').notEmpty().withMessage('Incident date is required'),
   body('incidentType').notEmpty().withMessage('Incident type is required'),

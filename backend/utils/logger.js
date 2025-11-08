@@ -1,8 +1,3 @@
-/**
- * Production-Ready Logging System
- * Replaces console.log with proper Winston logger
- */
-
 const winston = require('winston');
 const config = require('./config');
 

@@ -166,7 +166,7 @@ export default {
   
   // Profile Screen
   profile: {
-    editProfile: 'ಪ್ರೊಫೈಲ್ ಸಂಪಾದಿಸಿ',
+    editProfile: 'ಪ್ರೊಫೈಲ್ ನಿರ್ವಹಿಸಿ',
     updatePersonalInfo: 'ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ನವೀಕರಿಸಿ',
     language: 'ಭಾಷೆ',
     currentLanguage: 'ಪ್ರಸ್ತುತ: {language}',

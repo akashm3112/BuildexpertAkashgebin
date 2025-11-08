@@ -21,7 +21,7 @@ export default {
     supportAndReporting: 'ஆதரவு மற்றும் அறிக்கை',
     reportCustomer: 'வாடிக்கையாளரை அறிக்கை செய்',
     accountSettings: 'கணக்கு அமைப்புகள்',
-    editProfile: 'சுயவிவரத்தைத் திருத்து',
+    editProfile: 'சுயவிவரத்தை நிர்வகிக்கவும்',
     notifications: 'அறிவிப்புகள்',
     privacyAndSecurity: 'தனியுரிமை மற்றும் பாதுகாப்பு',
     appPreferences: 'பயன்பாட்டு விருப்பங்கள்',

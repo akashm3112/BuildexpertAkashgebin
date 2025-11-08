@@ -225,7 +225,14 @@ router.post('/initiate-paytm', paymentInitiationLimiter, auth, requireRole(['pro
       timestamp: new Date().toISOString()
     });
 
-    const { providerServiceId, amount, serviceCategory, serviceName } = req.body;
+    const { 
+      providerServiceId, 
+      amount, 
+      serviceCategory, 
+      serviceName,
+      pricingPlanId,
+      currencyCode
+    } = req.body;
 
     if (!providerServiceId || !amount) {
       logger.payment('Payment initiation failed - missing parameters', {
@@ -258,7 +265,14 @@ router.post('/initiate-paytm', paymentInitiationLimiter, auth, requireRole(['pro
     }
 
     // SECURITY CHECK 2: Validate payment amount
-    const amountValidation = await PaymentSecurity.validatePaymentAmount(providerServiceId, amount);
+    const amountValidation = await PaymentSecurity.validatePaymentAmount(
+      providerServiceId,
+      amount,
+      {
+        pricingPlanId,
+        currency: currencyCode
+      }
+    );
     if (!amountValidation.valid) {
       logger.payment('Invalid payment amount', {
         userId: req.user.id,
@@ -269,9 +283,18 @@ router.post('/initiate-paytm', paymentInitiationLimiter, auth, requireRole(['pro
       return res.status(400).json({
         status: 'error',
         message: amountValidation.message,
-        expectedAmount: amountValidation.expected
+        expectedAmount: amountValidation.expected,
+        expectedCurrency: amountValidation.expectedCurrency
       });
     }
+
+    const selectedPricingPlan = amountValidation.pricingPlan;
+    const resolvedCurrency = (amountValidation.currency || 'INR').toUpperCase();
+    const expectedAmountNumeric = Number.isFinite(amountValidation.expectedAmount)
+      ? Number(amountValidation.expectedAmount)
+      : Number(amount);
+    const normalisedAmountValue = Number(expectedAmountNumeric.toFixed(2));
+    const normalisedAmountString = normalisedAmountValue.toFixed(2);
 
     // SECURITY CHECK 3: Acquire payment lock (prevent concurrent payments)
     const lock = await PaymentSecurity.acquirePaymentLock(req.user.id, providerServiceId);
@@ -335,16 +358,18 @@ router.post('/initiate-paytm', paymentInitiationLimiter, auth, requireRole(['pro
     // Create payment record with enhanced data
     const result = await query(`
       INSERT INTO payment_transactions 
-      (order_id, user_id, provider_service_id, amount, status, payment_method, service_name,
-       payment_flow_id, user_agent, ip_address, device_info, created_at)
-      VALUES ($1, $2, $3, $4, 'pending', 'paytm', $5, $6, $7, $8, $9, NOW())
+      (order_id, user_id, provider_service_id, amount, currency_code, status, payment_method, service_name,
+       pricing_plan_id, payment_flow_id, user_agent, ip_address, device_info, created_at)
+      VALUES ($1, $2, $3, $4, $5, 'pending', 'paytm', $6, $7, $8, $9, $10, $11, NOW())
       RETURNING id
     `, [
       orderId, 
       req.user.id, 
       providerServiceId, 
-      amount, 
-      serviceName,
+      normalisedAmountValue, 
+      resolvedCurrency,
+      serviceName || amountValidation.service.service_name,
+      selectedPricingPlan ? selectedPricingPlan.id : amountValidation.service.default_pricing_plan_id,
       paymentFlowId,
       clientInfo.userAgent,
       clientInfo.ipAddress,
@@ -368,7 +393,11 @@ router.post('/initiate-paytm', paymentInitiationLimiter, auth, requireRole(['pro
     // Log payment initiation event
     await PaymentLogger.logPaymentEvent(transactionId, 'payment_initiated', {
       orderId,
-      amount,
+      amount: normalisedAmountValue,
+      currency: resolvedCurrency,
+      pricingPlanId: selectedPricingPlan?.id || amountValidation.service.default_pricing_plan_id,
+      pricingPlanName: selectedPricingPlan?.plan_name || 'standard',
+      pricingPlanAmount: normalisedAmountValue,
       serviceName,
       serviceCategory,
       paymentFlowId,
@@ -383,7 +412,7 @@ router.post('/initiate-paytm', paymentInitiationLimiter, auth, requireRole(['pro
       INDUSTRY_TYPE_ID: PAYTM_CONFIG.INDUSTRY_TYPE_ID,
       ORDER_ID: orderId,
       CUST_ID: req.user.id,
-      TXN_AMOUNT: amount.toString(),
+      TXN_AMOUNT: normalisedAmountString,
       CALLBACK_URL: PAYTM_CONFIG.CALLBACK_URL,
       EMAIL: req.user.email || '',
       MOBILE_NO: req.user.phone || ''
@@ -416,7 +445,8 @@ router.post('/initiate-paytm', paymentInitiationLimiter, auth, requireRole(['pro
     logger.payment('Payment initiated successfully', {
       orderId,
       transactionId,
-      amount,
+      amount: normalisedAmountValue,
+      currency: resolvedCurrency,
       userId: req.user.id,
       responseTime: `${responseTime}ms`
     });

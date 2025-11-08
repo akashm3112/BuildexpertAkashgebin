@@ -10,6 +10,7 @@ import { Modal } from '@/components/common/Modal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/constants/api';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import NotificationSettings from '@/components/NotificationSettings';
 import { tokenManager } from '../../utils/tokenManager';
 
@@ -714,6 +715,7 @@ export default function ProfileScreen() {
   };
 
   const uploadProfilePicture = async (imageUri: string) => {
+    let optimizedImage: ImageManipulator.ImageResult | null = null;
     try {
       showAlert('Uploading...', 'Please wait while we upload your profile picture.', 'info');
       
@@ -727,74 +729,75 @@ export default function ProfileScreen() {
       console.log('🖼️ Image URI:', imageUri);
       console.log('🌐 API Base URL:', API_BASE_URL);
 
-      // Convert image to base64
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      const reader = new FileReader();
+      optimizedImage = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 1080 } }],
+        { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+
+      if (!optimizedImage.base64) {
+        showAlert('Error', 'Unable to process image. Please try a different photo.', 'error');
+        return;
+      }
+
+      if (optimizedImage.uri) {
+        setUserProfile(prev => ({ ...prev, image: optimizedImage.uri }));
+      }
+
+      const payload = `data:image/jpeg;base64,${optimizedImage.base64}`;
+
+      const uploadResponse = await fetch(`${API_BASE_URL}/api/users/profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          profilePicUrl: payload,
+        }),
+      });
       
-      reader.onload = async () => {
-        const base64 = reader.result as string;
+      console.log('📡 Upload response status:', uploadResponse.status);
 
-        console.log('🔄 Making API request to upload profile picture...');
-        const uploadResponse = await fetch(`${API_BASE_URL}/api/users/profile`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            profilePicUrl: base64,
-          }),
-        });
+      if (uploadResponse.ok) {
+        const data = await uploadResponse.json();
+        console.log('📤 Upload response:', data);
         
-        console.log('📡 Upload response status:', uploadResponse.status);
-
-        if (uploadResponse.ok) {
-          const data = await uploadResponse.json();
-          console.log('📤 Upload response:', data);
-          
-          // Handle different response structures
-          let newImageUrl = '';
-          if (data.data && data.data.user && data.data.user.profilePicUrl) {
-            newImageUrl = data.data.user.profilePicUrl;
-          } else if (data.data && data.data.profile_pic_url) {
-            newImageUrl = data.data.profile_pic_url;
-          } else if (data.user && data.user.profilePicUrl) {
-            newImageUrl = data.user.profilePicUrl;
-          } else if (data.profile_pic_url) {
-            newImageUrl = data.profile_pic_url;
-          }
-          
-          console.log('🖼️ New image URL:', newImageUrl);
-          
-          if (newImageUrl) {
-            setUserProfile(prev => ({ ...prev, image: newImageUrl }));
-            await cacheProfileImage(newImageUrl);
-            
-            // Update user context with new profile picture
-            if (user) {
-              await updateUser({ profile_pic_url: newImageUrl });
-            }
-            
-            // Refresh user profile data
-            await fetchUserProfile();
-            
-            // Small delay to ensure state updates are processed
-            setTimeout(() => {
-              showAlert('Success', 'Profile picture updated successfully!', 'success');
-            }, 100);
-          } else {
-            console.error('❌ No image URL in response:', data);
-            showAlert('Error', 'Failed to get image URL from response.', 'error');
-          }
-        } else {
-          const errorData = await uploadResponse.json();
-          console.error('❌ Upload failed:', errorData);
-          showAlert('Error', errorData.message || 'Failed to upload profile picture.', 'error');
+        let newImageUrl = '';
+        if (data.data && data.data.user && data.data.user.profilePicUrl) {
+          newImageUrl = data.data.user.profilePicUrl;
+        } else if (data.data && data.data.profile_pic_url) {
+          newImageUrl = data.data.profile_pic_url;
+        } else if (data.user && data.user.profilePicUrl) {
+          newImageUrl = data.user.profilePicUrl;
+        } else if (data.profile_pic_url) {
+          newImageUrl = data.profile_pic_url;
         }
-      };
-
-      reader.readAsDataURL(blob);
+        
+        console.log('🖼️ New image URL:', newImageUrl);
+        
+        if (newImageUrl) {
+          setUserProfile(prev => ({ ...prev, image: newImageUrl }));
+          await cacheProfileImage(newImageUrl);
+          
+          if (user) {
+            await updateUser({ profile_pic_url: newImageUrl });
+          }
+          
+          await fetchUserProfile();
+          
+          setTimeout(() => {
+            showAlert('Success', 'Profile picture updated successfully!', 'success');
+          }, 100);
+        } else {
+          console.error('❌ No image URL in response:', data);
+          showAlert('Error', 'Failed to get image URL from response.', 'error');
+        }
+      } else {
+        const errorData = await uploadResponse.json();
+        console.error('❌ Upload failed:', errorData);
+        showAlert('Error', errorData.message || 'Failed to upload profile picture.', 'error');
+      }
     } catch (error) {
       console.error('❌ Error uploading profile picture:', error);
       
@@ -805,12 +808,13 @@ export default function ProfileScreen() {
         
         // Store the image locally for later upload when network is restored
         try {
-          await AsyncStorage.setItem('pending_profile_upload', imageUri);
+          const optimizedForOffline = optimizedImage?.uri || imageUri;
+          await AsyncStorage.setItem('pending_profile_upload', optimizedForOffline);
           console.log('💾 Stored image locally for later upload');
           
           // Update UI with local image immediately
-          setUserProfile(prev => ({ ...prev, image: imageUri }));
-          await cacheProfileImage(imageUri);
+          setUserProfile(prev => ({ ...prev, image: optimizedForOffline }));
+          await cacheProfileImage(optimizedForOffline);
           
           showAlert('Network Issue', 'Your profile picture has been saved locally and will be uploaded when network connection is restored.', 'warning');
         } catch (storageError) {

@@ -2,7 +2,13 @@ const express = require('express');
 const { query, getRow } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const logger = require('../utils/logger');
+const { adminActionLimiter } = require('../middleware/rateLimiting');
+const { sanitizeQuery } = require('../middleware/inputSanitization');
 const router = express.Router();
+
+// Apply rate limiting and sanitization to all admin routes
+router.use(adminActionLimiter);
+router.use(sanitizeQuery());
 
 // @route   GET /api/admin/stats
 // @desc    Get admin dashboard statistics
