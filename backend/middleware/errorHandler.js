@@ -8,7 +8,7 @@
 
 const logger = require('../utils/logger');
 const config = require('../utils/config');
-const { 
+const {
   ApplicationError,
   isRetryableError,
   getUserFriendlyMessage
@@ -72,13 +72,51 @@ const classifyNetworkError = (error) => {
 /**
  * Format error response for client
  */
+const isValidationError = (error) => {
+  if (!error) return false;
+  if (error.name === 'ValidationError') return true;
+  if (error.errorCode === 'VALIDATION_ERROR') return true;
+  if (Array.isArray(error.errors) && error.errors.length) return true;
+  return false;
+};
+
+const determineErrorCategory = (error) => {
+  if (error.errorCategory) return error.errorCategory;
+
+  const externalCodes = new Set([
+    'PAYMENT_GATEWAY_ERROR',
+    'PAYMENT_GATEWAY_UNAVAILABLE',
+    'EXTERNAL_SERVICE_ERROR',
+    'SERVICE_UNAVAILABLE'
+  ]);
+
+  const networkCodes = new Set([
+    'NETWORK_ERROR',
+    'NETWORK_TIMEOUT',
+    'TIMEOUT_ERROR'
+  ]);
+
+  if (externalCodes.has(error.errorCode)) {
+    return 'EXTERNAL_SERVICE_ERROR';
+  }
+
+  if (networkCodes.has(error.errorCode) || error.retryable) {
+    return 'NETWORK_ERROR';
+  }
+
+  if (isValidationError(error) || (error.statusCode >= 400 && error.statusCode < 500)) {
+    return 'LOGIC_ERROR';
+  }
+
+  return 'LOGIC_ERROR';
+};
+
 const formatErrorResponse = (error, req) => {
   const isDevelopment = config.isDevelopment();
   
-  // Base response
   const response = {
     status: 'error',
-    message: error.message || 'An error occurred',
+    message: getUserFriendlyMessage(error),
     errorCode: error.errorCode || 'INTERNAL_ERROR'
   };
   
@@ -91,6 +129,16 @@ const formatErrorResponse = (error, req) => {
     response.retryable = true;
     response.retryAfter = error.retryAfter || 5000; // milliseconds
   }
+
+  if (isValidationError(error) && error.errors) {
+    response.details = error.errors;
+  }
+
+  if (error.retryAfter) {
+    response.retryAfter = error.retryAfter;
+  }
+
+  response.errorCategory = determineErrorCategory(error);
   
   if (error.resource) {
     response.resource = error.resource;
@@ -110,22 +158,10 @@ const formatErrorResponse = (error, req) => {
  * Determine if error should be logged
  */
 const shouldLogError = (error) => {
-  // Don't log expected operational errors
-  if (error.statusCode === 400 || error.statusCode === 404) {
-    return false;
-  }
-  
-  // Don't log auth errors (they're tracked in security_events)
-  if (error.statusCode === 401 || error.statusCode === 403) {
-    return false;
-  }
-  
-  // Don't log rate limit errors (they're tracked separately)
-  if (error.statusCode === 429) {
-    return false;
-  }
-  
-  // Log all server errors
+  if (error.statusCode === 404) return false;
+  if (error.statusCode === 429) return false;
+  if (isValidationError(error)) return false;
+  if (error.statusCode === 401 || error.statusCode === 403) return false;
   return true;
 };
 
@@ -135,31 +171,44 @@ const shouldLogError = (error) => {
 const errorHandler = (err, req, res, next) => {
   let error = err;
   
-  // Convert non-ApplicationError to ApplicationError
+  // Convert non-ApplicationError to ApplicationError with special validation handling
   if (!(error instanceof ApplicationError)) {
-    // Database errors
-    if (error.code && error.code.match(/^[0-9A-Z]{5}$/)) {
+    if (isValidationError(error)) {
+      const validationError = new ApplicationError(
+        error.message || 'Validation failed',
+        error.statusCode || 400,
+        error.errorCode || 'VALIDATION_ERROR',
+        true
+      );
+      validationError.errors = error.errors;
+      error = validationError;
+    } else if (error.code && error.code.match(/^[0-9A-Z]{5}$/)) {
       error = classifyDatabaseError(error);
-    }
-    // Network errors
-    else if (error.code && error.code.match(/^E[A-Z]+$/)) {
+    } else if (error.code && error.code.match(/^E[A-Z]+$/)) {
       error = classifyNetworkError(error);
-    }
-    // Generic error
-    else {
-      const { ApplicationError } = require('../utils/errorTypes');
+    } else {
       error = new ApplicationError(
         config.isProduction() ? 'An unexpected error occurred' : err.message,
-        500,
-        'INTERNAL_ERROR',
-        false // Non-operational (unexpected)
+        error.statusCode || 500,
+        error.errorCode || 'INTERNAL_ERROR',
+        false
       );
     }
   }
+
+  if (isValidationError(error)) {
+    error.statusCode = error.statusCode || 400;
+    error.errorCode = error.errorCode || 'VALIDATION_ERROR';
+  }
+
+  error.errorCategory = determineErrorCategory(error);
   
   // Log error if needed
   if (shouldLogError(error)) {
-    logger.error('Request error', {
+    const failureCategory = error.failureCategory
+      || (error.retryable || isRetryableError(error) || error.statusCode >= 500 ? 'resilience' : 'logic');
+
+    const logPayload = {
       message: error.message,
       errorCode: error.errorCode,
       statusCode: error.statusCode,
@@ -169,8 +218,15 @@ const errorHandler = (err, req, res, next) => {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
       stack: error.stack,
-      originalError: error.originalError?.message
-    });
+      originalError: error.originalError?.message,
+      errorCategory: error.errorCategory
+    };
+
+    if (failureCategory === 'resilience') {
+      logger.resilience('Request error', logPayload);
+    } else {
+      logger.logic('Request error', logPayload);
+    }
   }
   
   // Format and send response

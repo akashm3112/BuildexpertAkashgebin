@@ -20,6 +20,8 @@ const addAuthSecurityTables = require('./010-add-auth-security-tables');
 const updatePushNotificationInfrastructure = require('./011-update-push-notification-infra');
 const updateServicePricingInfrastructure = require('./012-service-pricing-infrastructure');
 const alignServicePricing = require('./013-align-service-pricing');
+const notificationQueueAndCascade = require('./014-notification-queue-and-cascade');
+const createPendingPushNotificationsTable = require('./015-pending-push-notifications');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -112,6 +114,20 @@ const migrations = [
     name: 'Align Service Pricing',
     description: 'Standardises provider subscription pricing to ₹99 and enforces defaults',
     function: alignServicePricing,
+    required: true
+  },
+  {
+    id: '014',
+    name: 'Notification Queue & Cascade Clean-up',
+    description: 'Adds durable notification queueing and cascades for dependent tables',
+    function: notificationQueueAndCascade,
+    required: true
+  },
+  {
+    id: '015',
+    name: 'Pending Push Notifications Table',
+    description: 'Stores pending push notifications for users without active tokens',
+    function: createPendingPushNotificationsTable,
     required: true
   }
 ];

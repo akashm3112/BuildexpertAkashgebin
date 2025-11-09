@@ -47,6 +47,31 @@ const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+const formatLockoutDuration = (totalSeconds) => {
+  const seconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  const parts = [];
+
+  if (minutes > 0) {
+    parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`);
+  }
+
+  if (remainingSeconds > 0) {
+    parts.push(`${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}`);
+  }
+
+  if (!parts.length) {
+    parts.push('a few seconds');
+  }
+
+  return parts.join(' and ');
+};
+
+const buildLockoutMessage = (seconds) => {
+  return `Too many failed attempts. Please wait ${formatLockoutDuration(seconds)} before retrying.`;
+};
+
 // Check if phone number is locked due to too many attempts
 const isPhoneLocked = (phoneNumber) => {
   const attemptData = otpAttempts.get(phoneNumber);
@@ -163,11 +188,9 @@ const sendOTP = async (phoneNumber, otp) => {
     // Check if phone is locked
     if (isPhoneLocked(phoneNumber)) {
       const lockoutTime = getLockoutTimeRemaining(phoneNumber);
-      const minutes = Math.floor(lockoutTime / 60);
-      const seconds = lockoutTime % 60;
-      return { 
-        success: false, 
-        error: `Too many failed attempts. Please try again in ${minutes}:${seconds.toString().padStart(2, '0')}` 
+      return {
+        success: false,
+        error: buildLockoutMessage(lockoutTime)
       };
     }
 
@@ -220,11 +243,9 @@ const verifyOTP = (phoneNumber, otp) => {
   // Check if phone is locked
   if (isPhoneLocked(phoneNumber)) {
     const lockoutTime = getLockoutTimeRemaining(phoneNumber);
-    const minutes = Math.floor(lockoutTime / 60);
-    const seconds = lockoutTime % 60;
-    return { 
-      valid: false, 
-      message: `Too many failed attempts. Please try again in ${minutes}:${seconds.toString().padStart(2, '0')}`,
+    return {
+      valid: false,
+      message: buildLockoutMessage(lockoutTime),
       locked: true,
       lockoutTimeRemaining: lockoutTime
     };
@@ -258,11 +279,9 @@ const verifyOTP = (phoneNumber, otp) => {
     
     if (isLocked) {
       const lockoutTime = getLockoutTimeRemaining(phoneNumber);
-      const minutes = Math.floor(lockoutTime / 60);
-      const seconds = lockoutTime % 60;
-      return { 
-        valid: false, 
-        message: `Too many failed attempts. Please try again in ${minutes}:${seconds.toString().padStart(2, '0')}`,
+      return {
+        valid: false,
+        message: buildLockoutMessage(lockoutTime),
         locked: true,
         lockoutTimeRemaining: lockoutTime
       };

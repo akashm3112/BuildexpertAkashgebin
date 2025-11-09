@@ -42,6 +42,7 @@ class PushNotificationService {
     await this.ensureSchema();
     await this.processMessageQueue();
     await this.processPendingReceipts();
+    await this.flushAllPendingPush();
   }
 
   async ensureSchema(force = false) {
@@ -192,6 +193,8 @@ class PushNotificationService {
         console.log('✅ Registered new push token');
       }
 
+      await this.deliverPendingForUser(userId);
+
       return { success: true };
     } catch (error) {
       console.error('❌ Error registering push token:', error);
@@ -292,8 +295,9 @@ class PushNotificationService {
     try {
       const tokens = await this.getUserPushTokens(userId);
       if (tokens.length === 0) {
-        console.log('📱 No active push tokens for user:', userId);
-        return { success: false, error: 'No active push tokens' };
+        console.log('📱 No active push tokens for user, storing pending message:', userId);
+        await this.storePendingNotification(userId, notification);
+        return { success: false, error: 'No active push tokens. Notification queued until device registers.' };
       }
 
       return await this.sendToTokens(tokens, notification, { userId });
@@ -323,6 +327,84 @@ class PushNotificationService {
     } catch (error) {
       console.error('❌ Error enqueueing notifications:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  async storePendingNotification(userId, notification, meta = {}) {
+    try {
+      await query(
+        `
+          INSERT INTO pending_push_notifications (user_id, notification_payload, metadata)
+          VALUES ($1, $2::jsonb, $3::jsonb)
+        `,
+        [userId, JSON.stringify(notification), JSON.stringify(meta)]
+      );
+      console.log('📝 Stored pending push notification for user', userId);
+    } catch (error) {
+      console.error('❌ Error storing pending push notification:', error);
+    }
+  }
+
+  async deliverPendingForUser(userId) {
+    try {
+      const tokens = await this.getUserPushTokens(userId);
+      if (!tokens.length) {
+        return;
+      }
+
+      const pending = await getRows(
+        `
+          SELECT id, notification_payload, metadata, created_at
+          FROM pending_push_notifications
+          WHERE user_id = $1
+          ORDER BY created_at ASC
+          LIMIT 50
+        `,
+        [userId]
+      );
+
+      if (!pending.length) {
+        return;
+      }
+
+      for (const record of pending) {
+        const notification = record.notification_payload;
+        const context = record.metadata || {};
+        const result = await this.sendToTokens(tokens, notification, { userId, meta: context });
+
+        if (result.success) {
+          await query('DELETE FROM pending_push_notifications WHERE id = $1', [record.id]);
+          console.log('📬 Delivered pending push notification', { userId, pendingId: record.id });
+        } else {
+          console.warn('⚠️ Failed to deliver pending push notification, will retry later', {
+            userId,
+            pendingId: record.id
+          });
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error delivering pending push notifications:', error);
+    }
+  }
+
+  async flushAllPendingPush(limit = 200) {
+    try {
+      const usersWithPending = await getRows(
+        `
+          SELECT DISTINCT ON (user_id) user_id
+          FROM pending_push_notifications
+          ORDER BY user_id, created_at ASC
+          LIMIT $1
+        `,
+        [limit]
+      );
+
+      for (const row of usersWithPending) {
+        await this.deliverPendingForUser(row.user_id);
+      }
+    } catch (error) {
+      console.error('❌ Failed to flush pending push notifications:', error);
     }
   }
 
@@ -774,6 +856,7 @@ class PushNotificationService {
     cron.schedule('* * * * *', async () => {
       await this.processScheduledNotifications();
       await this.processMessageQueue();
+      await this.flushAllPendingPush(50);
     });
 
     cron.schedule('*/10 * * * *', async () => {

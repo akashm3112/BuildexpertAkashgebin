@@ -1,10 +1,6 @@
 
 const logger = require('./logger');
 
-/**
- * Resource Registry
- * Tracks all timers, listeners, and cleanup functions
- */
 class ResourceRegistry {
   constructor() {
     this.timers = new Map(); // Track all intervals and timeouts

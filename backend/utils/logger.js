@@ -78,6 +78,14 @@ logger.database = (action, data) => {
   logger.info(`💾 Database: ${action}`, data);
 };
 
+logger.resilience = (action, data = {}) => {
+  logger.warn(`🛡️ Resilience: ${action}`, { ...data, category: 'resilience' });
+};
+
+logger.logic = (action, data = {}) => {
+  logger.info(`🧠 Logic: ${action}`, { ...data, category: 'logic' });
+};
+
 // OTP logging (keep visible in console for development)
 logger.otp = (phone, otp) => {
   const message = `📱 OTP for ${phone}: ${otp}`;

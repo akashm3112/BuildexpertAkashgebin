@@ -204,7 +204,7 @@ const invalidateSession = async (tokenJti, userId) => {
 const invalidateAllUserSessions = async (userId) => {
   try {
     const result = await query(
-      'UPDATE user_sessions SET is_active = FALSE WHERE user_id = $1 AND is_active = TRUE',
+      'UPDATE user_sessions SET is_active = FALSE WHERE user_id = $1::uuid AND is_active = TRUE',
       [userId]
     );
     
@@ -236,7 +236,7 @@ const invalidateAllUserSessions = async (userId) => {
 const invalidateSessionById = async (sessionId, userId) => {
   try {
     const result = await query(
-      'UPDATE user_sessions SET is_active = FALSE WHERE id = $1 AND user_id = $2',
+      'UPDATE user_sessions SET is_active = FALSE WHERE id = $1 AND user_id = $2::uuid',
       [sessionId, userId]
     );
     

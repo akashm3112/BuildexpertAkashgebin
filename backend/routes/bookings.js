@@ -11,6 +11,38 @@ const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
 const { bookingCreationLimiter, standardLimiter } = require('../middleware/rateLimiting');
 const { sanitizeBody } = require('../middleware/inputSanitization');
+const { createQueuedRateLimiter } = require('../utils/rateLimiterQueue');
+const { ServiceUnavailableError, DatabaseConnectionError } = require('../utils/errorTypes');
+
+const bookingTrafficShaper = createQueuedRateLimiter({
+  windowMs: 60 * 1000, // 1 minute burst window
+  maxRequests: 8,
+  concurrency: 2,
+  queueLimit: 25,
+  metricName: 'booking-creation',
+  keyGenerator: (req) => req.user?.id?.toString() || req.ip,
+  onQueue: (req, queueLength, meta) => {
+    logger.warn('Booking request queued due to burst rate', {
+      service: 'buildxpert-api',
+      userId: req.user?.id,
+      ip: req.ip,
+      queueLength,
+      inProgress: meta.inProgress,
+      tokensRemaining: meta.tokens
+    });
+  },
+  onReject: (req, res) => {
+    logger.error('Booking queue saturated', {
+      service: 'buildxpert-api',
+      userId: req.user?.id,
+      ip: req.ip
+    });
+    return res.status(429).json({
+      status: 'error',
+      message: 'Booking demand is very high right now. Please wait a moment and try again.'
+    });
+  }
+});
 
 const router = express.Router();
 
@@ -24,12 +56,13 @@ router.use(sanitizeBody());
 // @desc    Create a new booking
 // @access  Private
 router.post('/', [
+  bookingTrafficShaper,
   bookingCreationLimiter,
   body('providerServiceId').isUUID().withMessage('Valid provider service ID is required'),
   body('selectedService').notEmpty().withMessage('Selected service is required'),
   body('appointmentDate').isDate().withMessage('Valid appointment date is required'),
   body('appointmentTime').notEmpty().withMessage('Appointment time is required')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -184,17 +217,24 @@ router.post('/', [
 
   } catch (error) {
     logger.error('Create booking error', { error: error.message, stack: error.stack });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+
+    if (['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE'].includes(error.code)) {
+      return next(
+        new ServiceUnavailableError(
+          'booking service',
+          'Booking service is temporarily unavailable due to connectivity issues. Please try again shortly.'
+        )
+      );
+    }
+
+    return next(error);
   }
 });
 
 // @route   GET /api/bookings
 // @desc    Get user's bookings
 // @access  Private
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
     const { status, page = 1, limit = 10 } = req.query;
 
@@ -216,10 +256,14 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     logger.error('Get bookings error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+
+    if (['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT'].includes(error.code)) {
+      return next(
+        new DatabaseConnectionError('Unable to fetch bookings at the moment. Please try again shortly.')
+      );
+    }
+
+    return next(error);
   }
 });
 

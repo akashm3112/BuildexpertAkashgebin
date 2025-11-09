@@ -1,13 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { query, getRow, getRows, pool } = require('../database/connection');
+const { query, getRow, getRows, withTransaction } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const { sendNotification } = require('../utils/notifications');
 const PaymentLogger = require('../utils/paymentLogging');
 const PaymentSecurity = require('../utils/paymentSecurity');
 const logger = require('../utils/logger');
 const rateLimit = require('express-rate-limit');
+const { withPaymentRetry } = require('../utils/retryLogic');
+const { registry } = require('../utils/circuitBreaker');
+const { PaymentGatewayError } = require('../utils/errorTypes');
 
 // Paytm Configuration
 // TODO: Replace with actual Paytm credentials
@@ -68,70 +71,55 @@ function generateChecksum(params, merchantKey) {
 /**
  * Verify Paytm payment with Paytm API
  */
+const paytmBreaker = registry.getBreaker('paytm-api', {
+  failureThreshold: 4,
+  successThreshold: 2,
+  timeout: 60000
+});
+
 async function verifyPaytmPayment(orderId, transactionId = null) {
   const startTime = Date.now();
-  
-  try {
-    logger.payment('Starting Paytm verification', { orderId });
 
-    // Prepare verification parameters
-    const verificationParams = {
-      MID: PAYTM_CONFIG.MID,
-      ORDERID: orderId
-    };
+  logger.payment('Starting Paytm verification', { orderId });
 
-    // Generate checksum for verification
-    const checksum = generateChecksum(verificationParams, PAYTM_CONFIG.MERCHANT_KEY);
-    verificationParams.CHECKSUMHASH = checksum;
+  const verificationParams = {
+    MID: PAYTM_CONFIG.MID,
+    ORDERID: orderId
+  };
 
-    // Paytm verification URL
-    const verificationUrl = process.env.NODE_ENV === 'production'
-      ? 'https://securegw.paytm.in/merchant-status/getTxnStatus'
-      : 'https://securegw-stage.paytm.in/merchant-status/getTxnStatus';
+  verificationParams.CHECKSUMHASH = generateChecksum(verificationParams, PAYTM_CONFIG.MERCHANT_KEY);
 
-    logger.payment('Paytm API Request', {
-      orderId,
-      endpoint: verificationUrl
-    });
+  const verificationUrl = process.env.NODE_ENV === 'production'
+    ? 'https://securegw.paytm.in/merchant-status/getTxnStatus'
+    : 'https://securegw-stage.paytm.in/merchant-status/getTxnStatus';
 
-    // Make API call to Paytm
+  const performVerification = async () => {
     const response = await fetch(verificationUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(verificationParams)
     });
 
-    const responseTime = Date.now() - startTime;
-
     if (!response.ok) {
-      const error = new Error(`Paytm API error: ${response.status} ${response.statusText}`);
-      logger.error('Paytm API Error', {
-        orderId,
-        status: response.status,
-        statusText: response.statusText,
-        responseTime: `${responseTime}ms`
-      });
-
-      // Log API interaction
-      if (transactionId) {
-        await PaymentLogger.logApiInteraction(
-          transactionId,
-          verificationUrl,
-          'POST',
-          verificationParams,
-          { status: response.status, statusText: response.statusText },
-          responseTime,
-          error
-        );
-      }
-
-      throw error;
+      throw new PaymentGatewayError('Paytm', `HTTP ${response.status} ${response.statusText}`);
     }
 
-    const paytmResponse = await response.json();
-    
+    return response.json();
+  };
+
+  let paytmResponse;
+  let responseTime;
+
+  try {
+    paytmResponse = await withPaymentRetry(
+      () => paytmBreaker.execute(
+        performVerification,
+        async () => { throw new PaymentGatewayError('Paytm', 'Circuit breaker open'); }
+      ),
+      'Paytm verification'
+    );
+    responseTime = Date.now() - startTime;
+
     logger.payment('Paytm verification response', {
       orderId,
       status: paytmResponse.STATUS,
@@ -139,7 +127,6 @@ async function verifyPaytmPayment(orderId, transactionId = null) {
       responseTime: `${responseTime}ms`
     });
 
-    // Log API interaction
     if (transactionId) {
       await PaymentLogger.logApiInteraction(
         transactionId,
@@ -150,47 +137,32 @@ async function verifyPaytmPayment(orderId, transactionId = null) {
         responseTime
       );
     }
-
-    // Check if payment was successful
-    const isSuccess = paytmResponse.STATUS === 'TXN_SUCCESS';
-    const paytmTransactionId = paytmResponse.TXNID;
-    const amount = paytmResponse.TXNAMOUNT;
-    const responseCode = paytmResponse.RESPCODE;
-    const responseMessage = paytmResponse.RESPMSG;
-
-    // Log verification result
-    if (transactionId) {
-      await PaymentLogger.logPaymentEvent(transactionId, 'paytm_verification_completed', {
-        orderId,
-        success: isSuccess,
-        paytmTransactionId,
-        amount,
-        responseCode,
-        responseMessage,
-        responseTime
-      });
+  } catch (error) {
+    responseTime = Date.now() - startTime;
+    if (error instanceof PaymentGatewayError) {
+      const retryAfterMs = Math.max(0, (paytmBreaker.nextAttempt || Date.now()) - Date.now());
+      const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+      error.statusCode = 503;
+      error.errorCode = 'PAYMENT_GATEWAY_UNAVAILABLE';
+      error.retryable = true;
+      error.retryAfter = retryAfterSeconds;
+      error.message = 'Payment gateway unavailable';
+      if (transactionId) {
+        await PaymentLogger.logPaymentEvent(transactionId, 'paytm_verification_failed', {
+          orderId,
+          error: error.message,
+          responseTime
+        });
+      }
+      throw error;
     }
 
-    return {
-      success: isSuccess,
-      transactionId: paytmTransactionId,
-      amount: amount,
-      responseCode: responseCode,
-      responseMessage: responseMessage,
-      paytmResponse: paytmResponse,
-      responseTime: responseTime
-    };
-
-  } catch (error) {
-    const responseTime = Date.now() - startTime;
-    
-    logger.error('Paytm verification error', {
+    logger.resilience('Paytm verification error', {
       orderId,
       error: error.message,
       responseTime: `${responseTime}ms`
     });
 
-    // Log verification failure
     if (transactionId) {
       await PaymentLogger.logPaymentEvent(transactionId, 'paytm_verification_failed', {
         orderId,
@@ -203,9 +175,37 @@ async function verifyPaytmPayment(orderId, transactionId = null) {
       success: false,
       error: error.message,
       paytmResponse: null,
-      responseTime: responseTime
+      responseTime
     };
   }
+
+  const isSuccess = paytmResponse.STATUS === 'TXN_SUCCESS';
+  const paytmTransactionId = paytmResponse.TXNID;
+  const amount = paytmResponse.TXNAMOUNT;
+  const responseCode = paytmResponse.RESPCODE;
+  const responseMessage = paytmResponse.RESPMSG;
+
+  if (transactionId) {
+    await PaymentLogger.logPaymentEvent(transactionId, 'paytm_verification_completed', {
+      orderId,
+      success: isSuccess,
+      paytmTransactionId,
+      amount,
+      responseCode,
+      responseMessage,
+      responseTime
+    });
+  }
+
+  return {
+    success: isSuccess,
+    transactionId: paytmTransactionId,
+    amount,
+    responseCode,
+    responseMessage,
+    paytmResponse,
+    responseTime
+  };
 }
 
 /**
@@ -499,7 +499,7 @@ router.post('/initiate-paytm', paymentInitiationLimiter, auth, requireRole(['pro
  * @desc    Verify Paytm payment and activate service
  * @access  Private (Provider only)
  */
-router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) => {
+router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res, next) => {
   try {
     const { orderId, providerServiceId } = req.body;
 
@@ -542,81 +542,68 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
     const paymentVerification = await verifyPaytmPayment(orderId, transaction.id);
 
     if (paymentVerification.success) {
-      // USE DATABASE TRANSACTION for atomicity
-      const client = await pool.connect();
-      
-      try {
-        await client.query('BEGIN');
-        
-        // Get existing service to check if it's a renewal
-        const existingServiceResult = await client.query(`
-          SELECT payment_start_date, payment_end_date, payment_status
-          FROM provider_services
-          WHERE id = $1
-        `, [providerServiceId]);
-        
-        const existingService = existingServiceResult.rows[0];
+      const { startDate, endDate, existingService } = await withTransaction(async (client) => {
+        const existingServiceResult = await client.query(
+          `
+            SELECT payment_start_date, payment_end_date, payment_status
+              FROM provider_services
+             WHERE id = $1
+             FOR UPDATE
+          `,
+          [providerServiceId]
+        );
 
-        let startDate, endDate;
-        
-        if (existingService && existingService.payment_status === 'active' && existingService.payment_end_date) {
-          // Renewal: Start new period after current expiry
-          const currentEndDate = new Date(existingService.payment_end_date);
+        const existing = existingServiceResult.rows[0];
+        let startDate;
+        let endDate;
+
+        if (existing && existing.payment_status === 'active' && existing.payment_end_date) {
+          const currentEndDate = new Date(existing.payment_end_date);
           startDate = currentEndDate;
           endDate = new Date(currentEndDate);
           endDate.setDate(endDate.getDate() + 30);
         } else {
-          // New activation or expired service: Start immediately
           startDate = new Date();
           endDate = new Date();
           endDate.setDate(endDate.getDate() + 30);
         }
 
-        // Update provider service status
-        await client.query(`
-          UPDATE provider_services
-          SET payment_status = 'active',
-              payment_start_date = $1,
-              payment_end_date = $2
-          WHERE id = $3
-        `, [startDate, endDate, providerServiceId]);
+        await client.query(
+          `
+            UPDATE provider_services
+               SET payment_status = 'active',
+                   payment_start_date = $1,
+                   payment_end_date = $2
+             WHERE id = $3
+          `,
+          [startDate, endDate, providerServiceId]
+        );
 
-        // Update payment transaction with success details
-        await client.query(`
-          UPDATE payment_transactions
-          SET status = 'completed',
-              payment_gateway_response = $1,
-              completed_at = NOW(),
-              transaction_id = $2,
-              updated_at = NOW()
-          WHERE order_id = $3
-        `, [
-          JSON.stringify(paymentVerification.paytmResponse), 
-          paymentVerification.transactionId,
-          orderId
-        ]);
+        await client.query(
+          `
+            UPDATE payment_transactions
+               SET status = 'completed',
+                   payment_gateway_response = $1,
+                   completed_at = NOW(),
+                   transaction_id = $2,
+                   updated_at = NOW()
+             WHERE order_id = $3
+          `,
+          [
+            JSON.stringify(paymentVerification.paytmResponse),
+            paymentVerification.transactionId,
+            orderId
+          ]
+        );
 
-        // Commit transaction
-        await client.query('COMMIT');
-        
-        logger.payment('Payment completed successfully with transaction', {
-          orderId,
-          transactionId: paymentVerification.transactionId,
-          userId: req.user.id
-        });
-        
-      } catch (transactionError) {
-        // Rollback on any error
-        await client.query('ROLLBACK');
-        logger.error('Payment transaction rollback', {
-          orderId,
-          error: transactionError.message,
-          userId: req.user.id
-        });
-        throw transactionError;
-      } finally {
-        client.release();
-      }
+        return { startDate, endDate, existingService: existing };
+      }, { name: 'provider_service_activation' });
+
+      logger.payment('Payment completed successfully with transaction', {
+        orderId,
+        transactionId: paymentVerification.transactionId,
+        userId: req.user.id
+      });
 
       // Log payment success event
       await PaymentLogger.logPaymentEvent(transaction.id, 'payment_completed', {
@@ -660,8 +647,8 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
         status: 'success',
         message: 'Payment verified and service activated',
         data: {
-          startDate: startDate,
-          endDate: endDate,
+          startDate,
+          endDate,
           validity: 30,
           transactionId: paymentVerification.transactionId,
           amount: paymentVerification.amount
@@ -723,8 +710,9 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
 
         res.status(400).json({
           status: 'error',
-          message: paymentVerification.error || 'Payment verification failed',
-          details: paymentVerification.responseMessage || 'Unknown error'
+          message: paymentVerification.error || 'Payment gateway unavailable. Please try again in a few minutes.',
+          details: paymentVerification.responseMessage || 'Payment gateway is currently unavailable.',
+          retryAfter: 120
         });
 
       } catch (dbError) {
@@ -739,11 +727,7 @@ router.post('/verify-paytm', auth, requireRole(['provider']), async (req, res) =
     }
 
   } catch (error) {
-    logger.error('Verify Paytm payment error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to verify payment'
-    });
+    next(error);
   }
 });
 
@@ -1416,7 +1400,7 @@ router.post('/initiate-labour-payment', paymentInitiationLimiter, auth, requireR
  * @desc    Verify Paytm payment and activate labour service access
  * @access  Private (User only)
  */
-router.post('/verify-labour-payment', auth, requireRole(['user']), async (req, res) => {
+router.post('/verify-labour-payment', auth, requireRole(['user']), async (req, res, next) => {
   try {
     const { orderId } = req.body;
 
@@ -1459,82 +1443,69 @@ router.post('/verify-labour-payment', auth, requireRole(['user']), async (req, r
     const paymentVerification = await verifyPaytmPayment(orderId, transaction.id);
 
     if (paymentVerification.success) {
-      // USE DATABASE TRANSACTION for atomicity
-      const client = await pool.connect();
-      
-      try {
-        await client.query('BEGIN');
-        
-        // Get existing labour access to check if it's a renewal
-        const existingAccessResult = await client.query(`
-          SELECT labour_access_start_date, labour_access_end_date, labour_access_status
-          FROM users
-          WHERE id = $1
-        `, [req.user.id]);
-        
-        const existingAccess = existingAccessResult.rows[0];
+      const { startDate, endDate, existingAccess } = await withTransaction(async (client) => {
+        const existingAccessResult = await client.query(
+          `
+            SELECT labour_access_start_date, labour_access_end_date, labour_access_status
+              FROM users
+             WHERE id = $1
+             FOR UPDATE
+          `,
+          [req.user.id]
+        );
 
-        let startDate, endDate;
-        
-        if (existingAccess && existingAccess.labour_access_status === 'active' && existingAccess.labour_access_end_date) {
-          // Renewal: Start new period after current expiry
-          const currentEndDate = new Date(existingAccess.labour_access_end_date);
+        const existing = existingAccessResult.rows[0];
+        let startDate;
+        let endDate;
+
+        if (existing && existing.labour_access_status === 'active' && existing.labour_access_end_date) {
+          const currentEndDate = new Date(existing.labour_access_end_date);
           startDate = currentEndDate;
           endDate = new Date(currentEndDate);
           endDate.setDate(endDate.getDate() + 7);
         } else {
-          // New activation or expired access: Start immediately
           startDate = new Date();
           endDate = new Date();
           endDate.setDate(endDate.getDate() + 7);
         }
 
-        // Update user labour access status
-        await client.query(`
-          UPDATE users
-          SET labour_access_status = 'active',
-              labour_access_start_date = $1,
-              labour_access_end_date = $2,
-              updated_at = NOW()
-          WHERE id = $3
-        `, [startDate, endDate, req.user.id]);
+        await client.query(
+          `
+            UPDATE users
+               SET labour_access_status = 'active',
+                   labour_access_start_date = $1,
+                   labour_access_end_date = $2,
+                   updated_at = NOW()
+             WHERE id = $3
+          `,
+          [startDate, endDate, req.user.id]
+        );
 
-        // Update payment transaction with success details
-        await client.query(`
-          UPDATE labour_payment_transactions
-          SET status = 'completed',
-              payment_gateway_response = $1,
-              completed_at = NOW(),
-              transaction_id = $2,
-              updated_at = NOW()
-          WHERE order_id = $3
-        `, [
-          JSON.stringify(paymentVerification.paytmResponse), 
-          paymentVerification.transactionId,
-          orderId
-        ]);
+        await client.query(
+          `
+            UPDATE labour_payment_transactions
+               SET status = 'completed',
+                   payment_gateway_response = $1,
+                   completed_at = NOW(),
+                   transaction_id = $2,
+                   updated_at = NOW()
+             WHERE order_id = $3
+          `,
+          [
+            JSON.stringify(paymentVerification.paytmResponse),
+            paymentVerification.transactionId,
+            orderId
+          ]
+        );
 
-        // Commit transaction
-        await client.query('COMMIT');
-        
-        logger.payment('Labour payment completed successfully with transaction', {
-          orderId,
-          transactionId: paymentVerification.transactionId,
-          userId: req.user.id
-        });
-        
-      } catch (transactionError) {
-        // Rollback on any error
-        await client.query('ROLLBACK');
-        logger.error('Labour payment transaction rollback', {
-          orderId,
-          error: transactionError.message,
-          userId: req.user.id
-        });
-        throw transactionError;
-      } finally {
-        client.release();
-      }
+        return { startDate, endDate, existingAccess: existing };
+      }, { name: 'labour_access_activation' });
+
+      logger.payment('Labour payment completed successfully with transaction', {
+        orderId,
+        transactionId: paymentVerification.transactionId,
+        userId: req.user.id
+      });
 
       // Log payment success event
       await PaymentLogger.logPaymentEvent(transaction.id, 'labour_payment_completed', {
@@ -1578,8 +1549,8 @@ router.post('/verify-labour-payment', auth, requireRole(['user']), async (req, r
         status: 'success',
         message: 'Payment verified and labour service access activated',
         data: {
-          startDate: startDate,
-          endDate: endDate,
+          startDate,
+          endDate,
           validity: 7,
           transactionId: paymentVerification.transactionId,
           amount: paymentVerification.amount
@@ -1641,8 +1612,9 @@ router.post('/verify-labour-payment', auth, requireRole(['user']), async (req, r
 
         res.status(400).json({
           status: 'error',
-          message: paymentVerification.error || 'Payment verification failed',
-          details: paymentVerification.responseMessage || 'Unknown error'
+          message: paymentVerification.error || 'Payment gateway unavailable. Please try again in a few minutes.',
+          details: paymentVerification.responseMessage || 'Payment gateway is currently unavailable.',
+          retryAfter: 120
         });
 
       } catch (dbError) {
@@ -1657,11 +1629,7 @@ router.post('/verify-labour-payment', auth, requireRole(['user']), async (req, r
     }
 
   } catch (error) {
-    logger.error('Verify labour payment error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to verify labour payment'
-    });
+    next(error);
   }
 });
 

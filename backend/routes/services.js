@@ -9,6 +9,7 @@ const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
 const { serviceRegistrationLimiter, standardLimiter, searchLimiter } = require('../middleware/rateLimiting');
 const { sanitizeBody, sanitizeQuery } = require('../middleware/inputSanitization');
+const { DatabaseConnectionError } = require('../utils/errorTypes');
 
 const router = express.Router();
 
@@ -38,7 +39,7 @@ const categoryToServiceMap = {
 // @route   GET /api/services
 // @desc    Get all services
 // @access  Public
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
   try {
     const services = await getRows(`
       SELECT id, name, is_paid, created_at
@@ -53,10 +54,12 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     logger.error('Get services error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+
+    if (['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT'].includes(error.code)) {
+      return next(new DatabaseConnectionError('Service catalog is temporarily unavailable. Please try again shortly.'));
+    }
+
+    return next(error);
   }
 });
 
@@ -594,6 +597,20 @@ router.post('/:id/providers', requireRole(['provider']), [
         message: 'Service not found'
       });
     }
+
+    const defaultPricingPlan = await getRow(`
+      SELECT id, plan_name, description, price, currency_code, billing_period, billing_interval
+      FROM service_pricing
+      WHERE service_id = $1
+        AND is_active = TRUE
+        AND (effective_from IS NULL OR effective_from <= NOW())
+        AND (effective_to IS NULL OR effective_to >= NOW())
+      ORDER BY 
+        (CASE WHEN id = $2 THEN 0 ELSE 1 END),
+        priority DESC,
+        effective_from DESC NULLS LAST
+      LIMIT 1
+    `, [service.id, service.default_pricing_plan_id]);
 
     // Check if user is already registered for this service
     const existingRegistration = await getRow(`

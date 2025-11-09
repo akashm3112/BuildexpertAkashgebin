@@ -1,5 +1,7 @@
 const { Pool } = require('pg');
 const config = require('../utils/config');
+const logger = require('../utils/logger');
+const { sleep } = require('../utils/retryLogic');
 
 // Enhanced database configuration for production readiness
 const pool = new Pool({
@@ -50,9 +52,30 @@ let connectionTested = false;
 })();
 
 // Helper function to execute queries with enhanced error handling and retry logic
+const RETRYABLE_DATABASE_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  '57P01', // admin shutdown
+  '57P02', // crash shutdown
+  '57P03', // cannot connect now
+  '57014', // query cancelled / timeout
+  '08003', // connection does not exist
+  '08006', // connection failure
+  '53300', // too many connections
+  '40001'  // serialization failure
+]);
+
+const SLEEP_BASE_MS = 100;
+const BACKOFF_STEPS = [100, 300, 900];
+
+const isRetryableDatabaseError = (error) => {
+  if (!error || !error.code) return false;
+  return RETRYABLE_DATABASE_CODES.has(error.code);
+};
+
 const query = async (text, params) => {
   const start = Date.now();
-  const maxRetries = 2;
+  const maxRetries = config.isProduction() ? 2 : 2;
   let lastError;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -60,50 +83,114 @@ const query = async (text, params) => {
       const res = await pool.query(text, params);
       const duration = Date.now() - start;
       
-      // Only log in development mode to avoid performance issues
       if (config.isDevelopment() && config.get('security.enableQueryLogging')) {
         console.log('Executed query', {
-          text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+          text: typeof text === 'string' ? text.substring(0, 100) + (text.length > 100 ? '...' : '') : 'dynamic query',
           duration: `${duration}ms`,
           rows: res.rowCount,
           attempt: attempt > 0 ? attempt + 1 : undefined
         });
       }
       
+      if (attempt > 0) {
+        logger.resilience('Database query recovered after retry', {
+          attempts: attempt,
+          duration,
+          queryPreview: typeof text === 'string' ? text.substring(0, 80) : 'dynamic query'
+        });
+      }
+      
       return res;
     } catch (error) {
       lastError = error;
-      
-      // Check if error is retryable
-      const isRetryable = error.code === 'ECONNREFUSED' || 
-                          error.code === 'ECONNRESET' || 
-                          error.code === '57014' || // Query timeout
-                          error.code === '08003' || // Connection does not exist
-                          error.code === '08006';   // Connection failure
-      
+      const retryable = isRetryableDatabaseError(error);
       const isLastAttempt = attempt === maxRetries;
       
-      if (!isRetryable || isLastAttempt) {
-        // Log error with appropriate context
-        console.error('Database query error:', {
+      if (!retryable || isLastAttempt) {
+        logger.error('Database query error', {
           message: error.message,
           code: error.code,
-          query: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-          params: params ? params.length : 0,
-          attempts: attempt + 1
+          queryPreview: typeof text === 'string' ? text.substring(0, 120) : 'dynamic query',
+          paramsCount: Array.isArray(params) ? params.length : 0,
+          attempts: attempt + 1,
+          failureCategory: retryable ? 'resilience' : 'logic'
         });
         throw error;
       }
       
-      // Log retry
-      console.warn(`Database query failed, retrying (attempt ${attempt + 1}/${maxRetries + 1})`, {
+      const delay = BACKOFF_STEPS[Math.min(attempt, BACKOFF_STEPS.length - 1)];
+      const jitter = Math.floor(Math.random() * 50);
+      const backoff = delay + jitter;
+      
+      logger.resilience('Database query retry scheduled', {
+        attempt: attempt + 1,
+        maxRetries,
+        delay: backoff,
         error: error.message,
         code: error.code
       });
       
-      // Wait before retrying (exponential backoff)
-      const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await sleep(backoff);
+    }
+  }
+  
+  throw lastError;
+};
+
+const withTransaction = async (handler, { retries = config.isProduction() ? 2 : 1, name = 'transaction' } = {}) => {
+  let lastError;
+  
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await handler(client);
+      await client.query('COMMIT');
+      
+      if (attempt > 0) {
+        logger.resilience(`${name} succeeded after retry`, { attempts: attempt });
+      }
+      
+      return result;
+    } catch (error) {
+      lastError = error;
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        logger.error('Transaction rollback failed', {
+          message: rollbackError.message,
+          originalError: error.message
+        });
+      }
+      
+      const retryable = isRetryableDatabaseError(error);
+      const isLastAttempt = attempt === retries;
+      
+      if (!retryable || isLastAttempt) {
+        logger.error(`${name} aborted`, {
+          message: error.message,
+          code: error.code,
+          attempts: attempt + 1,
+          failureCategory: retryable ? 'resilience' : 'logic'
+        });
+        throw error;
+      }
+      
+      const delay = BACKOFF_STEPS[Math.min(attempt, BACKOFF_STEPS.length - 1)];
+      const jitter = Math.floor(Math.random() * 60);
+      const backoff = delay + jitter;
+      
+      logger.resilience(`${name} retry scheduled`, {
+        attempt: attempt + 1,
+        maxRetries: retries,
+        delay: backoff,
+        error: error.message,
+        code: error.code
+      });
+      
+      await sleep(backoff);
+    } finally {
+      client.release();
     }
   }
   
@@ -126,5 +213,7 @@ module.exports = {
   pool,
   query,
   getRow,
-  getRows
+  getRows,
+  withTransaction,
+  isRetryableDatabaseError
 }; 

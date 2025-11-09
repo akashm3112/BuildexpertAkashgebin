@@ -9,19 +9,23 @@ const { uploadLimiter } = require('../middleware/rateLimiting');
 const router = express.Router();
 
 // Configure multer for memory storage (for Cloudinary upload)
+const imageFileFilter = (req, file, cb) => {
+  if (file && file.mimetype && file.mimetype.startsWith('image/')) {
+    return cb(null, true);
+  }
+  const error = new Error('Only image files are allowed');
+  error.name = 'ValidationError';
+  error.statusCode = 400;
+  error.errorCode = 'INVALID_FILE_TYPE';
+  return cb(error);
+};
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit per file
   },
-  fileFilter: (req, file, cb) => {
-    // Check file type - only allow images
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'), false);
-    }
-  },
+  fileFilter: imageFileFilter,
 });
 
 // All routes require authentication
@@ -250,6 +254,26 @@ router.post('/multiple-base64', [
       message: 'Internal server error'
     });
   }
+});
+
+// Upload-specific error normalization
+router.use((err, req, res, next) => {
+  if (!err) {
+    return next();
+  }
+
+  if (err instanceof multer.MulterError) {
+    err.name = 'ValidationError';
+    err.statusCode = 400;
+    err.errorCode = 'UPLOAD_ERROR';
+    return next(err);
+  }
+
+  if (err.name === 'ValidationError' || err.errorCode === 'INVALID_FILE_TYPE') {
+    return next(err);
+  }
+
+  return next(err);
 });
 
 module.exports = router; 

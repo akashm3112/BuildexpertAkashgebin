@@ -57,12 +57,12 @@ const strictLimiter = rateLimit({
 
 /**
  * Booking creation limiter
- * Limit: 5 bookings per hour per user
+ * Limit: 20 bookings per hour per user (long-term quota)
  */
 const bookingCreationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5,
-  message: { status: 'error', message: 'Too many booking requests. Please try again in 1 hour.' },
+  max: 20,
+  message: { status: 'error', message: 'Too many booking requests in a short period. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
@@ -76,7 +76,7 @@ const bookingCreationLimiter = rateLimit({
     });
     res.status(429).json({
       status: 'error',
-      message: 'Too many booking requests. Please try again in 1 hour.'
+      message: 'Too many booking requests in a short period. Please try again later.'
     });
   }
 });

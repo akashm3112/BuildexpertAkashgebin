@@ -22,11 +22,12 @@ const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
 
 // Initialize services
-const { bookingReminderService } = require('./services/bookingReminders');
+require('./services/bookingReminders');
 const { serviceExpiryManager } = require('./services/serviceExpiryManager');
 const { initializeCleanupJob } = require('./utils/cleanupJob');
 const { validateCallPermissions } = require('./utils/callPermissions');
 const { WebRTCPermissionError } = require('./utils/errorTypes');
+const notificationQueue = require('./utils/notificationQueue');
 
 // Initialize memory leak prevention
 const { 
@@ -459,6 +460,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('🔧 Starting background services...');
   serviceExpiryManager.start();
   initializeCleanupJob(); // Auth data cleanup (tokens, sessions, security logs)
+  notificationQueue.start();
   console.log('✅ All background services started');
 });
 
