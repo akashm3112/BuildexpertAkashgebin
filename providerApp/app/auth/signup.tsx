@@ -222,6 +222,10 @@ export default function SignUpScreen() {
       showModal('Password Mismatch', 'Passwords do not match. Please try again.', 'error');
       return;
     }
+    if (!profileImage) {
+      showModal('Profile Picture Required', 'Please upload a profile picture before continuing.', 'error');
+      return;
+    }
     setIsLoading(true);
     try {
       console.log('📤 Starting signup process...');

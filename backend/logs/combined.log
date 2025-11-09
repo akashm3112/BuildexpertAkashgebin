@@ -6533,3 +6533,508 @@
 {"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 18:52:47","userId":"513b3070-c892-4df3-8369-83f57feb79ce"}
 {"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 18:52:47","userId":"513b3070-c892-4df3-8369-83f57feb79ce"}
 {"count":2,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 18:52:47","userId":"513b3070-c892-4df3-8369-83f57feb79ce"}
+{"level":"info","message":"Timer registered: otpStore-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"level":"info","message":"Map registered for monitoring: otpStore (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"cleanupInterval":60000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpStore","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57","ttl":300000}
+{"level":"info","message":"Timer registered: pendingSignups-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"level":"info","message":"Map registered for monitoring: pendingSignups (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: pendingSignups","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57","ttl":600000}
+{"level":"info","message":"Timer registered: passwordResetSessions-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"level":"info","message":"Map registered for monitoring: passwordResetSessions (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: passwordResetSessions","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57","ttl":600000}
+{"level":"info","message":"Timer registered: otpAttempts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"level":"info","message":"Map registered for monitoring: otpAttempts (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"cleanupInterval":300000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpAttempts","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57","ttl":900000}
+{"level":"info","message":"Timer registered: booking-creation-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"level":"info","message":"Timer registered: booking-creation-refill (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:57"}
+{"level":"info","message":"Initializing memory leak prevention...","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"Memory leak prevention initialized","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"Timer registered: activeCalls-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"Map registered for monitoring: activeCalls (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: activeCalls","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58","ttl":86400000}
+{"level":"info","message":"Timer registered: callTimeouts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"Map registered for monitoring: callTimeouts (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: callTimeouts","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58","ttl":86400000}
+{"level":"info","message":"Timer registered: socket-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"Socket cleanup job started","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"Timer registered: memory-monitor (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"checkInterval":"60000ms","level":"info","message":"Memory monitor started","service":"buildxpert-api","threshold":"500MB","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"🧹 Starting scheduled auth data cleanup...","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"Timer registered: auth-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"🕐 Auth cleanup job initialized (runs every 24 hours)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"level":"info","message":"Timer registered: notification-queue (interval)","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58"}
+{"batchSize":25,"category":"resilience","interval":2000,"level":"warn","message":"🛡️ Resilience: Notification queue processor started","service":"buildxpert-api","timestamp":"2025-11-09 19:08:58","workerId":"node-9660-sjv3ju"}
+{"level":"info","loginAttemptsRemoved":0,"message":"Security data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","timestamp":"2025-11-09 19:09:00"}
+{"duration":"2940ms","level":"info","loginAttemptsRemoved":0,"message":"✅ Auth data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","sessionsRemoved":0,"timestamp":"2025-11-09T13:39:01.074Z","tokensRemoved":0}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"9966996699","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:13:13"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"9966996699","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:13:21"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:13:21","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"deviceName":"Unknown on Unknown","ipAddress":"192.168.1.34","level":"info","message":"Session created","service":"buildxpert-api","timestamp":"2025-11-09 19:13:22","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"eventType":"signup","level":"info","message":"Security event logged","service":"buildxpert-api","severity":"info","timestamp":"2025-11-09 19:13:22","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"8TBwqw7lPqQlQWVWAAAC","timestamp":"2025-11-09 19:13:24","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"8TBwqw7lPqQlQWVWAAAC","timestamp":"2025-11-09 19:13:24","totalConnections":1,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"JEYuYvFC4m3Ls2tUAAAD","timestamp":"2025-11-09 19:13:24","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"JEYuYvFC4m3Ls2tUAAAD","timestamp":"2025-11-09 19:13:24","totalConnections":2,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"9988998899","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:13:55"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"9988998899","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:14:07"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:14:07","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"deviceName":"Unknown on Unknown","ipAddress":"192.168.1.35","level":"info","message":"Session created","service":"buildxpert-api","timestamp":"2025-11-09 19:14:08","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"eventType":"signup","level":"info","message":"Security event logged","service":"buildxpert-api","severity":"info","timestamp":"2025-11-09 19:14:08","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"fZaO01OBkXL_23ayAAAG","timestamp":"2025-11-09 19:14:09","totalConnections":3,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"fZaO01OBkXL_23ayAAAG","timestamp":"2025-11-09 19:14:09","totalConnections":3,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"r1I6WA8imbuY33kUAAAI","timestamp":"2025-11-09 19:14:09","totalConnections":4,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"r1I6WA8imbuY33kUAAAI","timestamp":"2025-11-09 19:14:09","totalConnections":4,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:14:10","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:14:11","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:14:11","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-09 19:14:11","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"4xaU0p2Kg_PaIc9BAAAJ","timestamp":"2025-11-09 19:14:11","totalConnections":5,"userId":null}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:14:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-09 19:14:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"4xaU0p2Kg_PaIc9BAAAJ","timestamp":"2025-11-09 19:14:12","totalConnections":5,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Uploading working proof images to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-09 19:15:26"}
+{"count":1,"level":"info","message":"Successfully uploaded images to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-09 19:15:29"}
+{"level":"info","message":"Labor service registered for free - activated immediately","providerServiceId":"cb418985-f39e-4fea-94d4-671bf02da184","service":"buildxpert-api","timestamp":"2025-11-09 19:15:30"}
+{"category":"resilience","level":"warn","message":"🛡️ Resilience: Notification queued","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:15:30","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"category":"resilience","level":"warn","message":"🛡️ Resilience: Notification queued","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:15:31","userId":"f80c3c31-1723-4c3e-9d62-17f4d17c76b4"}
+{"category":"resilience","count":2,"level":"warn","message":"🛡️ Resilience: Notification queue batch picked","service":"buildxpert-api","timestamp":"2025-11-09 19:15:32","workerId":"node-9660-sjv3ju"}
+{"category":"logic","level":"info","message":"🧠 Logic: Notification delivered","notificationId":"ea4a0464-da00-4353-932c-c7b4b5972074","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:15:33","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"category":"logic","level":"info","message":"🧠 Logic: Notification delivered","notificationId":"2d0982ee-1226-4f50-8f2e-1f20b7ff8653","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:15:33","userId":"f80c3c31-1723-4c3e-9d62-17f4d17c76b4"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:15:35","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:15:35","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:15:35","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:15:35","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:15:36","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:15:36","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"0ZelSqpvaN3FS8f5AAAL","timestamp":"2025-11-09 19:15:52","totalConnections":6,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"0ZelSqpvaN3FS8f5AAAL","timestamp":"2025-11-09 19:15:52","totalConnections":6,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:15:53","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:15:53","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:15:53","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:15:53","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:15:53","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:15:54","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:16:05","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:16:05","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:16:06","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"iEmueoBuJ0oJdppdAAAN","timestamp":"2025-11-09 19:16:29","totalConnections":7,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"iEmueoBuJ0oJdppdAAAN","timestamp":"2025-11-09 19:16:29","totalConnections":7,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:17:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:17:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:17:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Deleting profile picture from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-09 19:17:55"}
+{"level":"error","message":"Failed to delete profile picture from Cloudinary","service":"buildxpert-api","timestamp":"2025-11-09 19:17:56"}
+{"duration":"227s","level":"info","message":"Socket connection unregistered","remainingConnections":6,"service":"buildxpert-api","socketId":"fZaO01OBkXL_23ayAAAG","timestamp":"2025-11-09 19:17:57","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"124s","level":"info","message":"Socket connection unregistered","remainingConnections":5,"service":"buildxpert-api","socketId":"0ZelSqpvaN3FS8f5AAAL","timestamp":"2025-11-09 19:17:57","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"_MFktUOrj7Hw_sBJAAAQ","timestamp":"2025-11-09 19:17:57","totalConnections":6,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"CS5B57LyV_nvWx17AAAR","timestamp":"2025-11-09 19:17:57","totalConnections":7,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"_MFktUOrj7Hw_sBJAAAQ","timestamp":"2025-11-09 19:17:57","totalConnections":7,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"CS5B57LyV_nvWx17AAAR","timestamp":"2025-11-09 19:17:57","totalConnections":7,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:17:58","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:17:58","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:18:00","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:18:00","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:18:00","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:18:00","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:18:01","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:18:01","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:18:01","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:18:23","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:18:24","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:18:24","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"340s","level":"info","message":"Socket connection unregistered","remainingConnections":6,"service":"buildxpert-api","socketId":"JEYuYvFC4m3Ls2tUAAAD","timestamp":"2025-11-09 19:19:04","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"155s","level":"info","message":"Socket connection unregistered","remainingConnections":5,"service":"buildxpert-api","socketId":"iEmueoBuJ0oJdppdAAAN","timestamp":"2025-11-09 19:19:04","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"340s","level":"info","message":"Socket connection unregistered","remainingConnections":4,"service":"buildxpert-api","socketId":"8TBwqw7lPqQlQWVWAAAC","timestamp":"2025-11-09 19:19:04","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"qwDN7s0QFfvpN2_mAAAV","timestamp":"2025-11-09 19:19:13","totalConnections":5,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"M6YlmasruEPwKt8OAAAW","timestamp":"2025-11-09 19:19:13","totalConnections":6,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"dF5zcYmzo4Qi5z3KAAAX","timestamp":"2025-11-09 19:19:13","totalConnections":7,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"qwDN7s0QFfvpN2_mAAAV","timestamp":"2025-11-09 19:19:13","totalConnections":7,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"dF5zcYmzo4Qi5z3KAAAX","timestamp":"2025-11-09 19:19:13","totalConnections":7,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:19:21","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:19:21","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:19:22","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:19:39","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:19:41","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:19:41","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:19:41","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:19:41","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:19:41","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:20:00","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:20:01","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:20:01","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:20:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:20:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:20:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:20:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:20:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:20:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:20:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:20:13","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:20:13","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:20:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:20:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:20:16","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:20:19","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:20:19","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:20:19","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:20:52","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:20:52","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:20:53","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:20:53","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:20:53","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:20:53","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"IWejtd3YczuxQWdcAAAZ","timestamp":"2025-11-09 19:21:06","totalConnections":8,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"IWejtd3YczuxQWdcAAAZ","timestamp":"2025-11-09 19:21:06","totalConnections":8,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:21:06","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:21:06","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:21:06","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:21:07","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:21:07","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:21:07","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"bookingId":"2096a89f-57ca-4361-a5b1-92541cb49d19","level":"info","message":"📅 Booking: Push notification sent to provider","providerId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9","service":"buildxpert-api","timestamp":"2025-11-09 19:21:25"}
+{"category":"resilience","level":"warn","message":"🛡️ Resilience: Notification queued","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:21:25","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"category":"resilience","level":"warn","message":"🛡️ Resilience: Notification queued","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:21:26","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"Dgd4RrdegIgNyYvgAAAb","timestamp":"2025-11-09 19:21:28","totalConnections":9,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"Dgd4RrdegIgNyYvgAAAb","timestamp":"2025-11-09 19:21:28","totalConnections":9,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"category":"resilience","count":2,"level":"warn","message":"🛡️ Resilience: Notification queue batch picked","service":"buildxpert-api","timestamp":"2025-11-09 19:21:28","workerId":"node-9660-sjv3ju"}
+{"category":"logic","level":"info","message":"🧠 Logic: Notification delivered","notificationId":"c08e442c-6341-4736-9b3c-aae26233d5f9","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:21:28","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"category":"logic","level":"info","message":"🧠 Logic: Notification delivered","notificationId":"e9060406-a681-402f-b938-718feed8a1cf","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:21:29","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"ltKQtq0Tuu0dX0qTAAAd","timestamp":"2025-11-09 19:21:36","totalConnections":10,"userId":null}
+{"count":6,"level":"warn","max":5,"message":"User exceeded max connections","service":"buildxpert-api","timestamp":"2025-11-09 19:21:36","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"ltKQtq0Tuu0dX0qTAAAd","timestamp":"2025-11-09 19:21:36","totalConnections":10,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"category":"resilience","level":"warn","message":"🛡️ Resilience: Notification queued","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:21:42","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"bookingId":"2096a89f-57ca-4361-a5b1-92541cb49d19","level":"info","message":"📅 Booking: Push notification sent for booking acceptance","service":"buildxpert-api","timestamp":"2025-11-09 19:21:42"}
+{"category":"resilience","level":"warn","message":"🛡️ Resilience: Notification queued","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:21:42","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"category":"resilience","count":2,"level":"warn","message":"🛡️ Resilience: Notification queue batch picked","service":"buildxpert-api","timestamp":"2025-11-09 19:21:44","workerId":"node-9660-sjv3ju"}
+{"category":"logic","level":"info","message":"🧠 Logic: Notification delivered","notificationId":"63661e99-2f09-4adc-bb93-696f74167fdd","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:21:44","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"category":"logic","level":"info","message":"🧠 Logic: Notification delivered","notificationId":"e009caad-9caf-4d7b-a2b7-5b7111e00c5c","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:21:45","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"category":"resilience","level":"warn","message":"🛡️ Resilience: Notification queued","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:22:28","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"category":"resilience","count":1,"level":"warn","message":"🛡️ Resilience: Notification queue batch picked","service":"buildxpert-api","timestamp":"2025-11-09 19:22:30","workerId":"node-9660-sjv3ju"}
+{"category":"logic","level":"info","message":"🧠 Logic: Notification delivered","notificationId":"c9674520-8a98-417e-ac69-f4f95aefcf89","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:22:30","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"category":"resilience","level":"warn","message":"🛡️ Resilience: Notification queued","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:22:37","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"bookingId":"2096a89f-57ca-4361-a5b1-92541cb49d19","level":"info","message":"📅 Booking: Push notification sent for service completion","service":"buildxpert-api","timestamp":"2025-11-09 19:22:38"}
+{"category":"resilience","level":"warn","message":"🛡️ Resilience: Notification queued","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:22:38","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"category":"resilience","count":1,"level":"warn","message":"🛡️ Resilience: Notification queue batch picked","service":"buildxpert-api","timestamp":"2025-11-09 19:22:38","workerId":"node-9660-sjv3ju"}
+{"category":"logic","level":"info","message":"🧠 Logic: Notification delivered","notificationId":"d5d8b6a8-8823-4bc5-9dda-133192509749","role":"user","service":"buildxpert-api","timestamp":"2025-11-09 19:22:38","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"206s","level":"info","message":"Socket connection unregistered","remainingConnections":9,"service":"buildxpert-api","socketId":"qwDN7s0QFfvpN2_mAAAV","timestamp":"2025-11-09 19:22:39","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"category":"resilience","count":1,"level":"warn","message":"🛡️ Resilience: Notification queue batch picked","service":"buildxpert-api","timestamp":"2025-11-09 19:22:40","workerId":"node-9660-sjv3ju"}
+{"category":"logic","level":"info","message":"🧠 Logic: Notification delivered","notificationId":"f3aadece-be6d-4d80-a948-3f9de68cb003","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:22:40","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"511s","level":"info","message":"Socket connection unregistered","remainingConnections":8,"service":"buildxpert-api","socketId":"r1I6WA8imbuY33kUAAAI","timestamp":"2025-11-09 19:22:41","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:22:49","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:22:49","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:22:49","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:22:54","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:22:55","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:22:55","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:23:05","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:23:05","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:23:05","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"319s","level":"info","message":"Socket connection unregistered","remainingConnections":7,"service":"buildxpert-api","socketId":"_MFktUOrj7Hw_sBJAAAQ","timestamp":"2025-11-09 19:23:17","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"319s","level":"info","message":"Socket connection unregistered","remainingConnections":6,"service":"buildxpert-api","socketId":"CS5B57LyV_nvWx17AAAR","timestamp":"2025-11-09 19:23:17","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"131s","level":"info","message":"Socket connection unregistered","remainingConnections":5,"service":"buildxpert-api","socketId":"IWejtd3YczuxQWdcAAAZ","timestamp":"2025-11-09 19:23:17","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"101s","level":"info","message":"Socket connection unregistered","remainingConnections":4,"service":"buildxpert-api","socketId":"ltKQtq0Tuu0dX0qTAAAd","timestamp":"2025-11-09 19:23:17","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"545s","level":"info","message":"Socket connection unregistered","remainingConnections":3,"service":"buildxpert-api","socketId":"4xaU0p2Kg_PaIc9BAAAJ","timestamp":"2025-11-09 19:23:17","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"deviceName":"Unknown on Unknown","ipAddress":"192.168.1.35","level":"info","message":"Session created","service":"buildxpert-api","timestamp":"2025-11-09 19:23:42","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"eventType":"login","level":"info","message":"Security event logged","service":"buildxpert-api","severity":"info","timestamp":"2025-11-09 19:23:42","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:43","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:43","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:43","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:43","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"kaCibxFqq1eY-mI5AAAi","timestamp":"2025-11-09 19:23:44","totalConnections":4,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"mvkJCFx9GHrht2D0AAAj","timestamp":"2025-11-09 19:23:44","totalConnections":5,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"Sxtc5eS8A8WXVR3qAAAl","timestamp":"2025-11-09 19:23:44","totalConnections":6,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"kaCibxFqq1eY-mI5AAAi","timestamp":"2025-11-09 19:23:44","totalConnections":6,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"mvkJCFx9GHrht2D0AAAj","timestamp":"2025-11-09 19:23:44","totalConnections":6,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"T9Xbl4ZKmFJS5Qx6AAAm","timestamp":"2025-11-09 19:23:44","totalConnections":7,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"Sxtc5eS8A8WXVR3qAAAl","timestamp":"2025-11-09 19:23:44","totalConnections":7,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"T9Xbl4ZKmFJS5Qx6AAAm","timestamp":"2025-11-09 19:23:44","totalConnections":7,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:44","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:44","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"0s","level":"info","message":"Socket connection unregistered","remainingConnections":6,"service":"buildxpert-api","socketId":"Sxtc5eS8A8WXVR3qAAAl","timestamp":"2025-11-09 19:23:45","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:45","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:45","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:45","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:23:45","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"ZgQzQHa7it8ssa-pAAAn","timestamp":"2025-11-09 19:23:45","totalConnections":7,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"ZgQzQHa7it8ssa-pAAAn","timestamp":"2025-11-09 19:23:45","totalConnections":7,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"attempts":1,"code":"42703","failureCategory":"logic","level":"error","message":"column urp.report_type does not exist","paramsCount":0,"queryPreview":"\n        SELECT \n          urp.id, \n          urp.report_type, \n          urp.description, \n          urp.status, \n     ","service":"buildxpert-api","timestamp":"2025-11-09 19:23:55"}
+{"error":"column urp.report_type does not exist","level":"error","message":"Admin reports error","service":"buildxpert-api","timestamp":"2025-11-09 19:23:55"}
+{"attempts":1,"code":"42703","failureCategory":"logic","level":"error","message":"column urp.report_type does not exist","paramsCount":1,"queryPreview":"\n        SELECT \n          urp.id, \n          urp.report_type, \n          urp.description, \n          urp.status, \n     ","service":"buildxpert-api","timestamp":"2025-11-09 19:24:02"}
+{"error":"column urp.report_type does not exist","level":"error","message":"Admin reports error","service":"buildxpert-api","timestamp":"2025-11-09 19:24:02"}
+{"attempts":1,"code":"42703","failureCategory":"logic","level":"error","message":"column urp.report_type does not exist","paramsCount":1,"queryPreview":"\n        SELECT \n          urp.id, \n          urp.report_type, \n          urp.description, \n          urp.status, \n     ","service":"buildxpert-api","timestamp":"2025-11-09 19:24:03"}
+{"error":"column urp.report_type does not exist","level":"error","message":"Admin reports error","service":"buildxpert-api","timestamp":"2025-11-09 19:24:03"}
+{"attempts":1,"code":"42703","failureCategory":"logic","level":"error","message":"column urp.report_type does not exist","paramsCount":1,"queryPreview":"\n        SELECT \n          urp.id, \n          urp.report_type, \n          urp.description, \n          urp.status, \n     ","service":"buildxpert-api","timestamp":"2025-11-09 19:24:04"}
+{"error":"column urp.report_type does not exist","level":"error","message":"Admin reports error","service":"buildxpert-api","timestamp":"2025-11-09 19:24:04"}
+{"attempts":1,"code":"42703","failureCategory":"logic","level":"error","message":"column urp.report_type does not exist","paramsCount":0,"queryPreview":"\n        SELECT \n          urp.id, \n          urp.report_type, \n          urp.description, \n          urp.status, \n     ","service":"buildxpert-api","timestamp":"2025-11-09 19:24:13"}
+{"error":"column urp.report_type does not exist","level":"error","message":"Admin reports error","service":"buildxpert-api","timestamp":"2025-11-09 19:24:13"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"evmdh8hSmYvarYPuAAAp","timestamp":"2025-11-09 19:24:16","totalConnections":8,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"evmdh8hSmYvarYPuAAAp","timestamp":"2025-11-09 19:24:16","totalConnections":8,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:16","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:16","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:16","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:16","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:22","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:22","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"41s","level":"info","message":"Socket connection unregistered","remainingConnections":7,"service":"buildxpert-api","socketId":"kaCibxFqq1eY-mI5AAAi","timestamp":"2025-11-09 19:24:26","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"41s","level":"info","message":"Socket connection unregistered","remainingConnections":6,"service":"buildxpert-api","socketId":"mvkJCFx9GHrht2D0AAAj","timestamp":"2025-11-09 19:24:26","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"9s","level":"info","message":"Socket connection unregistered","remainingConnections":5,"service":"buildxpert-api","socketId":"evmdh8hSmYvarYPuAAAp","timestamp":"2025-11-09 19:24:26","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"41s","level":"info","message":"Socket connection unregistered","remainingConnections":4,"service":"buildxpert-api","socketId":"T9Xbl4ZKmFJS5Qx6AAAm","timestamp":"2025-11-09 19:24:26","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"40s","level":"info","message":"Socket connection unregistered","remainingConnections":3,"service":"buildxpert-api","socketId":"ZgQzQHa7it8ssa-pAAAn","timestamp":"2025-11-09 19:24:26","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"deviceName":"Unknown on Unknown","ipAddress":"192.168.1.35","level":"info","message":"Session created","service":"buildxpert-api","timestamp":"2025-11-09 19:24:37","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"eventType":"login","level":"info","message":"Security event logged","service":"buildxpert-api","severity":"info","timestamp":"2025-11-09 19:24:38","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:39","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:39","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:39","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:39","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"EacwJnhpOGr2N6FUAAAu","timestamp":"2025-11-09 19:24:40","totalConnections":4,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"-hgcyImBp3WJgd9fAAAv","timestamp":"2025-11-09 19:24:40","totalConnections":5,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"uKTnz2m8ln1M6JmJAAAx","timestamp":"2025-11-09 19:24:40","totalConnections":6,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"EacwJnhpOGr2N6FUAAAu","timestamp":"2025-11-09 19:24:40","totalConnections":6,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"-hgcyImBp3WJgd9fAAAv","timestamp":"2025-11-09 19:24:40","totalConnections":6,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"R4CjYgEEJZvQBH0tAAAy","timestamp":"2025-11-09 19:24:40","totalConnections":7,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"uKTnz2m8ln1M6JmJAAAx","timestamp":"2025-11-09 19:24:40","totalConnections":7,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"R4CjYgEEJZvQBH0tAAAy","timestamp":"2025-11-09 19:24:40","totalConnections":7,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:40","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:40","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"0s","level":"info","message":"Socket connection unregistered","remainingConnections":6,"service":"buildxpert-api","socketId":"uKTnz2m8ln1M6JmJAAAx","timestamp":"2025-11-09 19:24:40","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:40","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:40","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:40","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:24:40","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"Ko9Jl5Mi3iZmNKZzAAAz","timestamp":"2025-11-09 19:24:40","totalConnections":7,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"Ko9Jl5Mi3iZmNKZzAAAz","timestamp":"2025-11-09 19:24:41","totalConnections":7,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"attempts":1,"code":"42703","failureCategory":"logic","level":"error","message":"column urp.report_type does not exist","paramsCount":0,"queryPreview":"\n        SELECT \n          urp.id, \n          urp.report_type, \n          urp.description, \n          urp.status, \n     ","service":"buildxpert-api","timestamp":"2025-11-09 19:24:55"}
+{"error":"column urp.report_type does not exist","level":"error","message":"Admin reports error","service":"buildxpert-api","timestamp":"2025-11-09 19:24:55"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"J0bri0cT5x_1DWCjAAA1","timestamp":"2025-11-09 19:25:04","totalConnections":8,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"J0bri0cT5x_1DWCjAAA1","timestamp":"2025-11-09 19:25:04","totalConnections":8,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:04","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:04","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:05","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:05","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:19","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:19","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:25","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:25","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:25","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:25","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"bAW3Pp3HVAl7-V6aAAA3","timestamp":"2025-11-09 19:25:29","totalConnections":9,"userId":null}
+{"count":6,"level":"warn","max":5,"message":"User exceeded max connections","service":"buildxpert-api","timestamp":"2025-11-09 19:25:29","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"bAW3Pp3HVAl7-V6aAAA3","timestamp":"2025-11-09 19:25:29","totalConnections":9,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:32","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:32","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:39","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"warn","message":"User is not a provider","role":"admin","service":"buildxpert-api","timestamp":"2025-11-09 19:25:39","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"62s","level":"info","message":"Socket connection unregistered","remainingConnections":8,"service":"buildxpert-api","socketId":"EacwJnhpOGr2N6FUAAAu","timestamp":"2025-11-09 19:25:42","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"62s","level":"info","message":"Socket connection unregistered","remainingConnections":7,"service":"buildxpert-api","socketId":"-hgcyImBp3WJgd9fAAAv","timestamp":"2025-11-09 19:25:42","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"38s","level":"info","message":"Socket connection unregistered","remainingConnections":6,"service":"buildxpert-api","socketId":"J0bri0cT5x_1DWCjAAA1","timestamp":"2025-11-09 19:25:42","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"13s","level":"info","message":"Socket connection unregistered","remainingConnections":5,"service":"buildxpert-api","socketId":"bAW3Pp3HVAl7-V6aAAA3","timestamp":"2025-11-09 19:25:42","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"62s","level":"info","message":"Socket connection unregistered","remainingConnections":4,"service":"buildxpert-api","socketId":"R4CjYgEEJZvQBH0tAAAy","timestamp":"2025-11-09 19:25:42","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"61s","level":"info","message":"Socket connection unregistered","remainingConnections":3,"service":"buildxpert-api","socketId":"Ko9Jl5Mi3iZmNKZzAAAz","timestamp":"2025-11-09 19:25:42","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"deviceName":"Unknown on Unknown","ipAddress":"192.168.1.35","level":"info","message":"Session created","service":"buildxpert-api","timestamp":"2025-11-09 19:26:08","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"eventType":"login","level":"info","message":"Security event logged","service":"buildxpert-api","severity":"info","timestamp":"2025-11-09 19:26:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"yKvGW4xIroBKJgQuAAA8","timestamp":"2025-11-09 19:26:11","totalConnections":4,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"ElrVj0nf3RDDFe_AAAA9","timestamp":"2025-11-09 19:26:11","totalConnections":5,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"2TaA_sast6LYkFySAAA_","timestamp":"2025-11-09 19:26:11","totalConnections":6,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"yKvGW4xIroBKJgQuAAA8","timestamp":"2025-11-09 19:26:11","totalConnections":6,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"ElrVj0nf3RDDFe_AAAA9","timestamp":"2025-11-09 19:26:11","totalConnections":6,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"ZK5YOQGxHyPV_GRtAABA","timestamp":"2025-11-09 19:26:11","totalConnections":7,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"2TaA_sast6LYkFySAAA_","timestamp":"2025-11-09 19:26:11","totalConnections":7,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"ZK5YOQGxHyPV_GRtAABA","timestamp":"2025-11-09 19:26:11","totalConnections":7,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:26:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:26:13","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:26:13","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:26:13","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:26:14","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:26:14","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:26:14","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:26:14","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:26:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:26:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:26:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:26:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:26:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:26:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"UjyMGvqOChKWNT5cAABB","timestamp":"2025-11-09 19:26:15","totalConnections":8,"userId":null}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:26:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"UjyMGvqOChKWNT5cAABB","timestamp":"2025-11-09 19:26:15","totalConnections":8,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"nkZUcH7ywXzHuEEMAABD","timestamp":"2025-11-09 19:26:21","totalConnections":9,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"nkZUcH7ywXzHuEEMAABD","timestamp":"2025-11-09 19:26:21","totalConnections":9,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"3C0iAiYQU2EKtEbmAABF","timestamp":"2025-11-09 19:26:54","totalConnections":10,"userId":null}
+{"count":6,"level":"warn","max":5,"message":"User exceeded max connections","service":"buildxpert-api","timestamp":"2025-11-09 19:26:54","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"3C0iAiYQU2EKtEbmAABF","timestamp":"2025-11-09 19:26:54","totalConnections":10,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:27:10","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:27:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:27:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:27:17","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:27:18","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:27:18","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"491s","level":"info","message":"Socket connection unregistered","remainingConnections":9,"service":"buildxpert-api","socketId":"M6YlmasruEPwKt8OAAAW","timestamp":"2025-11-09 19:27:25","userId":null}
+{"duration":"357s","level":"info","message":"Socket connection unregistered","remainingConnections":8,"service":"buildxpert-api","socketId":"Dgd4RrdegIgNyYvgAAAb","timestamp":"2025-11-09 19:27:25","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"64s","level":"info","message":"Socket connection unregistered","remainingConnections":7,"service":"buildxpert-api","socketId":"nkZUcH7ywXzHuEEMAABD","timestamp":"2025-11-09 19:27:25","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"491s","level":"info","message":"Socket connection unregistered","remainingConnections":6,"service":"buildxpert-api","socketId":"dF5zcYmzo4Qi5z3KAAAX","timestamp":"2025-11-09 19:27:25","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"81s","level":"info","message":"Socket connection unregistered","remainingConnections":5,"service":"buildxpert-api","socketId":"ElrVj0nf3RDDFe_AAAA9","timestamp":"2025-11-09 19:27:33","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"81s","level":"info","message":"Socket connection unregistered","remainingConnections":4,"service":"buildxpert-api","socketId":"yKvGW4xIroBKJgQuAAA8","timestamp":"2025-11-09 19:27:33","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"81s","level":"info","message":"Socket connection unregistered","remainingConnections":3,"service":"buildxpert-api","socketId":"2TaA_sast6LYkFySAAA_","timestamp":"2025-11-09 19:27:33","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"39s","level":"info","message":"Socket connection unregistered","remainingConnections":2,"service":"buildxpert-api","socketId":"3C0iAiYQU2EKtEbmAABF","timestamp":"2025-11-09 19:27:33","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"81s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"ZK5YOQGxHyPV_GRtAABA","timestamp":"2025-11-09 19:27:33","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"77s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"UjyMGvqOChKWNT5cAABB","timestamp":"2025-11-09 19:27:33","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"UJaVm90dKS50FpXgAABI","timestamp":"2025-11-09 19:38:15","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"KnJE7MuuH8RDV2kwAABJ","timestamp":"2025-11-09 19:38:15","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"UJaVm90dKS50FpXgAABI","timestamp":"2025-11-09 19:38:15","totalConnections":2,"userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"KnJE7MuuH8RDV2kwAABJ","timestamp":"2025-11-09 19:38:15","totalConnections":2,"userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"vRQfx6xQgdoCAhi_AABL","timestamp":"2025-11-09 19:38:16","totalConnections":3,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"vRQfx6xQgdoCAhi_AABL","timestamp":"2025-11-09 19:38:16","totalConnections":3,"userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"cw4oylQzA4zfLf7YAABN","timestamp":"2025-11-09 19:38:32","totalConnections":4,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"cw4oylQzA4zfLf7YAABN","timestamp":"2025-11-09 19:38:32","totalConnections":4,"userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"IzGqETE4TM3mrUElAABP","timestamp":"2025-11-09 19:38:39","totalConnections":5,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"IzGqETE4TM3mrUElAABP","timestamp":"2025-11-09 19:38:39","totalConnections":5,"userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"duration":"27s","level":"info","message":"Socket connection unregistered","remainingConnections":4,"service":"buildxpert-api","socketId":"vRQfx6xQgdoCAhi_AABL","timestamp":"2025-11-09 19:38:43","userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"duration":"11s","level":"info","message":"Socket connection unregistered","remainingConnections":3,"service":"buildxpert-api","socketId":"cw4oylQzA4zfLf7YAABN","timestamp":"2025-11-09 19:38:43","userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"duration":"4s","level":"info","message":"Socket connection unregistered","remainingConnections":2,"service":"buildxpert-api","socketId":"IzGqETE4TM3mrUElAABP","timestamp":"2025-11-09 19:38:43","userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"duration":"27s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"UJaVm90dKS50FpXgAABI","timestamp":"2025-11-09 19:38:43","userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"duration":"27s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"KnJE7MuuH8RDV2kwAABJ","timestamp":"2025-11-09 19:38:43","userId":"64fe1f7b-aed0-47a7-a9c9-072eb5169a8a"}
+{"deviceName":"Unknown on Unknown","ipAddress":"192.168.1.34","level":"info","message":"Session created","service":"buildxpert-api","timestamp":"2025-11-09 19:39:01","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"eventType":"login","level":"info","message":"Security event logged","service":"buildxpert-api","severity":"info","timestamp":"2025-11-09 19:39:01","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"zPEL0YICxgeN4DcKAABU","timestamp":"2025-11-09 19:39:02","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"kfMc1uIva--7fCoVAABW","timestamp":"2025-11-09 19:39:02","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"zPEL0YICxgeN4DcKAABU","timestamp":"2025-11-09 19:39:02","totalConnections":2,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"bLXqtSTkGqAN8ozBAABX","timestamp":"2025-11-09 19:39:02","totalConnections":3,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"kfMc1uIva--7fCoVAABW","timestamp":"2025-11-09 19:39:02","totalConnections":3,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"bLXqtSTkGqAN8ozBAABX","timestamp":"2025-11-09 19:39:02","totalConnections":3,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:39:02","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:39:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:39:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:39:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:39:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:39:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:39:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:39:04","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"be6gSC3cPVub2dpsAABY","timestamp":"2025-11-09 19:39:06","totalConnections":4,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"wpHzwBgEyxDkJYFYAABZ","timestamp":"2025-11-09 19:39:06","totalConnections":5,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"be6gSC3cPVub2dpsAABY","timestamp":"2025-11-09 19:39:06","totalConnections":5,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"wpHzwBgEyxDkJYFYAABZ","timestamp":"2025-11-09 19:39:06","totalConnections":5,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:39:06","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:39:06","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:39:06","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:39:06","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:39:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:39:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:39:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:39:09","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:39:10","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:39:10","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"1w4XMB9dB4PvGqSIAABb","timestamp":"2025-11-09 19:39:12","totalConnections":6,"userId":null}
+{"count":6,"level":"warn","max":5,"message":"User exceeded max connections","service":"buildxpert-api","timestamp":"2025-11-09 19:39:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"1w4XMB9dB4PvGqSIAABb","timestamp":"2025-11-09 19:39:12","totalConnections":6,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:39:19","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:39:19","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:39:19","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 19:39:56","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 19:39:58","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 19:39:58","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"deviceName":"Unknown on Unknown","ipAddress":"192.168.1.34","level":"info","message":"Session created","service":"buildxpert-api","timestamp":"2025-11-09 19:42:12","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"eventType":"login","level":"info","message":"Security event logged","service":"buildxpert-api","severity":"info","timestamp":"2025-11-09 19:42:13","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"LQbEociWxn59tzLpAABe","timestamp":"2025-11-09 19:42:13","totalConnections":7,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"LQbEociWxn59tzLpAABe","timestamp":"2025-11-09 19:42:13","totalConnections":7,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"xJUQEZBHymYzWcWDAABf","timestamp":"2025-11-09 19:42:13","totalConnections":8,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"xJUQEZBHymYzWcWDAABf","timestamp":"2025-11-09 19:42:13","totalConnections":8,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"OMEHOBfmKh_q7j5BAABh","timestamp":"2025-11-09 19:42:22","totalConnections":9,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"OMEHOBfmKh_q7j5BAABh","timestamp":"2025-11-09 19:42:22","totalConnections":9,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"9_xDh8Fy4KAYBZK4AABj","timestamp":"2025-11-09 19:44:18","totalConnections":10,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"9_xDh8Fy4KAYBZK4AABj","timestamp":"2025-11-09 19:44:18","totalConnections":10,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"359s","level":"info","message":"Socket connection unregistered","remainingConnections":9,"service":"buildxpert-api","socketId":"1w4XMB9dB4PvGqSIAABb","timestamp":"2025-11-09 19:45:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"366s","level":"info","message":"Socket connection unregistered","remainingConnections":8,"service":"buildxpert-api","socketId":"be6gSC3cPVub2dpsAABY","timestamp":"2025-11-09 19:45:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"169s","level":"info","message":"Socket connection unregistered","remainingConnections":7,"service":"buildxpert-api","socketId":"OMEHOBfmKh_q7j5BAABh","timestamp":"2025-11-09 19:45:12","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"366s","level":"info","message":"Socket connection unregistered","remainingConnections":6,"service":"buildxpert-api","socketId":"wpHzwBgEyxDkJYFYAABZ","timestamp":"2025-11-09 19:45:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"178s","level":"info","message":"Socket connection unregistered","remainingConnections":5,"service":"buildxpert-api","socketId":"xJUQEZBHymYzWcWDAABf","timestamp":"2025-11-09 19:45:12","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"370s","level":"info","message":"Socket connection unregistered","remainingConnections":4,"service":"buildxpert-api","socketId":"bLXqtSTkGqAN8ozBAABX","timestamp":"2025-11-09 19:45:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"178s","level":"info","message":"Socket connection unregistered","remainingConnections":3,"service":"buildxpert-api","socketId":"LQbEociWxn59tzLpAABe","timestamp":"2025-11-09 19:45:12","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"54s","level":"info","message":"Socket connection unregistered","remainingConnections":2,"service":"buildxpert-api","socketId":"9_xDh8Fy4KAYBZK4AABj","timestamp":"2025-11-09 19:45:12","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"370s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"kfMc1uIva--7fCoVAABW","timestamp":"2025-11-09 19:45:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"370s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"zPEL0YICxgeN4DcKAABU","timestamp":"2025-11-09 19:45:12","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"Pc3j0Vb9vlqDV0muAABl","timestamp":"2025-11-09 19:45:13","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"fnuScbxEIIq8ZafQAABn","timestamp":"2025-11-09 19:45:13","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"fnuScbxEIIq8ZafQAABn","timestamp":"2025-11-09 19:45:13","totalConnections":2,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"55J_kXngMOaQc9jTAABp","timestamp":"2025-11-09 19:45:13","totalConnections":3,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"55J_kXngMOaQc9jTAABp","timestamp":"2025-11-09 19:45:13","totalConnections":3,"userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"k42_lbdzcFshB3TbAABr","timestamp":"2025-11-09 19:45:14","totalConnections":4,"userId":null}
+{"duration":"62s","level":"info","message":"Socket connection unregistered","remainingConnections":3,"service":"buildxpert-api","socketId":"k42_lbdzcFshB3TbAABr","timestamp":"2025-11-09 19:46:16","userId":null}
+{"duration":"62s","level":"info","message":"Socket connection unregistered","remainingConnections":2,"service":"buildxpert-api","socketId":"fnuScbxEIIq8ZafQAABn","timestamp":"2025-11-09 19:46:16","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"62s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"55J_kXngMOaQc9jTAABp","timestamp":"2025-11-09 19:46:16","userId":"c86bda04-2c89-49b2-90c7-359e4b115bdc"}
+{"duration":"62s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"Pc3j0Vb9vlqDV0muAABl","timestamp":"2025-11-09 19:46:16","userId":null}
+{"level":"info","message":"Timer registered: otpStore-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Map registered for monitoring: otpStore (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"cleanupInterval":60000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpStore","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27","ttl":300000}
+{"level":"info","message":"Timer registered: pendingSignups-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Map registered for monitoring: pendingSignups (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: pendingSignups","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27","ttl":600000}
+{"level":"info","message":"Timer registered: passwordResetSessions-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Map registered for monitoring: passwordResetSessions (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: passwordResetSessions","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27","ttl":600000}
+{"level":"info","message":"Timer registered: otpAttempts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Map registered for monitoring: otpAttempts (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"cleanupInterval":300000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpAttempts","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27","ttl":900000}
+{"level":"info","message":"Timer registered: booking-creation-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Timer registered: booking-creation-refill (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Initializing memory leak prevention...","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Memory leak prevention initialized","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Timer registered: activeCalls-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Map registered for monitoring: activeCalls (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: activeCalls","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27","ttl":86400000}
+{"level":"info","message":"Timer registered: callTimeouts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Map registered for monitoring: callTimeouts (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: callTimeouts","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27","ttl":86400000}
+{"level":"info","message":"Timer registered: socket-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Socket cleanup job started","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Timer registered: memory-monitor (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"checkInterval":"60000ms","level":"info","message":"Memory monitor started","service":"buildxpert-api","threshold":"500MB","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"🧹 Starting scheduled auth data cleanup...","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Timer registered: auth-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"🕐 Auth cleanup job initialized (runs every 24 hours)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"level":"info","message":"Timer registered: notification-queue (interval)","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27"}
+{"batchSize":25,"category":"resilience","interval":2000,"level":"warn","message":"🛡️ Resilience: Notification queue processor started","service":"buildxpert-api","timestamp":"2025-11-09 20:47:27","workerId":"node-22444-x3ntph"}
+{"level":"info","loginAttemptsRemoved":0,"message":"Security data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","timestamp":"2025-11-09 20:47:30"}
+{"duration":"3068ms","level":"info","loginAttemptsRemoved":0,"message":"✅ Auth data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","sessionsRemoved":0,"timestamp":"2025-11-09T15:17:30.910Z","tokensRemoved":0}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"shTzxAa5HCY4Mk2CAAAC","timestamp":"2025-11-09 20:49:13","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"shTzxAa5HCY4Mk2CAAAC","timestamp":"2025-11-09 20:49:13","totalConnections":1,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"dLOPC3vEyZmEH2vxAAAD","timestamp":"2025-11-09 20:49:13","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"wgCM3uhTGt6T6RRHAAAF","timestamp":"2025-11-09 20:49:13","totalConnections":3,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"wgCM3uhTGt6T6RRHAAAF","timestamp":"2025-11-09 20:49:13","totalConnections":3,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 20:49:15","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"dLOPC3vEyZmEH2vxAAAD","timestamp":"2025-11-09 20:49:16","totalConnections":3,"userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 20:49:16","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 20:49:16","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 20:49:16","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 20:49:16","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 20:49:16","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 20:49:18","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 20:49:19","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"count":1,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-09 20:49:19","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"7s","level":"info","message":"Socket connection unregistered","remainingConnections":2,"service":"buildxpert-api","socketId":"wgCM3uhTGt6T6RRHAAAF","timestamp":"2025-11-09 20:49:21","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"8s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"shTzxAa5HCY4Mk2CAAAC","timestamp":"2025-11-09 20:49:21","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"duration":"5s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"dLOPC3vEyZmEH2vxAAAD","timestamp":"2025-11-09 20:49:21","userId":"ba79a123-d680-42e1-84b9-13f4e74dd2b9"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Storing pending signup data","phone":"9900990044","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 20:51:11"}
+{"level":"info","message":"Uploading profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-09 20:51:30"}
+{"level":"info","message":"Successfully uploaded profile picture to Cloudinary","service":"buildxpert-api","timestamp":"2025-11-09 20:51:33"}
+{"hasProfilePic":true,"level":"info","message":"🔐 Auth: Inserting user into database","phone":"9900990044","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 20:51:33"}
+{"level":"info","message":"🔐 Auth: User created successfully","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 20:51:34","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"deviceName":"Unknown on Unknown","ipAddress":"192.168.1.34","level":"info","message":"Session created","service":"buildxpert-api","timestamp":"2025-11-09 20:51:34","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"eventType":"signup","level":"info","message":"Security event logged","service":"buildxpert-api","severity":"info","timestamp":"2025-11-09 20:51:35","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"49289Xkimy82dOUUAAAI","timestamp":"2025-11-09 20:51:35","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"49289Xkimy82dOUUAAAI","timestamp":"2025-11-09 20:51:35","totalConnections":1,"userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"3xcAwAU1ZPJqsHYoAAAK","timestamp":"2025-11-09 20:51:35","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"3xcAwAU1ZPJqsHYoAAAK","timestamp":"2025-11-09 20:51:35","totalConnections":2,"userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"3L6qlczjvuVyBebbAAAL","timestamp":"2025-11-09 20:51:36","totalConnections":3,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"3L6qlczjvuVyBebbAAAL","timestamp":"2025-11-09 20:51:36","totalConnections":3,"userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 20:51:37","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 20:51:37","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-09 20:51:38","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 20:51:39","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-09 20:51:39","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 20:51:39","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-09 20:51:39","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-09 20:51:39","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-09 20:51:39","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"duration":"13s","level":"info","message":"Socket connection unregistered","remainingConnections":2,"service":"buildxpert-api","socketId":"3xcAwAU1ZPJqsHYoAAAK","timestamp":"2025-11-09 20:51:49","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"duration":"12s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"3L6qlczjvuVyBebbAAAL","timestamp":"2025-11-09 20:51:49","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
+{"duration":"13s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"49289Xkimy82dOUUAAAI","timestamp":"2025-11-09 20:51:49","userId":"fb83acde-bc99-4809-b887-06c01ecf3bb3"}
