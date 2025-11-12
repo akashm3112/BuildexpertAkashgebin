@@ -4,7 +4,63 @@ const { auth, requireRole } = require('../middleware/auth');
 const logger = require('../utils/logger');
 const { adminActionLimiter } = require('../middleware/rateLimiting');
 const { sanitizeQuery } = require('../middleware/inputSanitization');
+const { blockIdentifiersForAccount } = require('../utils/blocklist');
+
 const router = express.Router();
+// @route   DELETE /api/admin/reports/pending
+// @desc    Delete all pending reports across all tables
+// @access  Private (Admin only)
+router.delete('/reports/pending', auth, requireRole(['admin']), async (req, res) => {
+  try {
+    const deletedUserReports = await query(
+      `DELETE FROM user_reports_providers WHERE status = 'open' RETURNING id`
+    );
+
+    const deletedProviderReports = await query(
+      `DELETE FROM provider_reports_users WHERE status = 'open' RETURNING id`
+    );
+
+    let deletedLegacyReports = { rows: [] };
+    if (await tableExists('public.provider_reports')) {
+      deletedLegacyReports = await query(
+        `DELETE FROM provider_reports WHERE status = 'open' RETURNING id`
+      );
+    }
+
+    const totalDeleted =
+      deletedUserReports.rows.length +
+      deletedProviderReports.rows.length +
+      deletedLegacyReports.rows.length;
+
+    res.json({
+      status: 'success',
+      message: 'Pending reports cleared successfully',
+      data: {
+        totalDeleted,
+        deletedUserReports: deletedUserReports.rows.map(r => r.id),
+        deletedProviderReports: deletedProviderReports.rows.map(r => r.id),
+        deletedLegacyReports: deletedLegacyReports.rows.map(r => r.id)
+      }
+    });
+  } catch (error) {
+    logger.error('Admin delete pending reports error', { error: error.message });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to delete pending reports'
+    });
+  }
+});
+
+
+const tableExists = async (tableName) => {
+  try {
+    const result = await query(`SELECT to_regclass($1) as table_name`, [tableName]);
+    return !!result.rows[0]?.table_name;
+  } catch (error) {
+    logger.warn('Failed to check table existence', { tableName, error: error.message });
+    return false;
+  }
+};
 
 // Apply rate limiting and sanitization to all admin routes
 router.use(adminActionLimiter);
@@ -38,25 +94,44 @@ router.get('/stats', auth, requireRole(['admin']), async (req, res) => {
     // Get reports counts by status from BOTH tables
     let reportsStats = { total: 0, open: 0, resolved: 0, closed: 0 };
     try {
-      // Count from user_reports_providers (users reporting providers)
-      const userReportsTotal = await query(`SELECT COUNT(*) as count FROM user_reports_providers`);
-      const userReportsOpen = await query(`SELECT COUNT(*) as count FROM user_reports_providers WHERE status = 'open'`);
-      const userReportsResolved = await query(`SELECT COUNT(*) as count FROM user_reports_providers WHERE status = 'resolved'`);
-      const userReportsClosed = await query(`SELECT COUNT(*) as count FROM user_reports_providers WHERE status = 'closed'`);
-      
-      // Count from provider_reports_users (providers reporting users)
-      const providerReportsTotal = await query(`SELECT COUNT(*) as count FROM provider_reports_users`);
-      const providerReportsOpen = await query(`SELECT COUNT(*) as count FROM provider_reports_users WHERE status = 'open'`);
-      const providerReportsResolved = await query(`SELECT COUNT(*) as count FROM provider_reports_users WHERE status = 'resolved'`);
-      const providerReportsClosed = await query(`SELECT COUNT(*) as count FROM provider_reports_users WHERE status = 'closed'`);
-      
-      // Combine counts
-      reportsStats.total = parseInt(userReportsTotal.rows[0].count) + parseInt(providerReportsTotal.rows[0].count);
-      reportsStats.open = parseInt(userReportsOpen.rows[0].count) + parseInt(providerReportsOpen.rows[0].count);
-      reportsStats.resolved = parseInt(userReportsResolved.rows[0].count) + parseInt(providerReportsResolved.rows[0].count);
-      reportsStats.closed = parseInt(userReportsClosed.rows[0].count) + parseInt(providerReportsClosed.rows[0].count);
+      if (await tableExists('public.user_reports_providers')) {
+        const userReportsTotal = await query(`SELECT COUNT(*) as count FROM user_reports_providers`);
+        const userReportsOpen = await query(`SELECT COUNT(*) as count FROM user_reports_providers WHERE LOWER(status) = 'open'`);
+        const userReportsResolved = await query(`SELECT COUNT(*) as count FROM user_reports_providers WHERE LOWER(status) = 'resolved'`);
+        const userReportsClosed = await query(`SELECT COUNT(*) as count FROM user_reports_providers WHERE LOWER(status) = 'closed'`);
+
+        reportsStats.total += parseInt(userReportsTotal.rows[0].count);
+        reportsStats.open += parseInt(userReportsOpen.rows[0].count);
+        reportsStats.resolved += parseInt(userReportsResolved.rows[0].count);
+        reportsStats.closed += parseInt(userReportsClosed.rows[0].count);
+      }
+
+      if (await tableExists('public.provider_reports_users')) {
+        const providerReportsTotal = await query(`SELECT COUNT(*) as count FROM provider_reports_users`);
+        const providerReportsOpen = await query(`SELECT COUNT(*) as count FROM provider_reports_users WHERE LOWER(status) = 'open'`);
+        const providerReportsResolved = await query(`SELECT COUNT(*) as count FROM provider_reports_users WHERE LOWER(status) = 'resolved'`);
+        const providerReportsClosed = await query(`SELECT COUNT(*) as count FROM provider_reports_users WHERE LOWER(status) = 'closed'`);
+
+        reportsStats.total += parseInt(providerReportsTotal.rows[0].count);
+        reportsStats.open += parseInt(providerReportsOpen.rows[0].count);
+        reportsStats.resolved += parseInt(providerReportsResolved.rows[0].count);
+        reportsStats.closed += parseInt(providerReportsClosed.rows[0].count);
+      }
+
+      if (await tableExists('public.provider_reports')) {
+        const legacyTotal = await query(`SELECT COUNT(*) as count FROM provider_reports`);
+        const legacyOpen = await query(`SELECT COUNT(*) as count FROM provider_reports WHERE LOWER(status) = 'open'`);
+        const legacyResolved = await query(`SELECT COUNT(*) as count FROM provider_reports WHERE LOWER(status) = 'resolved'`);
+        const legacyClosed = await query(`SELECT COUNT(*) as count FROM provider_reports WHERE LOWER(status) = 'closed'`);
+
+        reportsStats.total += parseInt(legacyTotal.rows[0].count);
+        reportsStats.open += parseInt(legacyOpen.rows[0].count);
+        reportsStats.resolved += parseInt(legacyResolved.rows[0].count);
+        reportsStats.closed += parseInt(legacyClosed.rows[0].count);
+      }
+
     } catch (error) {
-      logger.warn('Reports tables not found, setting all report stats to 0');
+      logger.warn('Reports tables not found, setting all report stats to 0', { error: error.message });
     }
 
     res.json({
@@ -202,40 +277,121 @@ router.get('/reports', auth, requireRole(['admin']), async (req, res) => {
       let queryParams = [];
 
       if (status !== 'all') {
-        whereClause = 'WHERE urp.status = $1';
+        whereClause = 'WHERE LOWER(urp.status) = LOWER($1)';
         queryParams.push(status);
       }
 
-      const userReportsQuery = await query(`
-        SELECT 
-          urp.id, 
-          urp.report_type, 
-          urp.description, 
-          urp.status, 
-          urp.created_at, 
-          urp.updated_at,
-          urp.reported_by_user_id, 
-          urp.reported_provider_id,
-          u.full_name as reporter_name, 
-          u.phone as reporter_phone,
-          p.full_name as reported_provider_name, 
-          p.phone as reported_provider_phone,
-          pp.service_description as reported_provider_business,
-          'user_report' as report_source
-        FROM user_reports_providers urp
-        LEFT JOIN users u ON urp.reported_by_user_id = u.id
-        LEFT JOIN users p ON urp.reported_provider_id = p.id
-        LEFT JOIN provider_profiles pp ON p.id = pp.user_id
-        ${whereClause}
-        ORDER BY urp.created_at DESC
-      `, queryParams);
+      let userReportsRows = [];
 
-      allReports = allReports.concat(userReportsQuery.rows.map(r => ({
+      if (await tableExists('public.user_reports_providers')) {
+        try {
+          const userReportsQuery = await query(`
+            SELECT 
+              urp.id, 
+              urp.report_type, 
+              urp.description, 
+              urp.status, 
+              urp.created_at, 
+              urp.updated_at,
+              urp.reported_by_user_id, 
+              urp.reported_provider_id,
+              u.full_name as reporter_name, 
+              u.phone as reporter_phone,
+              p.full_name as reported_provider_name, 
+              p.phone as reported_provider_phone,
+              pp.service_description as reported_provider_business,
+              'user_report' as report_source
+            FROM user_reports_providers urp
+            LEFT JOIN users u ON urp.reported_by_user_id = u.id
+            LEFT JOIN users p ON urp.reported_provider_id = p.id
+            LEFT JOIN provider_profiles pp ON p.id = pp.user_id
+            ${whereClause}
+            ORDER BY urp.created_at DESC
+          `, queryParams);
+          userReportsRows = userReportsQuery.rows;
+        } catch (error) {
+          logger.warn('Failed to fetch user_reports_providers data', { error: error.message });
+        }
+      }
+
+      if (await tableExists('public.provider_reports')) {
+        try {
+          const legacyWhere = status !== 'all' ? 'WHERE LOWER(pr.status) = LOWER($1)' : '';
+          const legacyParams = status !== 'all' ? [status] : [];
+          const legacyReports = await query(`
+            SELECT 
+              pr.id,
+              pr.report_type,
+              pr.description,
+              pr.status,
+              pr.created_at,
+              pr.updated_at,
+              pr.reported_by_user_id,
+              pr.reported_provider_id,
+              u.full_name as reporter_name,
+              u.phone as reporter_phone,
+              p.full_name as reported_provider_name,
+              p.phone as reported_provider_phone,
+              pp.service_description as reported_provider_business,
+              'legacy_user_report' as report_source
+            FROM provider_reports pr
+            LEFT JOIN users u ON pr.reported_by_user_id = u.id
+            LEFT JOIN users p ON pr.reported_provider_id = p.id
+            LEFT JOIN provider_profiles pp ON p.id = pp.user_id
+            ${legacyWhere}
+            ORDER BY pr.created_at DESC
+          `, legacyParams);
+          userReportsRows = legacyReports.rows;
+        } catch (error) {
+          logger.warn('Failed to fetch legacy provider_reports data', { error: error.message });
+        }
+      }
+
+      allReports = allReports.concat(userReportsRows.map(r => ({
         ...r,
         report_category: 'User Report',
         reporter_type: 'User',
         reported_type: 'Provider'
       })));
+
+      if (await tableExists('public.provider_reports')) {
+        try {
+          const legacyWhere = status !== 'all' ? 'WHERE pr.status = $1' : '';
+          const legacyParams = status !== 'all' ? [status] : [];
+          const legacyReports = await query(`
+            SELECT 
+              pr.id,
+              pr.report_type,
+              pr.description,
+              pr.status,
+              pr.created_at,
+              pr.updated_at,
+              pr.reported_by_user_id,
+              pr.reported_provider_id,
+              u.full_name as reporter_name,
+              u.phone as reporter_phone,
+              p.full_name as reported_provider_name,
+              p.phone as reported_provider_phone,
+              pp.service_description as reported_provider_business,
+              'legacy_user_report' as report_source
+            FROM provider_reports pr
+            LEFT JOIN users u ON pr.reported_by_user_id = u.id
+            LEFT JOIN users p ON pr.reported_provider_id = p.id
+            LEFT JOIN provider_profiles pp ON p.id = pp.user_id
+            ${legacyWhere}
+            ORDER BY pr.created_at DESC
+          `, legacyParams);
+
+          allReports = allReports.concat(legacyReports.rows.map(r => ({
+            ...r,
+            report_category: 'User Report',
+            reporter_type: 'User',
+            reported_type: 'Provider'
+          })));
+        } catch (error) {
+          logger.warn('Failed to fetch legacy provider_reports data', { error: error.message });
+        }
+      }
     }
 
     // Fetch provider reports (providers reporting users)
@@ -244,37 +400,46 @@ router.get('/reports', auth, requireRole(['admin']), async (req, res) => {
       let queryParams = [];
 
       if (status !== 'all') {
-        whereClause = 'WHERE pru.status = $1';
+        whereClause = 'WHERE LOWER(pru.status) = LOWER($1)';
         queryParams.push(status);
       }
 
-      const providerReportsQuery = await query(`
-        SELECT 
-          pru.id,
-          pru.incident_type as report_type,
-          pru.description,
-          pru.status,
-          pru.created_at,
-          pru.updated_at,
-          pru.provider_id,
-          pru.customer_name,
-          pru.customer_user_id,
-          pru.incident_date,
-          pru.incident_time,
-          pru.evidence,
-          p.full_name as provider_name,
-          p.phone as provider_phone,
-          u.full_name as customer_user_name,
-          u.phone as customer_user_phone,
-          'provider_report' as report_source
-        FROM provider_reports_users pru
-        LEFT JOIN users p ON pru.provider_id = p.id
-        LEFT JOIN users u ON pru.customer_user_id = u.id
-        ${whereClause}
-        ORDER BY pru.created_at DESC
-      `, queryParams);
+      let providerReportsRows = [];
 
-      allReports = allReports.concat(providerReportsQuery.rows.map(r => ({
+      if (await tableExists('public.provider_reports_users')) {
+        try {
+          const providerReportsQuery = await query(`
+            SELECT 
+              pru.id,
+              pru.incident_type as report_type,
+              pru.description,
+              pru.status,
+              pru.created_at,
+              pru.updated_at,
+              pru.provider_id,
+              pru.customer_name,
+              pru.customer_user_id,
+              pru.incident_date,
+              pru.incident_time,
+              pru.evidence,
+              p.full_name as provider_name,
+              p.phone as provider_phone,
+              u.full_name as customer_user_name,
+              u.phone as customer_user_phone,
+              'provider_report' as report_source
+            FROM provider_reports_users pru
+            LEFT JOIN users p ON pru.provider_id = p.id
+            LEFT JOIN users u ON pru.customer_user_id = u.id
+            ${whereClause}
+            ORDER BY pru.created_at DESC
+          `, queryParams);
+          providerReportsRows = providerReportsQuery.rows;
+        } catch (error) {
+          logger.warn('Failed to fetch provider_reports_users data', { error: error.message });
+        }
+      }
+
+      allReports = allReports.concat(providerReportsRows.map(r => ({
         ...r,
         report_category: 'Provider Report',
         reporter_type: 'Provider',
@@ -380,6 +545,31 @@ router.delete('/users/:id', auth, requireRole(['admin']), async (req, res) => {
       });
     }
 
+    // Block account identifiers before removing user
+    try {
+      await blockIdentifiersForAccount({
+        phone: user.phone,
+        email: user.email,
+        reason: 'Removed by admin due to reports or policy violations',
+        blockedBy: req.user?.id,
+        metadata: {
+          source: 'admin_remove_user',
+          originalRole: user.role,
+          adminId: req.user?.id || null,
+          removedAt: new Date().toISOString()
+        }
+      });
+    } catch (blockError) {
+      logger.error('Failed to block user identifiers prior to deletion', {
+        error: blockError.message,
+        userId: id
+      });
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to block user account. Deletion aborted.'
+      });
+    }
+
     // Delete related data first to avoid foreign key constraints
     // Delete notifications
     await query('DELETE FROM notifications WHERE user_id = $1', [id]);
@@ -454,6 +644,31 @@ router.delete('/providers/:id', auth, requireRole(['admin']), async (req, res) =
     // Delete addresses (this has CASCADE, but being explicit)
     await query('DELETE FROM addresses WHERE user_id = $1', [id]);
     
+    // Block account identifiers before removing provider
+    try {
+      await blockIdentifiersForAccount({
+        phone: provider.phone,
+        email: provider.email,
+        reason: 'Removed by admin due to reports or policy violations',
+        blockedBy: req.user?.id,
+        metadata: {
+          source: 'admin_remove_provider',
+          originalRole: provider.role,
+          adminId: req.user?.id || null,
+          removedAt: new Date().toISOString()
+        }
+      });
+    } catch (blockError) {
+      logger.error('Failed to block provider identifiers prior to deletion', {
+        error: blockError.message,
+        providerId: id
+      });
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to block provider account. Deletion aborted.'
+      });
+    }
+
     // Delete provider profile (this has CASCADE)
     if (providerProfile) {
       await query('DELETE FROM provider_profiles WHERE id = $1', [providerProfile.id]);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Platform, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { ArrowLeft, Users, FileText, BarChart3, Settings, LogOut, RefreshCw } from 'lucide-react-native';
@@ -38,6 +38,17 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchDashboardStats();
+  }, []);
+
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      router.replace('/(tabs)');
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => backHandler.remove();
   }, []);
 
   const fetchDashboardStats = async (isRefresh = false) => {

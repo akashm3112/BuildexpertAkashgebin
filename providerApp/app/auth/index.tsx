@@ -610,8 +610,11 @@ function AuthScreen() {
 
   useEffect(() => {
     if (user) {
-      // Redirect to main tabs
-      router.replace('/(tabs)');
+      if (user.role === 'admin') {
+        router.replace('/admin/dashboard');
+      } else {
+        router.replace('/(tabs)');
+      }
     }
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       // Prevent going back to previous screens (especially after logout/account deletion)
@@ -619,7 +622,7 @@ function AuthScreen() {
       return true;
     });
     return () => backHandler.remove();
-  }, [user]);
+  }, [user?.role]);
 
   // Handle orientation changes for responsive design
   useEffect(() => {

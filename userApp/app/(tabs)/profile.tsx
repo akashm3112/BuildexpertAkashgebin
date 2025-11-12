@@ -90,6 +90,7 @@ export default function ProfileScreen() {
   const [averageRating, setAverageRating] = useState(0);
   const [totalReviews, setTotalReviews] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [refreshing, setRefreshing] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);

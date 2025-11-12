@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Platform, StatusBar, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Edge } from 'react-native-safe-area-context';
 
 interface SafeViewProps {
   children: React.ReactNode;
@@ -28,7 +29,9 @@ export function SafeView({ children, style, backgroundColor = '#FFFFFF', exclude
     return tabBarHeight; // 60px base for large devices
   };
   
-  const edges = excludeBottom ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom'];
+  const edges: Edge[] = excludeBottom
+    ? ['top', 'left', 'right']
+    : ['top', 'left', 'right', 'bottom'];
   
   return (
     <SafeAreaView style={[styles.container, { backgroundColor }, style]} edges={edges}>

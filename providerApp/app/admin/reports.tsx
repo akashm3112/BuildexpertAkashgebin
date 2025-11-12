@@ -14,7 +14,8 @@ import {
   RefreshControl,
   Modal,
   TextInput,
-  ScrollView
+  ScrollView,
+  BackHandler
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -113,6 +114,20 @@ export default function ReportsScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const filterAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      router.replace('/(tabs)');
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.replace('/admin/dashboard');
+      return true;
+    });
+    return () => backHandler.remove();
+  }, [router]);
 
   useEffect(() => {
     loadReports();
@@ -285,6 +300,42 @@ export default function ReportsScreen() {
     );
   };
 
+  const resolveUserRemovalTarget = (report: Report) => {
+    if (report.reported_type === 'User') {
+      return {
+        id: report.customer_user_id || report.reported_provider_id,
+        name: report.reported_provider_name || report.customer_name || 'User'
+      };
+    }
+
+    if (report.reporter_type === 'User') {
+      return {
+        id: report.reported_by_user_id,
+        name: report.reporter_name || 'User'
+      };
+    }
+
+    return null;
+  };
+
+  const resolveProviderRemovalTarget = (report: Report) => {
+    if (report.reported_type === 'Provider') {
+      return {
+        id: report.reported_provider_id,
+        name: report.reported_provider_name || 'Provider'
+      };
+    }
+
+    if (report.reporter_type === 'Provider') {
+      return {
+        id: report.provider_id || report.reported_provider_id,
+        name: report.reporter_name || 'Provider'
+      };
+    }
+
+    return null;
+  };
+
   const removeProvider = async (providerId: string, providerName: string) => {
     Alert.alert(
       'Remove Provider',
@@ -385,6 +436,8 @@ export default function ReportsScreen() {
   const renderReport = ({ item, index }: { item: Report; index: number }) => {
     const StatusIcon = getStatusIcon(item.status);
     const statusColor = getStatusColor(item.status);
+    const userRemovalTarget = resolveUserRemovalTarget(item);
+    const providerRemovalTarget = resolveProviderRemovalTarget(item);
 
     return (
       <Animated.View 
@@ -493,21 +546,29 @@ export default function ReportsScreen() {
             </View>
 
             <View style={styles.removeActions}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.removeButton]}
-                onPress={() => removeUser(item.reported_by_user_id, item.reporter_name)}
-              >
-                <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
-                <Text style={styles.actionButtonText}>Remove User</Text>
-              </TouchableOpacity>
+              {userRemovalTarget?.id ? (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.removeButton]}
+                  onPress={() => removeUser(userRemovalTarget.id, userRemovalTarget.name)}
+                >
+                  <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
+                  <Text style={styles.actionButtonText}>
+                    {item.reported_type === 'User' ? 'Remove Reported User' : 'Remove Reporter'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
 
-              <TouchableOpacity
-                style={[styles.actionButton, styles.removeButton]}
-                onPress={() => removeProvider(item.reported_provider_id, item.reported_provider_name)}
-              >
-                <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
-                <Text style={styles.actionButtonText}>Remove Provider</Text>
-              </TouchableOpacity>
+              {providerRemovalTarget?.id ? (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.removeButton]}
+                  onPress={() => removeProvider(providerRemovalTarget.id, providerRemovalTarget.name)}
+                >
+                  <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
+                  <Text style={styles.actionButtonText}>
+                    {item.reported_type === 'Provider' ? 'Remove Reported Provider' : 'Remove Reporter'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         </LinearGradient>
@@ -524,7 +585,7 @@ export default function ReportsScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity onPress={() => router.replace('/admin/dashboard')} style={styles.backButton}>
               <ArrowLeft size={24} color="#374151" />
             </TouchableOpacity>
             <View style={styles.headerInfo}>

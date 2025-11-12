@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar, Animated, Platform, Alert, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar, Animated, Platform, Alert, TextInput, RefreshControl, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { ArrowLeft, UserCheck, Phone, Mail, Calendar, MapPin, Briefcase, UserX, Search, Filter, MoreVertical, Trash2, Shield, Eye, Star } from 'lucide-react-native';
@@ -62,8 +62,17 @@ export default function ProviderReportsScreen() {
   const filterAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (user && user.role !== 'admin') {
+      router.replace('/(tabs)');
+      return;
+    }
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.replace('/admin/dashboard');
+      return true;
+    });
+
     loadProviders();
-    // Start entrance animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -76,7 +85,9 @@ export default function ProviderReportsScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+
+    return () => backHandler.remove();
+  }, [user?.role]);
 
   useEffect(() => {
     // Filter animation
@@ -341,7 +352,7 @@ export default function ProviderReportsScreen() {
           }
         ]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.replace('/admin/dashboard')} style={styles.backButton}>
           <ArrowLeft size={getResponsiveValue(20, 22, 24)} color="#374151" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>

@@ -407,7 +407,7 @@ export default function OTPVerification() {
                   styles.verifyButton,
                   (isLoading || isLocked) && styles.verifyButtonDisabled
                 ]}
-                onPress={handleVerifyOTP}
+                onPress={() => handleVerifyOTP()}
                 disabled={isLoading || isLocked}
               >
                 {isLoading ? (

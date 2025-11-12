@@ -413,7 +413,7 @@ export default function MobileVerificationScreen() {
                 styles.verifyButton, 
                 (isLoading || isLocked) && styles.verifyButtonDisabled
               ]}
-              onPress={handleVerifyOtp}
+              onPress={() => handleVerifyOtp()}
               disabled={isLoading || isLocked}
             >
               {isLoading ? (
