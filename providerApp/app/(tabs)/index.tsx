@@ -148,7 +148,6 @@ export default function HomeScreen() {
     try {
       return t(`serviceCategories.${serviceId}`);
     } catch (error) {
-      console.log('Error getting service name for:', serviceId, error);
       return 'Unknown Service';
     }
   };
@@ -172,29 +171,23 @@ export default function HomeScreen() {
 
       if (selectedLocationData) {
         const selectedType = JSON.parse(selectedLocationData);
-        console.log('📍 Loading selected location type:', selectedType);
         setSelectedLocation(selectedType);
         
         // Find the selected location and set it as current
         const selectedLoc = locations.find((loc: any) => loc.type === selectedType);
         if (selectedLoc) {
-          console.log('📍 Loading saved location:', selectedLoc.address);
           setLocation(selectedLoc.address);
         } else {
-          console.log('📍 Selected location not found, defaulting to current');
           setSelectedLocation('current');
           setLocation('Current Location');
         }
       } else {
         // Default to current location
-        console.log('📍 No saved location preference, defaulting to current');
         setSelectedLocation('current');
         if (currentLocationData) {
           const currentLoc = JSON.parse(currentLocationData);
-          console.log('📍 Loading current location:', currentLoc);
           setLocation(currentLoc);
         } else {
-          console.log('📍 Setting default current location');
           setLocation('Current Location');
         }
       }
@@ -223,8 +216,7 @@ export default function HomeScreen() {
 
   // Debug selectedLocation changes
   useEffect(() => {
-    console.log('📍 selectedLocation changed to:', selectedLocation);
-    console.log('📍 current location state:', location);
+    
   }, [selectedLocation, location]);
 
   // Handle orientation changes for responsive design
@@ -258,18 +250,15 @@ export default function HomeScreen() {
         
         // Socket connection events
         socketRef.current.on('connect', () => {
-          console.log('🔌 Socket connected successfully');
           setSocketConnected(true);
         });
 
         socketRef.current.on('disconnect', (reason: string) => {
-          console.log('❌ Socket disconnected:', reason);
           setSocketConnected(false);
           
           // Auto-reconnect for certain disconnect reasons
           if (reason === 'io server disconnect') {
             // Server initiated disconnect, try to reconnect
-            console.log('🔄 Attempting to reconnect...');
             socketRef.current.connect();
           }
         });
@@ -280,12 +269,10 @@ export default function HomeScreen() {
           
           // Show user-friendly error message only for persistent errors
           if (error.type === 'TransportError' || error.message.includes('xhr poll error')) {
-            console.log('🔄 Network error detected, will retry automatically...');
           }
         });
 
         socketRef.current.on('reconnect', (attemptNumber: number) => {
-          console.log('🔄 Socket reconnected after', attemptNumber, 'attempts');
           setSocketConnected(true);
         });
 
@@ -303,7 +290,6 @@ export default function HomeScreen() {
         
         // Listen for real-time earnings updates
         socketRef.current.on('earnings_updated', (data: any) => {
-          console.log('📊 Received real-time earnings update:', data);
           if (data.status === 'success' && data.data.earnings) {
             setEarnings(data.data.earnings);
             setIsLoadingEarnings(false); // Stop loading when we get real-time data
@@ -312,7 +298,6 @@ export default function HomeScreen() {
 
         // Listen for booking updates that might affect earnings
         socketRef.current.on('booking_updated', (data: any) => {
-          console.log('📋 Received booking update:', data);
           // Earnings will be updated via earnings_updated event
         });
       }
@@ -321,7 +306,6 @@ export default function HomeScreen() {
     // Cleanup socket on unmount
     return () => {
       if (socketRef.current) {
-        console.log('🧹 Cleaning up socket connection...');
         socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -350,7 +334,6 @@ export default function HomeScreen() {
         setRecentSearches(JSON.parse(recent));
       }
     } catch (error) {
-      console.log('Error loading recent searches:', error);
     }
   };
 
@@ -363,7 +346,6 @@ export default function HomeScreen() {
       setRecentSearches(updated);
       await AsyncStorage.setItem('recent_searches', JSON.stringify(updated));
     } catch (error) {
-      console.log('Error saving recent search:', error);
     }
   };
 
@@ -398,7 +380,6 @@ export default function HomeScreen() {
         // Filter services based on search
         const filtered = SERVICE_CATEGORIES.filter(category => {
           if (!category || !category.id) {
-            console.log('Filtering out category - no id:', category);
             return false;
           }
           
@@ -409,7 +390,6 @@ export default function HomeScreen() {
             
             return categoryName.includes(searchLower) || categoryId.includes(searchLower);
           } catch (error) {
-            console.log('Error filtering category:', category, error);
             return false;
           }
         });
@@ -419,7 +399,6 @@ export default function HomeScreen() {
         setFilteredServices(SERVICE_CATEGORIES);
       }
     } catch (error) {
-      console.log('Error in handleSearchChange:', error);
       setSearchSuggestions([]);
       setFilteredServices(SERVICE_CATEGORIES);
     }
@@ -473,7 +452,6 @@ export default function HomeScreen() {
       setRecentSearches([]);
       await AsyncStorage.removeItem('recent_searches');
     } catch (error) {
-      console.log('Error clearing recent searches:', error);
     }
   };
 
@@ -487,11 +465,9 @@ export default function HomeScreen() {
       }
       
       if (!token) {
-        console.log('No token available');
         return;
       }
 
-      console.log('Fetching with token:', token.substring(0, 20) + '...');
       
       const response = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
         headers: {
@@ -499,12 +475,9 @@ export default function HomeScreen() {
         }
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Backend response:', data);
         
         // Map service names to frontend category IDs
         const serviceNameToCategoryMap: { [key: string]: string } = {
@@ -525,15 +498,13 @@ export default function HomeScreen() {
 
         const registeredCategoryIds = data.data.registeredServices.map((service: any) => {
           const categoryId = serviceNameToCategoryMap[service.service_name];
-          console.log(`Mapping: ${service.service_name} -> ${categoryId}`);
           return categoryId;
         }).filter(Boolean);
 
         setRegisteredServices(registeredCategoryIds);
       } else {
         const errorText = await response.text();
-        console.log('Failed to fetch registered services:', response.status);
-        console.log('Error response:', errorText);
+        
       }
     } catch (error) {
       console.error('Error fetching registered services:', error);
@@ -552,7 +523,6 @@ export default function HomeScreen() {
       }
       
       if (!token) {
-        console.log('No token available for earnings');
         return;
       }
 
@@ -564,13 +534,11 @@ export default function HomeScreen() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Earnings response:', data);
         
         if (data.status === 'success' && data.data.earnings) {
           setEarnings(data.data.earnings);
         }
       } else {
-        console.log('Failed to fetch earnings:', response.status);
         // Set default values if API fails
         setEarnings({
           thisMonth: '₹0',
@@ -593,7 +561,6 @@ export default function HomeScreen() {
 
   const handleServicePress = (serviceId: string) => {
     if (!serviceId) {
-      console.log('Service ID is undefined or null');
       return;
     }
     
@@ -632,14 +599,12 @@ export default function HomeScreen() {
       let geocode = await Location.reverseGeocodeAsync(loc.coords);
       if (geocode && geocode.length > 0) {
         const addr = `${geocode[0].name || ''} ${geocode[0].street || ''}, ${geocode[0].city || ''}, ${geocode[0].region || ''}`;
-        console.log('📍 Setting current location to:', addr);
         setLocation(addr);
         setSelectedLocation('current');
         const updatedLocations = savedLocations.map(l => l.type === 'current' ? { ...l, address: addr } : l);
         setSavedLocations(updatedLocations);
         await saveLocationPreferences(updatedLocations, 'current', addr);
       } else {
-        console.log('📍 Setting current location to default');
         setLocation('Current Location');
         setSelectedLocation('current');
         await saveLocationPreferences(savedLocations, 'current', 'Current Location');
@@ -672,8 +637,6 @@ export default function HomeScreen() {
     }
     const newLocation = { label: newLocationName, address: newLocationAddress, type: `custom${savedLocations.length}` };
     const updatedLocations = [...savedLocations, newLocation];
-    console.log('📍 Adding new location:', newLocation);
-    console.log('📍 Setting location to:', newLocationAddress);
     
     setSavedLocations(updatedLocations);
     setLocation(newLocationAddress);
@@ -686,9 +649,7 @@ export default function HomeScreen() {
   };
 
   const handleSelectLocation = async (loc: any) => {
-    console.log('📍 Selecting location:', loc);
-    console.log('📍 Setting location to:', loc.address);
-    console.log('📍 Setting selectedLocation to:', loc.type);
+    
     setSelectedLocation(loc.type);
     setLocation(loc.address);
     setModalVisible(false);
@@ -746,7 +707,6 @@ export default function HomeScreen() {
                 const selectedLoc = savedLocations.find(loc => loc.type === selectedLocation);
                 title = selectedLoc?.label || 'Home';
               }
-              console.log('📍 Rendering title:', title, 'for selectedLocation:', selectedLocation);
               return title;
             })()}
           </Text>

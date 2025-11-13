@@ -53,7 +53,6 @@ class PushNotificationService {
     if (!this.schemaReadyPromise || force) {
       this.schemaReadyPromise = (async () => {
         try {
-          console.log('🛠️ Ensuring push notification schema is up to date...');
 
           await query(`
             ALTER TABLE notification_queue
@@ -138,7 +137,6 @@ class PushNotificationService {
           `);
 
           this.schemaReady = true;
-          console.log('✅ Push notification schema verified');
         } catch (error) {
           console.error('❌ Failed to ensure push notification schema:', error);
           throw error;
@@ -159,7 +157,6 @@ class PushNotificationService {
    */
   async registerPushToken(userId, pushToken, deviceInfo = {}) {
     try {
-      console.log('📱 Registering push token for user:', userId);
 
       // Validate the push token
       if (!Expo.isExpoPushToken(pushToken)) {
@@ -178,7 +175,6 @@ class PushNotificationService {
           'UPDATE user_push_tokens SET last_seen = NOW(), is_active = true WHERE id = $1',
           [existingToken.id]
         );
-        console.log('✅ Updated existing push token');
       } else {
         await query(
           'UPDATE user_push_tokens SET is_active = false WHERE user_id = $1',
@@ -190,7 +186,6 @@ class PushNotificationService {
           VALUES ($1, $2, $3, true, NOW(), NOW())
         `, [userId, pushToken, JSON.stringify(deviceInfo)]);
 
-        console.log('✅ Registered new push token');
       }
 
       await this.deliverPendingForUser(userId);
@@ -295,7 +290,6 @@ class PushNotificationService {
     try {
       const tokens = await this.getUserPushTokens(userId);
       if (tokens.length === 0) {
-        console.log('📱 No active push tokens for user, storing pending message:', userId);
         await this.storePendingNotification(userId, notification);
         return { success: false, error: 'No active push tokens. Notification queued until device registers.' };
       }
@@ -339,7 +333,6 @@ class PushNotificationService {
         `,
         [userId, JSON.stringify(notification), JSON.stringify(meta)]
       );
-      console.log('📝 Stored pending push notification for user', userId);
     } catch (error) {
       console.error('❌ Error storing pending push notification:', error);
     }
@@ -374,7 +367,6 @@ class PushNotificationService {
 
         if (result.success) {
           await query('DELETE FROM pending_push_notifications WHERE id = $1', [record.id]);
-          console.log('📬 Delivered pending push notification', { userId, pendingId: record.id });
         } else {
           console.warn('⚠️ Failed to deliver pending push notification, will retry later', {
             userId,
@@ -823,7 +815,6 @@ class PushNotificationService {
         'UPDATE user_push_tokens SET is_active = false, last_seen = NOW() WHERE push_token = $1',
         [pushToken]
       );
-      console.log('🗑️ Deactivated invalid push token');
     } catch (error) {
       console.error('❌ Error deactivating token:', error);
     }
@@ -841,7 +832,6 @@ class PushNotificationService {
         VALUES ($1, $2, $3, NOW())
       `, [userId, JSON.stringify(notification), scheduledTime]);
 
-      console.log('⏰ Scheduled notification for:', scheduledTime);
       return { success: true };
     } catch (error) {
       console.error('❌ Error scheduling notification:', error);
@@ -867,7 +857,6 @@ class PushNotificationService {
       await this.cleanup();
     });
 
-    console.log('⏰ Scheduled tasks initialized for push notifications');
   }
 
   /**
@@ -894,7 +883,6 @@ class PushNotificationService {
             [scheduled.id]
           );
 
-          console.log('📤 Sent scheduled notification:', scheduled.id);
         } catch (error) {
           console.error('❌ Error sending scheduled notification:', error);
         }
@@ -909,7 +897,6 @@ class PushNotificationService {
    */
   async cleanup() {
     try {
-      console.log('🧹 Starting notification cleanup...');
 
       await query(
         'DELETE FROM user_push_tokens WHERE is_active = false AND last_seen < NOW() - INTERVAL \'30 days\''
@@ -933,7 +920,6 @@ class PushNotificationService {
         'DELETE FROM notification_receipts WHERE status IN (\'delivered\', \'failed\') AND updated_at < NOW() - INTERVAL \'30 days\''
       );
 
-      console.log('✅ Notification cleanup completed');
     } catch (error) {
       console.error('❌ Error in cleanup:', error);
     }

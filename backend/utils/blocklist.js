@@ -42,6 +42,15 @@ const isIdentifierBlocked = async ({ identifierType, identifierValue, role }) =>
 
     return record || null;
   } catch (error) {
+    // If table doesn't exist, return null (no blocking) instead of throwing
+    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+      logger.warn('Blocked identifiers table does not exist, skipping check', {
+        identifierType,
+        role
+      });
+      return null;
+    }
+    
     logger.error('Blocked identifier lookup failed', {
       error: error.message,
       identifierType,

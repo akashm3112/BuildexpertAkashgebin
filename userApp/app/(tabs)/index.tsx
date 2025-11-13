@@ -175,7 +175,6 @@ export default function HomeScreen() {
         setRecentSearches(JSON.parse(recent));
       }
     } catch (error) {
-      console.log('Error loading recent searches:', error);
     }
   };
 
@@ -188,7 +187,6 @@ export default function HomeScreen() {
       setRecentSearches(updated);
       await AsyncStorage.setItem('user_recent_searches', JSON.stringify(updated));
     } catch (error) {
-      console.log('Error saving recent search:', error);
     }
   };
 
@@ -236,7 +234,6 @@ export default function HomeScreen() {
             
             return categoryName.includes(searchLower) || categoryId.includes(searchLower);
           } catch (error) {
-            console.log('Error filtering category:', category, error);
             return false;
           }
         });
@@ -246,7 +243,6 @@ export default function HomeScreen() {
         setFilteredServices(SERVICE_CATEGORIES);
       }
     } catch (error) {
-      console.log('Error in handleSearchChange:', error);
       setSearchSuggestions([]);
       setFilteredServices(SERVICE_CATEGORIES);
     }
@@ -302,7 +298,6 @@ export default function HomeScreen() {
       setRecentSearches([]);
       await AsyncStorage.removeItem('user_recent_searches');
     } catch (error) {
-      console.log('Error clearing recent searches:', error);
     }
   };
 

@@ -2,7 +2,6 @@ const { query } = require('../database/connection');
 
 const setupNotificationQueueAndCascades = async () => {
   try {
-    console.log('🔔 Applying notification queue & cascade improvements...');
 
     await query(`
       CREATE TABLE IF NOT EXISTS notification_delivery_queue (
@@ -95,7 +94,6 @@ const setupNotificationQueueAndCascades = async () => {
         FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE;
     `);
 
-    console.log('✅ Notification queue and cascade updates applied');
   } catch (error) {
     console.error('❌ Error applying notification queue migration:', error);
     throw error;

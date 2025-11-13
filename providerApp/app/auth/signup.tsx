@@ -105,7 +105,6 @@ export default function SignUpScreen() {
               });
 
               if (!result.canceled && result.assets[0]) {
-                console.log('📸 Camera photo selected:', result.assets[0].uri);
                 // Convert file URI to base64 for backend processing
                 try {
                   const base64 = await convertUriToBase64(result.assets[0].uri);
@@ -116,7 +115,6 @@ export default function SignUpScreen() {
                   setProfileImage(result.assets[0].uri);
                 }
               } else {
-                console.log('📸 Camera photo selection canceled');
               }
             } catch (error) {
               console.error('Error taking photo:', error);
@@ -147,7 +145,6 @@ export default function SignUpScreen() {
               });
 
               if (!result.canceled && result.assets[0]) {
-                console.log('🖼️ Gallery photo selected:', result.assets[0].uri);
                 // Convert file URI to base64 for backend processing
                 try {
                   const base64 = await convertUriToBase64(result.assets[0].uri);
@@ -158,7 +155,6 @@ export default function SignUpScreen() {
                   setProfileImage(result.assets[0].uri);
                 }
               } else {
-                console.log('🖼️ Gallery photo selection canceled');
               }
             } catch (error) {
               console.error('Error choosing from gallery:', error);
@@ -228,9 +224,7 @@ export default function SignUpScreen() {
     }
     setIsLoading(true);
     try {
-      console.log('📤 Starting signup process...');
-      console.log('🖼️ Profile image being sent:', profileImage ? profileImage.substring(0, 50) + '...' : 'No image');
-      console.log('🌐 API Base URL:', API_BASE_URL);
+      
       
       const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
         method: 'POST',
@@ -244,10 +238,29 @@ export default function SignUpScreen() {
           profilePicUrl: profileImage
         })
       });
-      const data = await response.json();
+      
+      let data;
+      try {
+        const text = await response.text();
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        setIsLoading(false);
+        showModal('Signup Failed', 'Invalid response from server. Please try again.', 'error');
+        return;
+      }
+      
       setIsLoading(false);
       if (!response.ok) {
-        showModal('Signup Failed', data.message || 'An error occurred.', 'error');
+        // Show detailed error message
+        const errorMessage = data.message || data.errors?.[0]?.msg || `An error occurred (Status: ${response.status}). Please try again.`;
+        console.error('Signup error:', {
+          status: response.status,
+          message: errorMessage,
+          errors: data.errors,
+          data: data
+        });
+        showModal('Signup Failed', errorMessage, 'error');
         return;
       }
       // On success, navigate to OTP screen
@@ -255,9 +268,11 @@ export default function SignUpScreen() {
         pathname: '/auth/otp',
         params: { phone, isNewUser: 'true' }
       });
-    } catch (error) {
+    } catch (error: any) {
       setIsLoading(false);
-      showModal('Network Error', 'Could not connect to server.', 'error');
+      console.error('Signup network error:', error);
+      const errorMessage = error.message || 'Could not connect to server. Please check your internet connection and try again.';
+      showModal('Network Error', errorMessage, 'error');
     }
   };
 

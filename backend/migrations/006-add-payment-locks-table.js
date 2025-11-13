@@ -7,7 +7,6 @@ const { query } = require('../database/connection');
 
 async function up() {
   try {
-    console.log('Creating payment_locks table...');
 
     await query(`
       CREATE TABLE IF NOT EXISTS payment_locks (
@@ -20,7 +19,6 @@ async function up() {
       )
     `);
 
-    console.log('✅ payment_locks table created');
 
     // Create indexes for performance
     await query(`
@@ -29,14 +27,12 @@ async function up() {
       CREATE INDEX IF NOT EXISTS idx_payment_locks_user_id ON payment_locks(user_id);
     `);
 
-    console.log('✅ payment_locks indexes created');
 
     // Clean up expired locks
     await query(`
       DELETE FROM payment_locks WHERE expires_at < NOW()
     `);
 
-    console.log('✅ Migration 006 completed successfully');
 
   } catch (error) {
     console.error('❌ Migration 006 failed:', error);
@@ -46,13 +42,11 @@ async function up() {
 
 async function down() {
   try {
-    console.log('Dropping payment_locks table...');
 
     await query(`
       DROP TABLE IF EXISTS payment_locks CASCADE
     `);
 
-    console.log('✅ payment_locks table dropped');
 
   } catch (error) {
     console.error('❌ Rollback 006 failed:', error);
@@ -66,7 +60,6 @@ module.exports = { up, down };
 if (require.main === module) {
   up()
     .then(() => {
-      console.log('Migration completed successfully');
       process.exit(0);
     })
     .catch((error) => {

@@ -6,7 +6,6 @@ const { query } = require('../database/connection');
  */
 const addPaymentLoggingTables = async () => {
   try {
-    console.log('📊 Creating payment logging tables...');
 
     // Create payment_events table for granular event tracking
     await query(`
@@ -30,7 +29,6 @@ const addPaymentLoggingTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_payment_events_user_id ON payment_events(user_id);
     `);
 
-    console.log('✅ payment_events table created successfully');
 
     // Create payment_api_logs table for API interaction tracking
     await query(`
@@ -58,7 +56,6 @@ const addPaymentLoggingTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_payment_api_logs_response_status ON payment_api_logs(response_status);
     `);
 
-    console.log('✅ payment_api_logs table created successfully');
 
     // Create payment_security_events table for fraud detection
     await query(`
@@ -82,9 +79,7 @@ const addPaymentLoggingTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_payment_security_events_timestamp ON payment_security_events(timestamp);
     `);
 
-    console.log('✅ payment_security_events table created successfully');
 
-    console.log('🎉 Payment logging tables creation completed!');
     return { success: true };
   } catch (error) {
     console.error('❌ Error creating payment logging tables:', error);
@@ -99,7 +94,6 @@ if (require.main === module) {
   addPaymentLoggingTables()
     .then(result => {
       if (result.success) {
-        console.log('✅ Migration completed successfully');
         process.exit(0);
       } else {
         console.error('❌ Migration failed:', result.error);

@@ -11,7 +11,6 @@ router.post('/grant-labour-access', auth, async (req, res) => {
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + 7); // 7 days from now
 
-    console.log(`Granting labour access to user ${userId} from ${startDate} to ${endDate}`);
 
     // Update user's labour access status
     const updateQuery = `
@@ -48,7 +47,6 @@ router.post('/grant-labour-access', auth, async (req, res) => {
       transactionId
     ]);
 
-    console.log(`✅ Labour access granted successfully for user ${userId}`);
 
     res.json({
       status: 'success',

@@ -524,11 +524,7 @@ export default function SignupScreen() {
         profilePicUrl: profilePicture || DEFAULT_PROFILE_PIC,
       };
       
-      console.log('📤 Sending signup request...');
-      console.log('  - Profile picture:', profilePicture ? profilePicture.substring(0, 50) + '...' : 'null');
-      console.log('  - Default profile pic:', DEFAULT_PROFILE_PIC);
-      console.log('  - Final profilePicUrl:', requestBody.profilePicUrl ? requestBody.profilePicUrl.substring(0, 50) + '...' : 'null');
-      
+     
       const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
         method: 'POST',
         headers: {
@@ -539,7 +535,6 @@ export default function SignupScreen() {
 
       const data = await response.json();
       
-      console.log('📥 Signup response:', data);
 
       if (response.ok) {
         Toast.show({

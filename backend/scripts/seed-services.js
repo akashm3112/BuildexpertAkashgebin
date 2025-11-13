@@ -3,7 +3,6 @@ require('dotenv').config({ path: '../config.env' });
 
 const seedServices = async () => {
   try {
-    console.log('🌱 Starting service seeding...');
 
     // Define services to insert
     const services = [
@@ -24,7 +23,6 @@ const seedServices = async () => {
 
     // Check existing services
     const existingServices = await getRows('SELECT name FROM services_master');
-    console.log(`Found ${existingServices.length} existing services`);
 
     // Insert services that don't exist
     let insertedCount = 0;
@@ -35,18 +33,14 @@ const seedServices = async () => {
           INSERT INTO services_master (name, is_paid)
           VALUES ($1, $2)
         `, [service.name, service.is_paid]);
-        console.log(`✅ Inserted: ${service.name}`);
         insertedCount++;
       } else {
-        console.log(`⏭️  Already exists: ${service.name}`);
       }
     }
 
     // Verify final state
     const finalServices = await getRows('SELECT id, name, is_paid FROM services_master ORDER BY name');
-    console.log(`\n🎉 Service seeding completed!`);
-    console.log(`Total services in database: ${finalServices.length}`);
-    console.log(`New services inserted: ${insertedCount}`);
+    
 
     return finalServices;
 
@@ -60,7 +54,6 @@ const seedServices = async () => {
 if (require.main === module) {
   seedServices()
     .then(() => {
-      console.log('Service seeding completed successfully');
       process.exit(0);
     })
     .catch((error) => {

@@ -48,11 +48,9 @@ export default function LabourAccessSimpleScreen() {
             }
           } catch (apiError) {
             // If API fails, still show local data - this is fine
-            console.log('API fetch failed, using local data:', apiError);
           }
         } else {
           // No token - still show UI with local data (if any)
-          console.log('No token found, using local data only');
         }
       } catch (error) {
         // Even if checkLabourAccess fails, show the UI

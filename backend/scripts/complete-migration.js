@@ -3,11 +3,9 @@ require('dotenv').config({ path: './config.env' });
 
 const completeMigration = async () => {
   try {
-    console.log('🚀 Starting complete database migration...');
 
     // Set timezone to IST for the session
     await query(`SET timezone = 'Asia/Kolkata';`);
-    console.log('✅ Timezone set to IST (Asia/Kolkata)');
 
     // 1. Create users table with profile picture support
     await query(`
@@ -23,7 +21,6 @@ const completeMigration = async () => {
         is_verified BOOLEAN DEFAULT FALSE
       );
     `);
-    console.log('✅ Users table created with profile picture support');
 
     // 2. Create addresses table
     await query(`
@@ -36,7 +33,6 @@ const completeMigration = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Addresses table created');
 
     // 3. Create services_master table
     await query(`
@@ -47,7 +43,6 @@ const completeMigration = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Services master table created');
 
     // 4. Create provider_profiles table with engineering certificate support
     await query(`
@@ -61,7 +56,6 @@ const completeMigration = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Provider profiles table created with engineering certificate support');
 
     // 5. Create provider_services table with working proof URLs
     await query(`
@@ -78,7 +72,6 @@ const completeMigration = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Provider services table created with working proof URLs');
 
     // 6. Create provider_specific_services table
     await query(`
@@ -91,7 +84,6 @@ const completeMigration = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Provider specific services table created');
 
     // 7. Create bookings table with comprehensive fields
     await query(`
@@ -112,7 +104,6 @@ const completeMigration = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Bookings table created with comprehensive fields');
 
     // 8. Create ratings table
     await query(`
@@ -124,7 +115,6 @@ const completeMigration = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Ratings table created');
 
     // 9. Create notifications table with role and translation support
     await query(`
@@ -140,7 +130,6 @@ const completeMigration = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Notifications table created with translation support');
 
     // 10. Create payments table
     await query(`
@@ -155,7 +144,6 @@ const completeMigration = async () => {
         next_due_date DATE
       );
     `);
-    console.log('✅ Payments table created');
 
     // 11. Create push_tokens table
     await query(`
@@ -169,10 +157,8 @@ const completeMigration = async () => {
         UNIQUE(user_id, token)
       );
     `);
-    console.log('✅ Push tokens table created');
 
     // Create indexes for better performance
-    console.log('🔍 Creating indexes...');
     await query(`CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);`);
     await query(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);`);
     await query(`CREATE INDEX IF NOT EXISTS idx_users_profile_pic_url ON users(profile_pic_url);`);
@@ -187,15 +173,12 @@ const completeMigration = async () => {
     await query(`CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);`);
     await query(`CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);`);
     await query(`CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id);`);
-    console.log('✅ Database indexes created');
 
     // Add unique constraint on (phone, role) for users
     try {
       await query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_phone_key;`);
       await query(`ALTER TABLE users ADD CONSTRAINT users_phone_role_key UNIQUE (phone, role);`);
-      console.log('✅ Unique constraint on (phone, role) applied');
     } catch (error) {
-      console.log('⚠️  Unique constraint already exists or error:', error.message);
     }
 
     // Add profile picture URL validation
@@ -205,13 +188,10 @@ const completeMigration = async () => {
         ADD CONSTRAINT users_profile_pic_url_check 
         CHECK (profile_pic_url = '' OR profile_pic_url LIKE 'https://%')
       `);
-      console.log('✅ Profile picture URL validation added');
     } catch (error) {
-      console.log('⚠️  Profile picture URL validation already exists or error:', error.message);
     }
     
     // Seed services into services_master table
-    console.log('🌱 Seeding services...');
     const services = [
       { name: 'plumber', is_paid: true },
       { name: 'mason-mastri', is_paid: true },
@@ -235,7 +215,6 @@ const completeMigration = async () => {
         ON CONFLICT (name) DO NOTHING
       `, [service.name, service.is_paid]);
     }
-    console.log('✅ Services seeded successfully');
 
     // Create admin user if not exists
     const bcrypt = require('bcryptjs');
@@ -246,10 +225,8 @@ const completeMigration = async () => {
       VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (phone, role) DO NOTHING
     `, ['Admin User', 'admin@buildxpert.com', '9999999999', hashedPassword, 'admin', true]);
-    console.log('✅ Admin user created/verified');
 
     // Create test users for development
-    console.log('👥 Creating test users...');
     const testUsers = [
       {
         full_name: 'Sam User',
@@ -276,17 +253,7 @@ const completeMigration = async () => {
         ON CONFLICT (phone, role) DO NOTHING
       `, [user.full_name, user.email, user.phone, user.password, user.role, user.is_verified]);
     }
-    console.log('✅ Test users created/verified');
-
-    console.log('🎉 Complete database migration finished successfully!');
-    console.log('📊 Database includes:');
-    console.log('   - Profile picture support with Cloudinary integration');
-    console.log('   - Comprehensive user management');
-    console.log('   - Provider services with working proof URLs');
-    console.log('   - Booking system with ratings');
-    console.log('   - Notification system with translations');
-    console.log('   - Payment tracking');
-    console.log('   - Push notification support');
+    
 
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -298,7 +265,6 @@ const completeMigration = async () => {
 if (require.main === module) {
   completeMigration()
     .then(() => {
-      console.log('Complete migration finished');
       process.exit(0);
     })
     .catch((error) => {

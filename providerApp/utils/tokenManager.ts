@@ -27,14 +27,12 @@ export class TokenManager {
       
       // If token is already expired, clear data and return null
       if (tokenData.expiresAt <= now) {
-        console.log('Token is expired, clearing stored data');
         await this.clearStoredData();
         return null;
       }
       
       // If token will expire soon, try to refresh
       if (tokenData.expiresAt - now < bufferTime) {
-        console.log('Token will expire soon, attempting refresh');
         return await this.refreshToken();
       }
 

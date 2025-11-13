@@ -7,7 +7,6 @@ const { query } = require('../database/connection');
  */
 const updatePushNotificationInfrastructure = async () => {
   try {
-    console.log('📬 Updating push notification infrastructure (retry queue & receipts)...');
 
     // Normalize existing data
     await query(`
@@ -87,7 +86,6 @@ const updatePushNotificationInfrastructure = async () => {
       CREATE INDEX IF NOT EXISTS idx_notification_receipts_queue_id ON notification_receipts(queue_id);
     `);
 
-    console.log('✅ Push notification infrastructure updated successfully');
     return { success: true };
   } catch (error) {
     console.error('❌ Error updating push notification infrastructure:', error);
@@ -101,7 +99,6 @@ if (require.main === module) {
   updatePushNotificationInfrastructure()
     .then(result => {
       if (result.success) {
-        console.log('✅ Migration completed successfully');
         process.exit(0);
       } else {
         console.error('❌ Migration failed:', result.error);

@@ -140,13 +140,10 @@ export default function BookingsScreen() {
     const socket = socketIOClient(`${API_BASE_URL}`);
     socket.on('connect', () => console.log('Socket connected:', socket.id));
     socket.emit('join', user.id);
-    console.log('Joining room:', user.id);
     socket.on('booking_created', () => {
-      console.log('Received booking_created event');
       fetchBookings(false);
     });
     socket.on('booking_updated', () => {
-      console.log('Received booking_updated event');
       fetchBookings(false);
     });
     socket.on('disconnect', () => console.log('Socket disconnected'));

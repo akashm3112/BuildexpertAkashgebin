@@ -2,10 +2,8 @@ const { query, pool } = require('../database/connection');
 
 async function migrateReportTables() {
   try {
-    console.log('🔄 Separating report tables migration...\n');
 
     // Step 1: Create new table for provider reports (providers reporting users)
-    console.log('📋 Step 1: Creating provider_reports_users table...');
     await query(`
       CREATE TABLE IF NOT EXISTS provider_reports_users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -22,10 +20,8 @@ async function migrateReportTables() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `);
-    console.log('✅ provider_reports_users table created');
 
     // Create indexes
-    console.log('📋 Creating indexes for provider_reports_users...');
     await query(`
       CREATE INDEX IF NOT EXISTS idx_provider_reports_users_provider 
       ON provider_reports_users(provider_id);
@@ -42,10 +38,8 @@ async function migrateReportTables() {
       CREATE INDEX IF NOT EXISTS idx_provider_reports_users_created 
       ON provider_reports_users(created_at DESC);
     `);
-    console.log('✅ Indexes created');
 
     // Step 2: Create or rename user_reports_providers table
-    console.log('\n📋 Step 2: Setting up user_reports_providers table...');
     
     // Check if user_reports_providers already exists
     const userReportsCheck = await query(`
@@ -69,7 +63,6 @@ async function migrateReportTables() {
       if (providerReportsCheck.rows[0].exists) {
         // Rename existing table
         await query(`ALTER TABLE provider_reports RENAME TO user_reports_providers;`);
-        console.log('✅ Table renamed from provider_reports to user_reports_providers');
       } else {
         // Create new table if neither exists
         await query(`
@@ -87,14 +80,11 @@ async function migrateReportTables() {
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
           );
         `);
-        console.log('✅ Created user_reports_providers table');
       }
     } else {
-      console.log('⚠️  user_reports_providers already exists, skipping');
     }
 
     // Step 3: Update indexes and constraints for renamed table
-    console.log('\n📋 Step 3: Updating indexes for user_reports_providers...');
     
     // Drop old indexes if they exist and create new ones
     await query(`DROP INDEX IF EXISTS idx_provider_reports_status;`);
@@ -116,22 +106,13 @@ async function migrateReportTables() {
       CREATE INDEX IF NOT EXISTS idx_user_reports_providers_created 
       ON user_reports_providers(created_at DESC);
     `);
-    console.log('✅ Indexes updated');
 
     // Step 4: Create a view for backward compatibility (optional)
-    console.log('\n📋 Step 4: Creating compatibility view...');
     await query(`
       CREATE OR REPLACE VIEW provider_reports AS
       SELECT * FROM user_reports_providers;
     `);
-    console.log('✅ Compatibility view created');
-
-    console.log('\n✅ Migration completed successfully!\n');
-    console.log('📊 Summary:');
-    console.log('   ✅ provider_reports_users - NEW table for providers reporting users');
-    console.log('   ✅ user_reports_providers - RENAMED from provider_reports');
-    console.log('   ✅ provider_reports - VIEW for backward compatibility');
-    console.log('   ✅ All indexes created');
+    
 
   } catch (error) {
     console.error('❌ Migration failed:', error.message);
@@ -146,7 +127,6 @@ module.exports = migrateReportTables;
 if (require.main === module) {
   migrateReportTables()
     .then(() => {
-      console.log('\n🎉 Migration script completed');
       process.exit(0);
     })
     .catch((error) => {

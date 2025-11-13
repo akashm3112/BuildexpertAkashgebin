@@ -9,7 +9,6 @@ const { query } = require('../database/connection');
  */
 const updateServicePricingInfrastructure = async () => {
   try {
-    console.log('🏷️ Updating service pricing infrastructure...');
 
     // Extend services_master with pricing metadata
     await query(`
@@ -184,7 +183,6 @@ const updateServicePricingInfrastructure = async () => {
       SET currency_code = COALESCE(currency_code, 'INR')
     `);
 
-    console.log('✅ Service pricing infrastructure updated successfully');
     return { success: true };
   } catch (error) {
     console.error('❌ Error updating service pricing infrastructure:', error);
@@ -198,7 +196,6 @@ if (require.main === module) {
   updateServicePricingInfrastructure()
     .then(result => {
       if (result.success) {
-        console.log('✅ Migration completed successfully');
         process.exit(0);
       } else {
         console.error('❌ Migration failed:', result.error);

@@ -6,11 +6,9 @@ const { query } = require('../database/connection');
  */
 const createCoreTables = async () => {
   try {
-    console.log('🚀 Creating core application tables...');
 
     // Set timezone to IST for the session
     await query(`SET timezone = 'Asia/Kolkata';`);
-    console.log('✅ Timezone set to IST (Asia/Kolkata)');
 
     // 1. Create users table
     await query(`
@@ -26,7 +24,6 @@ const createCoreTables = async () => {
         is_verified BOOLEAN DEFAULT FALSE
       );
     `);
-    console.log('✅ Users table created');
 
     // 2. Create addresses table
     await query(`
@@ -41,7 +38,6 @@ const createCoreTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Addresses table created');
 
     // 3. Create services_master table
     await query(`
@@ -53,7 +49,6 @@ const createCoreTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Services master table created');
 
     // 4. Create provider_profiles table
     await query(`
@@ -67,7 +62,6 @@ const createCoreTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Provider profiles table created');
 
     // 5. Create provider_services table
     await query(`
@@ -84,7 +78,6 @@ const createCoreTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Provider services table created');
 
     // 6. Create bookings table
     await query(`
@@ -106,7 +99,6 @@ const createCoreTables = async () => {
         updated_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Bookings table created');
 
     // 7. Create ratings table
     await query(`
@@ -118,7 +110,6 @@ const createCoreTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Ratings table created');
 
     // 8. Create notifications table
     await query(`
@@ -134,7 +125,6 @@ const createCoreTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Notifications table created');
 
     // 9. Create indexes for better performance
     await query(`
@@ -158,9 +148,7 @@ const createCoreTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_notifications_role ON notifications(role);
       CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
     `);
-    console.log('✅ Core table indexes created');
 
-    console.log('🎉 Core tables creation completed!');
     return { success: true };
   } catch (error) {
     console.error('❌ Error creating core tables:', error);
@@ -175,7 +163,6 @@ if (require.main === module) {
   createCoreTables()
     .then(result => {
       if (result.success) {
-        console.log('✅ Migration completed successfully');
         process.exit(0);
       } else {
         console.error('❌ Migration failed:', result.error);

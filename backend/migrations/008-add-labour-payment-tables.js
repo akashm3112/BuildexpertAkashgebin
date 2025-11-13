@@ -2,7 +2,6 @@ const { query } = require('../database/connection');
 
 const addLabourPaymentTables = async () => {
   try {
-    console.log('🚀 Starting labour payment tables migration...');
 
     // 1. Add labour access columns to users table
     await query(`
@@ -11,7 +10,6 @@ const addLabourPaymentTables = async () => {
       ADD COLUMN IF NOT EXISTS labour_access_start_date TIMESTAMP,
       ADD COLUMN IF NOT EXISTS labour_access_end_date TIMESTAMP
     `);
-    console.log('✅ Added labour access columns to users table');
 
     // 2. Create labour_payment_transactions table
     await query(`
@@ -35,7 +33,6 @@ const addLabourPaymentTables = async () => {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    console.log('✅ Created labour_payment_transactions table');
 
     // 3. Create labour_payment_events table for detailed logging
     await query(`
@@ -50,7 +47,6 @@ const addLabourPaymentTables = async () => {
         timestamp TIMESTAMP DEFAULT NOW()
       )
     `);
-    console.log('✅ Created labour_payment_events table');
 
     // 4. Create labour_payment_locks table for concurrency control
     await query(`
@@ -62,7 +58,6 @@ const addLabourPaymentTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    console.log('✅ Created labour_payment_locks table');
 
     // 5. Create indexes for better performance
     await query(`CREATE INDEX IF NOT EXISTS idx_labour_payment_transactions_user_id ON labour_payment_transactions(user_id);`);
@@ -80,7 +75,6 @@ const addLabourPaymentTables = async () => {
     await query(`CREATE INDEX IF NOT EXISTS idx_users_labour_access_status ON users(labour_access_status);`);
     await query(`CREATE INDEX IF NOT EXISTS idx_users_labour_access_end_date ON users(labour_access_end_date);`);
     
-    console.log('✅ Created indexes for labour payment tables');
 
     // 6. Create function to clean up expired locks
     await query(`
@@ -91,7 +85,6 @@ const addLabourPaymentTables = async () => {
       END;
       $$ LANGUAGE plpgsql;
     `);
-    console.log('✅ Created cleanup function for expired locks');
 
     // 7. Create function to check labour access expiry
     await query(`
@@ -106,9 +99,7 @@ const addLabourPaymentTables = async () => {
       END;
       $$ LANGUAGE plpgsql;
     `);
-    console.log('✅ Created function to check labour access expiry');
 
-    console.log('🎉 Labour payment tables migration completed successfully!');
     
   } catch (error) {
     console.error('❌ Error in labour payment tables migration:', error);
@@ -122,7 +113,6 @@ module.exports = addLabourPaymentTables;
 if (require.main === module) {
   addLabourPaymentTables()
     .then(() => {
-      console.log('✅ Labour payment tables migration completed');
       process.exit(0);
     })
     .catch((error) => {

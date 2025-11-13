@@ -6,7 +6,6 @@ const { query } = require('../database/connection');
  */
 const addPaymentTransactionsTable = async () => {
   try {
-    console.log('💰 Creating payment_transactions table...');
 
     // Create payment_transactions table with all fields
     await query(`
@@ -50,9 +49,7 @@ const addPaymentTransactionsTable = async () => {
       CREATE INDEX IF NOT EXISTS idx_payment_transactions_created_at ON payment_transactions(created_at);
     `);
 
-    console.log('✅ payment_transactions table created successfully');
 
-    console.log('🎉 Payment transactions table creation completed!');
     return { success: true };
   } catch (error) {
     console.error('❌ Error creating payment_transactions table:', error);
@@ -67,7 +64,6 @@ if (require.main === module) {
   addPaymentTransactionsTable()
     .then(result => {
       if (result.success) {
-        console.log('✅ Migration completed successfully');
         process.exit(0);
       } else {
         console.error('❌ Migration failed:', result.error);

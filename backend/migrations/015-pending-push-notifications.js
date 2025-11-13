@@ -2,7 +2,6 @@ const { query } = require('../database/connection');
 
 const createPendingPushNotificationsTable = async () => {
   try {
-    console.log('🔔 Creating pending push notifications table...');
 
     await query(`
       CREATE TABLE IF NOT EXISTS pending_push_notifications (
@@ -19,7 +18,6 @@ const createPendingPushNotificationsTable = async () => {
         ON pending_push_notifications (user_id, created_at);
     `);
 
-    console.log('✅ Pending push notifications table ready');
   } catch (error) {
     console.error('❌ Error creating pending push notifications table:', error);
     throw error;

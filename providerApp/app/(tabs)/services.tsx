@@ -108,7 +108,6 @@ export default function ServicesScreen() {
         return;
       }
 
-      console.log('Fetching registered services...');
       
       const response = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
         headers: {
@@ -116,11 +115,9 @@ export default function ServicesScreen() {
         }
       });
 
-      console.log('Response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Backend response:', data);
         
         if (data.status === 'success' && data.data.registeredServices) {
           setRegisteredServices(data.data.registeredServices);
@@ -129,8 +126,6 @@ export default function ServicesScreen() {
         }
       } else {
         const errorText = await response.text();
-        console.log('Failed to fetch registered services:', response.status);
-        console.log('Error response:', errorText);
         
         if (response.status === 403) {
           setError('Access denied. Only providers can view registered services.');

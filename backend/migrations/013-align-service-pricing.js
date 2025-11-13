@@ -6,7 +6,6 @@ const { query } = require('../database/connection');
  */
 const alignServicePricing = async () => {
   try {
-    console.log('💳 Aligning service pricing to ₹99...');
 
     // Ensure default base price is ₹99 going forward
     await query(`
@@ -65,7 +64,6 @@ const alignServicePricing = async () => {
         AND pt.amount <> 99
     `);
 
-    console.log('✅ Service pricing aligned to ₹99 successfully');
     return { success: true };
   } catch (error) {
     console.error('❌ Error aligning service pricing:', error);
@@ -79,7 +77,6 @@ if (require.main === module) {
   alignServicePricing()
     .then(result => {
       if (result.success) {
-        console.log('✅ Migration completed successfully');
         process.exit(0);
       } else {
         console.error('❌ Migration failed:', result.error);

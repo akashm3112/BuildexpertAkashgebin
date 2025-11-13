@@ -33,7 +33,6 @@ export default function LogoutButton({
     try {
       onLogoutStart?.();
       
-      console.log('🚪 Starting complete logout process...');
       
       // Reset notification state first
       resetNotificationState();
@@ -46,7 +45,6 @@ export default function LogoutButton({
         try {
           // Navigate to root index which will handle auth redirect and prevent back navigation
           router.replace('/');
-          console.log('✅ Complete logout successful');
           onLogoutComplete?.();
         } catch (navError) {
           console.error('❌ Navigation error during logout:', navError);

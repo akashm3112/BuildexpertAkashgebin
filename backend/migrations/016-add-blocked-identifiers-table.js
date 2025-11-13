@@ -2,7 +2,6 @@ const { query } = require('../database/connection');
 
 const createBlockedIdentifiersTable = async () => {
   try {
-    console.log('🔒 Creating blocked identifiers table...');
 
     await query(`
       CREATE TABLE IF NOT EXISTS blocked_identifiers (
@@ -24,7 +23,8 @@ const createBlockedIdentifiersTable = async () => {
         ON blocked_identifiers (identifier_type, identifier_value, role);
     `);
 
-    console.log('✅ Blocked identifiers table ready');
+    console.log('✅ Blocked identifiers table created successfully');
+
   } catch (error) {
     console.error('❌ Error creating blocked identifiers table:', error);
     throw error;

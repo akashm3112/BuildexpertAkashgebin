@@ -70,7 +70,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (response.status === 401) {
-        console.log('🔔 Token expired, logging out user');
         await logout();
         return;
       }
@@ -94,27 +93,23 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const token = await AsyncStorage.getItem('token');
       if (!token) return;
 
-      console.log('🔔 Fetching notifications for user:', user.id, 'page:', page);
       const response = await fetch(`${API_BASE_URL}/api/notifications?page=${page}&limit=${limit}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (response.status === 401) {
-        console.log('🔔 Token expired, logging out user');
         await logout();
         return;
       }
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🔔 Notifications API response:', data);
         if (data.status === 'success') {
           setNotifications(data.data.notifications);
           setPagination(data.data.pagination);
           // Update unread count based on notifications
           const unread = data.data.notifications.filter((n: Notification) => !n.is_read).length;
           setUnreadCount(unread);
-          console.log('🔔 Updated notifications state:', data.data.notifications.length, 'notifications,', unread, 'unread');
         }
       } else {
         console.error('🔔 Notifications API error:', response.status, response.statusText);
@@ -152,7 +147,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (response.status === 401) {
-        console.log('🔔 Token expired, logging out user');
         await logout();
         return { notifications: [], pagination: {}, statistics: {} };
       }
@@ -197,7 +191,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (response.status === 401) {
-        console.log('🔔 Token expired, logging out user');
         await logout();
         return;
       }
@@ -223,7 +216,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (response.status === 401) {
-        console.log('🔔 Token expired, logging out user');
         await logout();
         return;
       }
@@ -238,7 +230,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   const resetNotificationState = () => {
-    console.log('🔄 Resetting notification state...');
     setUnreadCount(0);
     setNotifications([]);
     setPagination({
@@ -252,7 +243,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Handle booking-specific notifications with vibration and sound
   // Temporarily disabled due to expo-haptics plugin issue
   const handleBookingNotification = (data: any) => {
-    console.log('Booking notification received:', data);
     // TODO: Re-enable when expo-haptics plugin issue is resolved
   };
 
@@ -273,12 +263,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const socket = socketIOClient(`${API_BASE_URL}`);
     
     socket.on('connect', () => {
-      console.log('Notification socket connected:', socket.id);
       socket.emit('join', user.id);
     });
 
     socket.on('notification_created', (data) => {
-      console.log('🔔 New notification received via socket:', data);
       
       // Trigger vibration and sound for booking-related notifications
       // Temporarily disabled due to expo-haptics plugin issue
@@ -291,19 +279,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('notification_updated', () => {
-      console.log('Notification updated');
       fetchNotifications();
       fetchUnreadCount();
     });
 
     socket.on('notification_deleted', () => {
-      console.log('Notification deleted');
       fetchNotifications();
       fetchUnreadCount();
     });
 
     socket.on('disconnect', () => {
-      console.log('Notification socket disconnected');
     });
 
     socket.on('error', (error) => {

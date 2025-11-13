@@ -142,8 +142,7 @@ export default function ReportCustomerScreen() {
         throw new Error('No authentication token found');
       }
 
-      console.log('🔍 API_BASE_URL:', API_BASE_URL);
-      console.log('🔍 User token exists:', !!token);
+     
       console.log('Submitting report with data:', {
         customerName: formData.customerName,
         incidentDate: convertedDate,
@@ -177,9 +176,7 @@ export default function ReportCustomerScreen() {
         
                 clearTimeout(timeoutId);
 
-        console.log('Response status:', response.status);
         const data = await response.json();
-        console.log('Response data:', data);
 
         if (!response.ok) {
           console.error('❌ API Error:', {
@@ -190,7 +187,6 @@ export default function ReportCustomerScreen() {
           throw new Error(data.message || `Failed to submit report (${response.status})`);
         }
 
-        console.log('✅ Report submitted successfully!');
         showAlert(
           'Report Submitted',
           'Your customer report has been submitted successfully. Our team will review it and take appropriate action.',

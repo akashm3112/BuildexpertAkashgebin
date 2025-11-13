@@ -237,10 +237,7 @@ export default function NotificationsScreen() {
   };
 
   // Debug logging
-  console.log('🔔 NotificationsScreen - Current notifications:', notifications);
-  console.log('🔔 NotificationsScreen - Notifications count:', notifications.length);
-  console.log('🔔 NotificationsScreen - First notification details:', notifications[0]);
-  console.log('🔔 NotificationsScreen - Is first notification read?', notifications[0]?.is_read);
+  
 
   const handleRefresh = async () => {
     setRefreshing(true);

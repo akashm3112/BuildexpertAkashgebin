@@ -58,7 +58,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         setUser(parsed);
       } else {
-        console.log('📱 AuthContext: No user data found in storage');
       }
     } catch (error) {
       console.error('Error loading user:', error);
@@ -88,7 +87,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Note: Push notifications don't work in Expo Go SDK 53+
       // Real-time notifications work via Socket.io (already implemented)
-      console.log('📱 Using Socket.io for real-time notifications (Expo Go compatible)');
     } catch (error) {
       console.error('Error saving user:', error);
     }
@@ -96,10 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      console.log('🚪 Starting comprehensive logout process...');
       
       // Note: Socket.io cleanup handled by NotificationContext
-      console.log('📱 Socket.io notifications will be cleaned up by NotificationContext');
       
       // Clear all AsyncStorage data except language preferences
       const allKeys = await AsyncStorage.getAllKeys();
@@ -107,14 +103,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const keysToRemove = allKeys.filter(key => !keysToKeep.includes(key));
       
       if (keysToRemove.length > 0) {
-        console.log('🧹 Clearing all app data:', keysToRemove.length, 'keys');
         await AsyncStorage.multiRemove(keysToRemove);
       }
       
       // Reset user state
       setUser(null);
       
-      console.log('✅ Logout completed successfully - all data cleared');
     } catch (error) {
       console.error('❌ Error during logout:', error);
       // Even if there's an error, we should still clear the user state
@@ -129,7 +123,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearAllAppData = async () => {
     try {
-      console.log('🧹 Clearing all app data...');
       
       // Get all AsyncStorage keys
       const allKeys = await AsyncStorage.getAllKeys();
@@ -139,11 +132,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const keysToRemove = allKeys.filter(key => !keysToKeep.includes(key));
       
       if (keysToRemove.length > 0) {
-        console.log('🗑️ Removing keys:', keysToRemove);
         await AsyncStorage.multiRemove(keysToRemove);
       }
       
-      console.log('✅ All app data cleared successfully');
     } catch (error) {
       console.error('❌ Error clearing app data:', error);
     }

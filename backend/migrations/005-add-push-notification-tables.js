@@ -6,7 +6,6 @@ const { query } = require('../database/connection');
  */
 const addPushNotificationTables = async () => {
   try {
-    console.log('📱 Creating push notification tables...');
 
     // 1. Create user_push_tokens table
     await query(`
@@ -21,7 +20,6 @@ const addPushNotificationTables = async () => {
         UNIQUE(user_id, push_token)
       );
     `);
-    console.log('✅ user_push_tokens table created');
 
     // 2. Create scheduled_notifications table
     await query(`
@@ -35,7 +33,6 @@ const addPushNotificationTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ scheduled_notifications table created');
 
     // 3. Create notification_logs table for analytics
     await query(`
@@ -51,7 +48,6 @@ const addPushNotificationTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ notification_logs table created');
 
     // 4. Create user_notification_settings table
     await query(`
@@ -69,7 +65,6 @@ const addPushNotificationTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ user_notification_settings table created');
 
     // 5. Create notification_receipts table for delivery tracking
     await query(`
@@ -83,7 +78,6 @@ const addPushNotificationTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ notification_receipts table created');
 
     // 6. Create notification_queue table for failed message retry
     await query(`
@@ -100,7 +94,6 @@ const addPushNotificationTables = async () => {
         updated_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ notification_queue table created');
 
     // 7. Create comprehensive indexes for better performance
     await query(`
@@ -120,9 +113,7 @@ const addPushNotificationTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_notification_queue_next_attempt ON notification_queue(next_attempt_at);
       CREATE INDEX IF NOT EXISTS idx_notification_queue_user_id ON notification_queue(user_id);
     `);
-    console.log('✅ Comprehensive indexes created');
 
-    console.log('🎉 Push notification tables setup completed!');
     return { success: true };
   } catch (error) {
     console.error('❌ Error creating push notification tables:', error);
@@ -137,7 +128,6 @@ if (require.main === module) {
   addPushNotificationTables()
     .then(result => {
       if (result.success) {
-        console.log('✅ Migration completed successfully');
         process.exit(0);
       } else {
         console.error('❌ Migration failed:', result.error);

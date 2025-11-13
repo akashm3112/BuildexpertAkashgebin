@@ -41,37 +41,30 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Fetch unread count from API
   const fetchUnreadCount = async () => {
     if (!user?.id) {
-      console.log('🔍 fetchUnreadCount: No user ID available');
       return;
     }
     
     // Check if user has a token in context first
     if (!user?.token) {
-      console.log('🔍 fetchUnreadCount: No token in user context');
     }
     
     try {
       const token = await tokenManager.getValidToken();
       if (!token) {
-        console.log('🔍 fetchUnreadCount: No valid token available');
         return;
       }
 
-      console.log('🔍 fetchUnreadCount: Making API call...');
       const response = await fetch(`${API_BASE_URL}/api/notifications/unread-count`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
 
-      console.log('🔍 fetchUnreadCount: Response status:', response.status);
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'success') {
           setUnreadCount(data.data.unreadCount);
-          console.log('✅ fetchUnreadCount: Success, unread count:', data.data.unreadCount);
         }
       } else {
         const errorText = await response.text();
-        console.log('❌ fetchUnreadCount: API error:', response.status, errorText);
       }
     } catch (error) {
       console.error('❌ Error fetching unread count:', error);
@@ -81,23 +74,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Fetch all notifications
   const fetchNotifications = async () => {
     if (!user?.id) {
-      console.log('🔍 fetchNotifications: No user ID available');
       return;
     }
     
     try {
       const token = await tokenManager.getValidToken();
       if (!token) {
-        console.log('🔍 fetchNotifications: No valid token available');
         return;
       }
 
-      console.log('🔍 fetchNotifications: Making API call...');
       const response = await fetch(`${API_BASE_URL}/api/notifications`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
 
-      console.log('🔍 fetchNotifications: Response status:', response.status);
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'success') {
@@ -105,11 +94,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           // Update unread count based on notifications
           const unread = data.data.notifications.filter((n: Notification) => !n.is_read).length;
           setUnreadCount(unread);
-          console.log('✅ fetchNotifications: Success, notifications count:', data.data.notifications.length);
         }
       } else {
         const errorText = await response.text();
-        console.log('❌ fetchNotifications: API error:', response.status, errorText);
       }
     } catch (error) {
       console.error('❌ Error fetching notifications:', error);
@@ -168,7 +155,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   const resetNotificationState = () => {
-    console.log('🔄 Resetting notification state...');
     setUnreadCount(0);
     setNotifications([]);
   };
@@ -246,12 +232,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const socket = socketIOClient(`${API_BASE_URL}`);
     
     socket.on('connect', () => {
-      console.log('Notification socket connected:', socket.id);
       socket.emit('join', user.id);
     });
 
     socket.on('notification_created', (data) => {
-      console.log('🔔 New notification received via socket:', data);
       
       // Trigger vibration and sound for booking-related notifications
       if (data && data.type) {
@@ -263,19 +247,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('notification_updated', () => {
-      console.log('Notification updated');
       fetchNotifications();
       fetchUnreadCount();
     });
 
     socket.on('notification_deleted', () => {
-      console.log('Notification deleted');
       fetchNotifications();
       fetchUnreadCount();
     });
 
     socket.on('disconnect', () => {
-      console.log('Notification socket disconnected');
     });
 
     socket.on('error', (error) => {

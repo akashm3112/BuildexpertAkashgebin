@@ -70,7 +70,7 @@ const validateSignup = [
   body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['user', 'provider']).withMessage('Role must be either user or provider'),
-  body('profilePicUrl').optional().isString().withMessage('Profile picture URL must be a string')
+  body('profilePicUrl').optional({ nullable: true, checkFalsy: true }).isString().withMessage('Profile picture URL must be a string')
 ];
 
 const validateLogin = [
@@ -255,7 +255,16 @@ router.post('/signup', [signupLimiter, ...validateSignup], async (req, res) => {
 
     // Clean and normalize identifiers
     const phone = normalizePhoneNumber(req.body.phone);
-    const normalizedEmail = normalizeEmail(email);
+    let normalizedEmail = null;
+    try {
+      normalizedEmail = normalizeEmail(email);
+    } catch (emailError) {
+      logger.error('Email normalization error', { error: emailError.message, email });
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid email format provided.'
+      });
+    }
 
     if (!phone) {
       return res.status(400).json({
@@ -354,10 +363,23 @@ router.post('/signup', [signupLimiter, ...validateSignup], async (req, res) => {
       });
     }
   } catch (error) {
-    logger.error('Signup error', { error: error.message, stack: error.stack });
+    logger.error('Signup error', { 
+      error: error.message, 
+      stack: error.stack,
+      body: {
+        fullName: req.body?.fullName,
+        email: req.body?.email,
+        phone: req.body?.phone,
+        role: req.body?.role,
+        hasProfilePic: !!req.body?.profilePicUrl,
+        profilePicLength: req.body?.profilePicUrl?.length
+      }
+    });
     res.status(500).json({
       status: 'error',
-      message: 'Internal server error'
+      message: process.env.NODE_ENV === 'production' 
+        ? 'Internal server error' 
+        : `Internal server error: ${error.message}`
     });
   }
 });

@@ -119,7 +119,6 @@ export default function ProfileScreen() {
       } else {
         // Initialize userProfile with user context data
         const initialImage = user.profile_pic_url || '';
-        console.log('🖼️ Initial profile picture URL:', initialImage);
         
         setUserProfile((prev) => ({
           ...prev,
@@ -168,7 +167,6 @@ export default function ProfileScreen() {
       await AsyncStorage.setItem('cached_profile_image', imageUrl);
       setCachedImageUrl(imageUrl);
     } catch (error) {
-      console.log('❌ Failed to cache profile image:', error);
     }
   };
 
@@ -178,19 +176,15 @@ export default function ProfileScreen() {
       const cached = await AsyncStorage.getItem('cached_profile_image');
       if (cached) {
         setCachedImageUrl(cached);
-        console.log('📦 Loaded cached profile image:', cached);
         return cached;
       }
     } catch (error) {
-      console.log('❌ Failed to load cached profile image:', error);
     }
     return null;
   };
 
   // Debug: Log userProfile changes
   useEffect(() => {
-    console.log('📊 Current userProfile state:', userProfile);
-    console.log('🖼️ Profile image URL:', userProfile.image);
     
     // Cache the image URL when it changes
     if (userProfile.image && userProfile.image.trim() !== '') {
@@ -200,8 +194,6 @@ export default function ProfileScreen() {
 
   // Debug: Log user context data
   useEffect(() => {
-    console.log('👤 Current user context:', user);
-    console.log('🖼️ User context profile_pic_url:', user?.profile_pic_url);
   }, [user]);
 
   // Cleanup timeout on unmount
@@ -331,7 +323,6 @@ export default function ProfileScreen() {
 
       if (uploadResponse.ok) {
         const data = await uploadResponse.json();
-        console.log('📤 Upload response:', data);
         
         let newImageUrl = '';
         if (data.data && data.data.user && data.data.user.profilePicUrl) {
@@ -344,7 +335,6 @@ export default function ProfileScreen() {
           newImageUrl = data.user.profile_pic_url;
         }
 
-        console.log('🖼️ New image URL:', newImageUrl);
 
         if (newImageUrl) {
           setUserProfile(prev => ({ ...prev, image: newImageUrl }));
@@ -417,11 +407,9 @@ export default function ProfileScreen() {
     try {
       let token = await AsyncStorage.getItem('token');
       if (!token) {
-        console.log('❌ No token found, using user context data');
         // Use user context data as fallback
         if (user) {
           const fallbackImage = user.profile_pic_url || '';
-          console.log('🖼️ Using fallback profile picture URL:', fallbackImage);
           
           setUserProfile((prev) => ({
             ...prev,
@@ -434,8 +422,6 @@ export default function ProfileScreen() {
         return;
       }
       
-      console.log('🔍 Fetching user profile...');
-      console.log('🌐 API URL:', `${API_BASE_URL}/api/users/profile`);
       
       // Fetch user profile
       const profileRes = await fetch(`${API_BASE_URL}/api/users/profile`, {
@@ -443,8 +429,6 @@ export default function ProfileScreen() {
       });
       const profileData = await profileRes.json();
       
-      console.log('📥 Profile response status:', profileRes.status);
-      console.log('📥 Profile response data:', profileData);
       
       if (profileRes.ok && profileData.status === 'success') {
         // Handle different response structures
@@ -452,8 +436,6 @@ export default function ProfileScreen() {
         const profilePicUrl = userData.profilePicUrl || userData.profile_pic_url || '';
         const fullName = userData.fullName || userData.full_name || '';
         
-        console.log('🖼️ Profile picture URL:', profilePicUrl);
-        console.log('👤 Full name:', fullName);
         
         setUserProfile((prev) => ({
           ...prev,
@@ -462,13 +444,10 @@ export default function ProfileScreen() {
           phone: userData.phone || '',
           image: profilePicUrl,
         }));
-        console.log('✅ Profile data set successfully');
       } else {
-        console.log('⚠️ Profile fetch failed, using fallback data');
         // If profile fetch fails, use user data from context as fallback
         if (user) {
           const fallbackImage = user.profile_pic_url || '';
-          console.log('🖼️ Fallback profile picture URL:', fallbackImage);
           
           setUserProfile((prev) => ({
             ...prev,
@@ -508,24 +487,19 @@ export default function ProfileScreen() {
   const fetchBookingsStats = async () => {
     try {
       setStatsLoading(true);
-      console.log('📊 Fetching bookings stats...');
       let token = await AsyncStorage.getItem('token');
       if (!token) {
-        console.log('❌ No token found for bookings stats');
         setStatsLoading(false);
         return;
       }
       
-      console.log('🌐 API URL:', `${API_BASE_URL}/api/bookings`);
       const response = await fetch(`${API_BASE_URL}/api/bookings`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
       
-      console.log('📥 Bookings response status:', response.status);
       const data = await response.json();
-      console.log('📥 Bookings response data:', data);
       
       if (response.ok && data.status === 'success') {
         // Handle different response structures
@@ -533,7 +507,6 @@ export default function ProfileScreen() {
         const pagination = data.data?.pagination || {};
         const totalBookings = pagination.total || bookings.length || 0;
         
-        console.log('📊 Total bookings found:', totalBookings);
         setBookingsCount(totalBookings);
         
         // Calculate ratings and reviews from bookings
@@ -546,11 +519,9 @@ export default function ProfileScreen() {
           }
         });
         
-        console.log('⭐ Ratings calculated:', { ratingsSum, ratingsCount });
         setTotalReviews(ratingsCount);
         setAverageRating(ratingsCount > 0 ? (ratingsSum / ratingsCount) : 0);
       } else {
-        console.log('⚠️ Bookings fetch failed:', data.message || 'Unknown error');
         // Set default values on failure
         setBookingsCount(0);
         setTotalReviews(0);
@@ -811,12 +782,10 @@ export default function ProfileScreen() {
                     style={styles.profileImage} 
                     resizeMode="cover"
                     onLoadStart={() => {
-                      console.log('🔄 Image loading started:', userProfile.image || cachedImageUrl);
                       setImageLoading(true);
                       
                       // Set a timeout to fallback to text avatar if image takes too long
                       const timeout = setTimeout(() => {
-                        console.log('⏰ Image load timeout - falling back to text avatar');
                         setUserProfile(prev => ({ ...prev, image: '' }));
                         setImageLoading(false);
                       }, 5000); // 5 second timeout
@@ -824,7 +793,6 @@ export default function ProfileScreen() {
                       setImageLoadTimeout(timeout);
                     }}
                     onLoadEnd={() => {
-                      console.log('✅ Image loaded successfully');
                       setImageLoading(false);
                       
                       // Clear timeout if image loads successfully
@@ -834,8 +802,7 @@ export default function ProfileScreen() {
                       }
                     }}
                     onError={(error) => {
-                      console.log('❌ Image load error:', error);
-                      console.log('🔄 Falling back to text avatar');
+                     
                       
                       // Clear timeout on error
                       if (imageLoadTimeout) {
@@ -846,8 +813,7 @@ export default function ProfileScreen() {
                       // Check if it's a network error
                       const errorMessage = error.nativeEvent?.error || '';
                       if (errorMessage.includes('Unable to resolve host') || errorMessage.includes('Network request failed')) {
-                        console.log('🌐 Network connectivity issue detected');
-                        console.log('💡 Using text avatar as fallback for network issues');
+                        
                       }
                       
                       // If the profile image fails to load, use text avatar
@@ -1006,7 +972,6 @@ export default function ProfileScreen() {
                   onLoadStart={() => setImageLoading(true)}
                   onLoadEnd={() => setImageLoading(false)}
                   onError={() => {
-                    console.log('❌ Modal image load error');
                     // If the profile image fails to load, use text avatar
                     setUserProfile(prev => ({ ...prev, image: '' }));
                     setImageLoading(false);

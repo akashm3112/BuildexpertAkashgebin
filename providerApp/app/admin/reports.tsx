@@ -439,6 +439,11 @@ export default function ReportsScreen() {
     const userRemovalTarget = resolveUserRemovalTarget(item);
     const providerRemovalTarget = resolveProviderRemovalTarget(item);
 
+    const userRemovalTargetId = userRemovalTarget?.id;
+    const userRemovalTargetName = userRemovalTarget?.name || (item.reported_type === 'User' ? 'Reported User' : 'Reporter');
+    const providerRemovalTargetId = providerRemovalTarget?.id;
+    const providerRemovalTargetName = providerRemovalTarget?.name || (item.reported_type === 'Provider' ? 'Reported Provider' : 'Reporter');
+
     return (
       <Animated.View 
         style={[
@@ -546,10 +551,10 @@ export default function ReportsScreen() {
             </View>
 
             <View style={styles.removeActions}>
-              {userRemovalTarget?.id ? (
+              {userRemovalTargetId ? (
                 <TouchableOpacity
                   style={[styles.actionButton, styles.removeButton]}
-                  onPress={() => removeUser(userRemovalTarget.id, userRemovalTarget.name)}
+                  onPress={() => removeUser(userRemovalTargetId, userRemovalTargetName)}
                 >
                   <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
                   <Text style={styles.actionButtonText}>
@@ -558,10 +563,10 @@ export default function ReportsScreen() {
                 </TouchableOpacity>
               ) : null}
 
-              {providerRemovalTarget?.id ? (
+              {providerRemovalTargetId ? (
                 <TouchableOpacity
                   style={[styles.actionButton, styles.removeButton]}
-                  onPress={() => removeProvider(providerRemovalTarget.id, providerRemovalTarget.name)}
+                  onPress={() => removeProvider(providerRemovalTargetId, providerRemovalTargetName)}
                 >
                   <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
                   <Text style={styles.actionButtonText}>
@@ -908,27 +913,39 @@ export default function ReportsScreen() {
                   {/* User/Provider Removal Actions */}
                   <View style={styles.modalDivider} />
                   
-                  <TouchableOpacity
-                    style={[styles.modalActionButton, styles.modalRemoveUserButton]}
-                    onPress={() => {
-                      removeUser(selectedReport.reported_by_user_id);
-                      setShowReportModal(false);
-                    }}
-                  >
-                    <Trash2 size={20} color="white" />
-                    <Text style={styles.modalActionButtonText}>Remove Reporter (User)</Text>
-                  </TouchableOpacity>
+                  {selectedReport.reported_by_user_id && (
+                    <TouchableOpacity
+                      style={[styles.modalActionButton, styles.modalRemoveUserButton]}
+                      onPress={() => {
+                        const reporterId = selectedReport.reported_by_user_id;
+                        if (!reporterId) {
+                          return;
+                        }
+                        removeUser(reporterId, selectedReport.reporter_name || 'Reporter');
+                        setShowReportModal(false);
+                      }}
+                    >
+                      <Trash2 size={20} color="white" />
+                      <Text style={styles.modalActionButtonText}>Remove Reporter (User)</Text>
+                    </TouchableOpacity>
+                  )}
 
-                  <TouchableOpacity
-                    style={[styles.modalActionButton, styles.modalRemoveProviderButton]}
-                    onPress={() => {
-                      removeProvider(selectedReport.reported_provider_id);
-                      setShowReportModal(false);
-                    }}
-                  >
-                    <Trash2 size={20} color="white" />
-                    <Text style={styles.modalActionButtonText}>Remove Provider</Text>
-                  </TouchableOpacity>
+                  {selectedReport.reported_provider_id && (
+                    <TouchableOpacity
+                      style={[styles.modalActionButton, styles.modalRemoveProviderButton]}
+                      onPress={() => {
+                        const providerId = selectedReport.reported_provider_id;
+                        if (!providerId) {
+                          return;
+                        }
+                        removeProvider(providerId, selectedReport.reported_provider_name || 'Provider');
+                        setShowReportModal(false);
+                      }}
+                    >
+                      <Trash2 size={20} color="white" />
+                      <Text style={styles.modalActionButtonText}>Remove Provider</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
 

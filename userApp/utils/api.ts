@@ -28,7 +28,6 @@ export const apiRequest = async (
 
     // Handle 401 errors globally
     if (response.status === 401) {
-      console.log('🔐 API: Token expired, logging out user');
       if (globalLogout) {
         await globalLogout();
       }

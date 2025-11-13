@@ -5,7 +5,6 @@ const { query } = require('../database/connection');
  */
 const addSampleReports = async () => {
   try {
-    console.log('📝 Adding sample reports...');
 
     // Check if provider_reports table exists
     const tableCheck = await query(`
@@ -17,7 +16,6 @@ const addSampleReports = async () => {
     `);
 
     if (!tableCheck.rows[0].exists) {
-      console.log('📋 Creating provider_reports table...');
       
       await query(`
         CREATE TABLE provider_reports (
@@ -32,7 +30,6 @@ const addSampleReports = async () => {
         );
       `);
       
-      console.log('✅ Provider reports table created');
     }
 
     // Get some users and providers for sample data
@@ -40,7 +37,6 @@ const addSampleReports = async () => {
     const providers = await query('SELECT id, full_name, phone FROM users WHERE role = $1 LIMIT 3', ['provider']);
 
     if (users.rows.length === 0 || providers.rows.length === 0) {
-      console.log('⚠️ No users or providers found, skipping sample reports');
       return;
     }
 
@@ -86,7 +82,6 @@ const addSampleReports = async () => {
       `, [report.reported_by_user_id, report.reported_provider_id, report.report_type, report.description, report.status]);
     }
 
-    console.log(`✅ Added ${sampleReports.length} sample reports`);
 
   } catch (error) {
     console.error('❌ Error adding sample reports:', error);
@@ -98,7 +93,6 @@ const addSampleReports = async () => {
 if (require.main === module) {
   addSampleReports()
     .then(() => {
-      console.log('✅ Sample reports migration completed');
       process.exit(0);
     })
     .catch((error) => {

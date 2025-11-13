@@ -9,7 +9,6 @@ try {
     Notifications = require('expo-notifications');
   }
 } catch (error) {
-  console.log('expo-notifications not available in Expo Go');
 }
 
 /**
@@ -51,7 +50,6 @@ class BookingNotificationService {
   private async initializeNotifications() {
     // Skip initialization in Expo Go
     if (!Notifications) {
-      console.log('📱 Running in Expo Go - notifications disabled');
       return;
     }
 
@@ -111,7 +109,6 @@ class BookingNotificationService {
     try {
       // Skip in Expo Go
       if (!Notifications) {
-        console.log('📱 Sound notification skipped in Expo Go');
         return;
       }
 
@@ -134,7 +131,6 @@ class BookingNotificationService {
    * Handle new booking received notification
    */
   public async notifyNewBookingReceived(customerName: string, serviceName: string, scheduledDate: string) {
-    console.log('📱 New booking received notification triggered');
     
     // Urgent vibration pattern for new bookings
     await this.triggerVibration('heavy');
@@ -158,7 +154,6 @@ class BookingNotificationService {
    * Handle booking cancelled by customer notification
    */
   public async notifyBookingCancelledByCustomer(customerName: string, serviceName: string, reason?: string) {
-    console.log('❌ Booking cancelled by customer notification triggered');
     
     // Warning vibration pattern
     await this.triggerVibration('heavy');
@@ -182,7 +177,6 @@ class BookingNotificationService {
    * Handle booking completed notification
    */
   public async notifyBookingCompleted(customerName: string, serviceName: string, amount: number) {
-    console.log('🎊 Booking completed notification triggered');
     
     // Success vibration pattern
     await this.triggerVibration('heavy');
@@ -206,7 +200,6 @@ class BookingNotificationService {
    * Handle booking confirmed notification
    */
   public async notifyBookingConfirmed(customerName: string, serviceName: string, scheduledDate: string) {
-    console.log('✅ Booking confirmed notification triggered');
     
     // Confirmation vibration
     await this.triggerVibration('medium');
@@ -226,7 +219,6 @@ class BookingNotificationService {
    * Handle payment received notification
    */
   public async notifyPaymentReceived(amount: number, customerName: string, serviceName: string) {
-    console.log('💰 Payment received notification triggered');
     
     // Success vibration pattern
     await this.triggerVibration('medium');
@@ -248,7 +240,6 @@ class BookingNotificationService {
    * Handle customer rating received notification
    */
   public async notifyCustomerRatingReceived(customerName: string, rating: number, serviceName: string) {
-    console.log('⭐ Customer rating received notification triggered');
     
     // Positive vibration pattern
     await this.triggerVibration('medium');
@@ -270,7 +261,6 @@ class BookingNotificationService {
    * Handle booking reminder notification
    */
   public async notifyBookingReminder(customerName: string, serviceName: string, timeUntil: string) {
-    console.log('⏰ Booking reminder notification triggered');
     
     // Gentle reminder vibration
     await this.triggerVibration('light');
@@ -290,7 +280,6 @@ class BookingNotificationService {
    * Handle service requested notification
    */
   public async notifyServiceRequested(customerName: string, serviceName: string, location: string) {
-    console.log('🔔 Service requested notification triggered');
     
     // Attention vibration pattern
     await this.triggerVibration('heavy');
@@ -323,7 +312,6 @@ class BookingNotificationService {
     try {
       // Skip in Expo Go
       if (!Notifications) {
-        console.log('📱 Notification skipped in Expo Go');
         return;
       }
 
@@ -345,7 +333,6 @@ class BookingNotificationService {
    * Test notification system
    */
   public async testNotification() {
-    console.log('🧪 Testing notification system...');
     
     await this.triggerVibration('medium');
     await this.triggerSound('default');

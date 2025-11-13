@@ -4,7 +4,6 @@ require('dotenv').config({ path: './config.env' });
 
 const seedDatabase = async () => {
   try {
-    console.log('🌱 Starting database seeding...');
 
     // Hash password for admin user
     const hashedPassword = await bcrypt.hash('admin123', 12);
@@ -19,13 +18,10 @@ const seedDatabase = async () => {
         INSERT INTO users (full_name, email, phone, password, role, is_verified)
         VALUES ($1, $2, $3, $4, $5, $6)
       `, ['Admin User', 'admin@buildxpert.com', '9999999999', hashedPassword, 'admin', true]);
-      console.log('✅ Admin user created');
     } else {
-      console.log('⏭️  Admin user already exists');
     }
 
     // 2. Insert predefined services (now handled by migrate.js)
-    console.log('⏭️  Services are now handled by migration script');
 
     // 3. Create some sample users for testing
     const sampleUsers = [
@@ -57,12 +53,9 @@ const seedDatabase = async () => {
           INSERT INTO users (full_name, email, phone, password, role, is_verified)
           VALUES ($1, $2, $3, $4, $5, $6)
         `, [user.full_name, user.email, user.phone, user.password, user.role, user.is_verified]);
-        console.log(`✅ Created user: ${user.full_name}`);
       } else {
-        console.log(`⏭️  User already exists: ${user.full_name}`);
       }
     }
-    console.log('✅ Sample users processed');
 
     // 4. Create provider profile for Jane Smith
     const janeUser = await query(`
@@ -79,13 +72,10 @@ const seedDatabase = async () => {
           INSERT INTO provider_profiles (user_id, years_of_experience, service_description, is_engineering_provider)
           VALUES ($1, $2, $3, $4)
         `, [janeUser.rows[0].id, 5, 'Experienced plumber with expertise in residential and commercial plumbing', false]);
-        console.log('✅ Sample provider profile created');
       } else {
-        console.log('⏭️  Sample provider profile already exists');
       }
     }
 
-    console.log('🎉 Database seeding completed successfully!');
 
   } catch (error) {
     console.error('❌ Seeding failed:', error);
@@ -102,14 +92,12 @@ async function ensureTestProvider() {
   let user = await query(`SELECT * FROM users WHERE phone = $1`, [phone]);
   if (!user.rows[0]) {
     await query(`INSERT INTO users (full_name, email, phone, password, role, is_verified) VALUES ($1, $2, $3, $4, $5, $6)`, [fullName, email, phone, password, 'provider', true]);
-    console.log('✅ Test provider user created');
     user = await query(`SELECT * FROM users WHERE phone = $1`, [phone]);
   }
   const userId = user.rows[0].id;
   let profile = await query(`SELECT * FROM provider_profiles WHERE user_id = $1`, [userId]);
   if (!profile.rows[0]) {
     await query(`INSERT INTO provider_profiles (user_id, years_of_experience, service_description, is_engineering_provider) VALUES ($1, $2, $3, $4)`, [userId, 3, 'Seeded test provider profile', false]);
-    console.log('✅ Test provider profile created');
   }
 }
 
@@ -118,7 +106,6 @@ if (require.main === module) {
   seedDatabase()
     .then(() => ensureTestProvider())
     .then(() => {
-      console.log('Seeding completed');
       process.exit(0);
     })
     .catch((error) => {

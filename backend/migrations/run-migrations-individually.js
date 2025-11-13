@@ -82,7 +82,6 @@ const migrations = [
 const testConnection = async () => {
   try {
     await query('SELECT NOW()');
-    console.log('✅ Database connection successful\n');
     return true;
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
@@ -94,15 +93,11 @@ const testConnection = async () => {
 // Run a single migration
 const runMigration = async (migration) => {
   const startTime = Date.now();
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`🚀 Migration ${migration.id}: ${migration.name}`);
-  console.log(`📝 ${migration.description}`);
-  console.log(`${'='.repeat(60)}\n`);
+ 
   
   try {
     await migration.function();
     const executionTime = Date.now() - startTime;
-    console.log(`\n✅ Migration ${migration.id} completed successfully (${executionTime}ms)`);
     return { success: true, executionTime };
   } catch (error) {
     const executionTime = Date.now() - startTime;
@@ -114,14 +109,10 @@ const runMigration = async (migration) => {
 
 // Main function
 const main = async () => {
-  console.log('📊 Migration Runner - Individual Execution');
-  console.log(`🔧 Environment: ${config.isProduction() ? 'Production' : 'Development'}`);
-  console.log(`📡 Database: ${config.get('database.url')?.replace(/:[^:@]+@/, ':****@') || 'Not configured'}\n`);
   
   // Test connection first
   const connected = await testConnection();
   if (!connected) {
-    console.log('❌ Cannot proceed without database connection');
     process.exit(1);
   }
   
@@ -134,20 +125,16 @@ const main = async () => {
     
     if (!migration) {
       console.error(`❌ Migration ${migrationId} not found`);
-      console.log('\nAvailable migrations:');
       migrations.forEach(m => {
-        console.log(`  ${m.id} - ${m.name}`);
       });
       process.exit(1);
     }
     
-    console.log(`Running single migration: ${migration.id}\n`);
     const result = await runMigration(migration);
     process.exit(result.success ? 0 : 1);
   }
   
   // Otherwise, run all migrations one by one
-  console.log(`📋 Running ${migrations.length} migrations one by one...\n`);
   
   let executedCount = 0;
   let failedCount = 0;
@@ -176,33 +163,22 @@ const main = async () => {
   }
   
   // Summary
-  console.log(`\n${'='.repeat(60)}`);
-  console.log('📊 Migration Summary');
-  console.log(`${'='.repeat(60)}`);
-  console.log(`✅ Executed: ${executedCount}`);
-  console.log(`❌ Failed: ${failedCount}`);
-  console.log(`📊 Total: ${migrations.length}`);
-  
+ 
   if (failedCount > 0) {
-    console.log('\n❌ Failed Migrations:');
     results
       .filter(r => !r.result.success)
       .forEach(r => {
-        console.log(`  - ${r.migration.id}: ${r.migration.name}`);
-        console.log(`    Error: ${r.result.error}`);
+        
       });
   }
   
   if (executedCount > 0) {
-    console.log('\n✅ Successfully Executed:');
     results
       .filter(r => r.result.success)
       .forEach(r => {
-        console.log(`  - ${r.migration.id}: ${r.migration.name} (${r.result.executionTime}ms)`);
       });
   }
   
-  console.log(`\n${'='.repeat(60)}\n`);
   
   process.exit(failedCount > 0 ? 1 : 0);
 };

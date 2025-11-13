@@ -60,7 +60,6 @@ class WebRTCService {
   constructor() {
     this.isWebRTCAvailable = Platform.OS !== 'web' && !!RTCPeerConnection;
     if (this.isWebRTCAvailable) {
-      console.log('📞 WebRTC Service initialized');
     } else {
       console.warn('⚠️ WebRTC not available on this platform (web browser). Calling features disabled.');
     }
@@ -78,7 +77,6 @@ class WebRTCService {
   // Initialize Socket.io connection
   async initialize(userId: string, token: string) {
     if (this.socket?.connected) {
-      console.log('📞 Socket already connected');
       return;
     }
 
@@ -93,12 +91,10 @@ class WebRTCService {
     });
 
     this.socket.on('connect', () => {
-      console.log('📞 Socket connected:', this.socket?.id);
       this.socket?.emit('join', userId);
     });
 
     this.socket.on('disconnect', () => {
-      console.log('📞 Socket disconnected');
       this.cleanup();
     });
 
@@ -111,34 +107,29 @@ class WebRTCService {
 
     // Incoming call
     this.socket.on('call:incoming', (data: CallData) => {
-      console.log('📞 Incoming call:', data);
       this.currentCall = data;
       this.events.onIncomingCall?.(data);
     });
 
     // Call accepted
     this.socket.on('call:accepted', async ({ receiverId, socketId }) => {
-      console.log('📞 Call accepted by:', receiverId);
       this.events.onCallAccepted?.();
       await this.createOffer();
     });
 
     // Call rejected
     this.socket.on('call:rejected', ({ reason }) => {
-      console.log('📞 Call rejected:', reason);
       this.events.onCallRejected?.(reason);
       this.cleanup();
     });
 
     // WebRTC Offer received
     this.socket.on('call:offer', async ({ offer, from }) => {
-      console.log('📞 Received offer from:', from);
       await this.handleOffer(offer, from);
     });
 
     // WebRTC Answer received
     this.socket.on('call:answer', async ({ answer }) => {
-      console.log('📞 Received answer');
       await this.handleAnswer(answer);
     });
 
@@ -147,7 +138,6 @@ class WebRTCService {
       if (candidate && this.peerConnection) {
         try {
           await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-          console.log('📞 ICE candidate added');
         } catch (error) {
           console.error('❌ Error adding ICE candidate:', error);
         }
@@ -156,7 +146,6 @@ class WebRTCService {
 
     // Call ended
     this.socket.on('call:ended', ({ duration, endedBy }) => {
-      console.log('📞 Call ended by:', endedBy, 'Duration:', duration);
       this.events.onCallEnded?.(duration || 0, endedBy);
       this.cleanup();
     });
@@ -175,7 +164,6 @@ class WebRTCService {
         return;
       }
 
-      console.log('📞 Starting call...', callData);
       this.currentCall = callData;
 
       await this.ensureServerCallSetup(callData);
@@ -191,7 +179,6 @@ class WebRTCService {
           },
           video: false,
         });
-        console.log('📞 Audio stream acquired successfully');
       } catch (mediaError: any) {
         console.error('❌ Failed to get audio stream:', mediaError);
         if (mediaError.name === 'NotAllowedError') {
@@ -214,7 +201,6 @@ class WebRTCService {
       // Handle ICE candidates
       this.peerConnection!.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log('📞 Sending ICE candidate');
           this.socket?.emit('call:ice-candidate', {
             bookingId: callData.bookingId,
             candidate: event.candidate,
@@ -227,7 +213,6 @@ class WebRTCService {
       this.peerConnection!.onconnectionstatechange = () => {
         const pc = this.peerConnection;
         if (pc) {
-          console.log('📞 Connection state:', pc.connectionState);
           switch (pc.connectionState) {
             case 'connected':
               this.callStartTime = Date.now();
@@ -249,7 +234,6 @@ class WebRTCService {
               this.cleanup();
               break;
             case 'closed':
-              console.log('📞 Connection closed');
               this.cleanup();
               break;
           }
@@ -259,7 +243,6 @@ class WebRTCService {
       // Handle ICE connection state changes
       this.peerConnection!.oniceconnectionstatechange = () => {
         if (this.peerConnection) {
-          console.log('📞 ICE connection state:', this.peerConnection.iceConnectionState);
           if (this.peerConnection.iceConnectionState === 'failed') {
             console.error('📞 ICE connection failed');
             this.events.onError?.('Network connection failed. Please check your internet connection.');
@@ -292,7 +275,6 @@ class WebRTCService {
         throw new Error('No incoming call to accept');
       }
 
-      console.log('📞 Accepting call...');
 
       // Get local audio stream
       this.localStream = await mediaDevices.getUserMedia({
@@ -311,7 +293,6 @@ class WebRTCService {
       // Handle ICE candidates
       this.peerConnection!.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log('📞 Sending ICE candidate');
           this.socket?.emit('call:ice-candidate', {
             bookingId: this.currentCall?.bookingId,
             candidate: event.candidate,
@@ -322,7 +303,6 @@ class WebRTCService {
 
       // Handle connection state changes
       this.peerConnection!.onconnectionstatechange = () => {
-        console.log('📞 Connection state:', this.peerConnection?.connectionState);
         if (this.peerConnection?.connectionState === 'connected') {
           this.callStartTime = Date.now();
           this.events.onCallConnected?.();
@@ -346,7 +326,6 @@ class WebRTCService {
   rejectCall(reason = 'declined') {
     if (!this.currentCall) return;
 
-    console.log('📞 Rejecting call...');
     this.socket?.emit('call:reject', {
       bookingId: this.currentCall.bookingId,
       reason,
@@ -367,7 +346,6 @@ class WebRTCService {
 
       await this.peerConnection.setLocalDescription(offer);
 
-      console.log('📞 Sending offer');
       this.socket?.emit('call:offer', {
         bookingId: this.currentCall?.bookingId,
         offer: this.peerConnection.localDescription,
@@ -389,7 +367,6 @@ class WebRTCService {
       const answer = await this.peerConnection.createAnswer();
       await this.peerConnection.setLocalDescription(answer);
 
-      console.log('📞 Sending answer');
       this.socket?.emit('call:answer', {
         bookingId: this.currentCall?.bookingId,
         answer: this.peerConnection.localDescription,
@@ -407,7 +384,6 @@ class WebRTCService {
       if (!this.peerConnection) return;
 
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-      console.log('📞 Answer set successfully');
     } catch (error) {
       console.error('❌ Error handling answer:', error);
       this.events.onError?.('Failed to handle answer');
@@ -420,7 +396,6 @@ class WebRTCService {
 
     const duration = this.callStartTime ? Math.floor((Date.now() - this.callStartTime) / 1000) : 0;
 
-    console.log('📞 Ending call... Duration:', duration);
 
     this.socket?.emit('call:end', {
       bookingId: this.currentCall.bookingId,
@@ -469,7 +444,6 @@ class WebRTCService {
   }
 
   private cleanup() {
-    console.log('📞 Cleaning up call resources');
 
     if (this.localStream) {
       this.localStream.getTracks().forEach((track: any) => track.stop());

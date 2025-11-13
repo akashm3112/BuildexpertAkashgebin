@@ -7,7 +7,6 @@ const bcrypt = require('bcryptjs');
  */
 async function hashExistingPasswords() {
   try {
-    console.log('🔐 Starting password hashing process...');
     
     // Get all users with plain text passwords (not starting with $2a$ or $2b$)
     const users = await getRows(`
@@ -17,16 +16,12 @@ async function hashExistingPasswords() {
     `);
     
     if (users.length === 0) {
-      console.log('✅ All passwords are already hashed!');
       return;
     }
     
-    console.log(`📊 Found ${users.length} users with plain text passwords:`);
     users.forEach(user => {
-      console.log(`  - ${user.role}: ${user.phone} (ID: ${user.id})`);
     });
     
-    console.log('\n🔄 Hashing passwords...');
     
     for (const user of users) {
       try {
@@ -39,14 +34,12 @@ async function hashExistingPasswords() {
           [hashedPassword, user.id]
         );
         
-        console.log(`✅ Hashed password for ${user.role} ${user.phone}`);
       } catch (error) {
         console.error(`❌ Failed to hash password for ${user.role} ${user.phone}:`, error.message);
       }
     }
     
-    console.log('\n🎉 Password hashing completed!');
-    console.log(`✅ Successfully hashed ${users.length} passwords`);
+  
     
   } catch (error) {
     console.error('❌ Error during password hashing:', error);
@@ -58,7 +51,6 @@ async function hashExistingPasswords() {
 if (require.main === module) {
   hashExistingPasswords()
     .then(() => {
-      console.log('✅ Password hashing script completed successfully');
       process.exit(0);
     })
     .catch((error) => {

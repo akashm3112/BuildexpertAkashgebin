@@ -124,7 +124,6 @@ export default function ServiceListingScreen() {
             found = data.data.services.find((service: any) => service.name && routeToName[category as string] === service.name);
           }
           if (found) {
-            console.log('DEBUG: Found service for category', category, found);
             setServiceId(found.id);
             setCategoryName(found.name.charAt(0).toUpperCase() + found.name.slice(1).replace('-', ' '));
             
@@ -157,7 +156,6 @@ export default function ServiceListingScreen() {
 
   useEffect(() => {
     if (serviceId) {
-      console.log('DEBUG: Fetching providers for serviceId', serviceId);
       fetchProviders();
     } else if (!isLoading) {
       setError('Service not found. Please try again from the home screen.');
@@ -171,7 +169,6 @@ export default function ServiceListingScreen() {
       setError(null);
 
       const url = `${API_BASE_URL}/api/public/services/${serviceId}/providers`;
-      console.log('DEBUG: Fetching providers from', url);
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -181,15 +178,12 @@ export default function ServiceListingScreen() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('DEBUG: Providers response:', data);
         
         if (data.status === 'success' && Array.isArray(data.data.providers)) {
           const rawProviders = data.data.providers;
-          console.log('DEBUG: Raw providers array:', rawProviders);
           
           // If no providers found, set empty array instead of error
           if (rawProviders.length === 0) {
-            console.log('DEBUG: No providers found for this service');
             setProviders([]);
             setIsLoading(false);
             return;
@@ -239,8 +233,6 @@ export default function ServiceListingScreen() {
         }
       } else {
         const errorText = await response.text();
-        console.log('Failed to fetch providers:', response.status);
-        console.log('Error response:', errorText);
         
         if (response.status === 404) {
           setError('No providers found for this service');
@@ -290,11 +282,8 @@ export default function ServiceListingScreen() {
     return matchesSearch && matchesRating && matchesPrice && matchesExperience && matchesVerified && matchesAvailability;
   });
 
-  console.log('DEBUG: filteredProviders:', filteredProviders);
-  console.log('DEBUG: uniqueProviders:', uniqueProviders);
-  console.log('DEBUG: filters:', filters);
+ 
   if (filteredProviders.length === 0 && providers.length > 0) {
-    console.log('DEBUG: No providers after filtering, rendering raw providers for diagnosis.');
   }
 
   const toggleFavorite = (providerId: string) => {

@@ -42,7 +42,6 @@ export default function LogoutButton({
     try {
       onLogoutStart?.();
       
-      console.log('🚪 Starting complete logout process...');
       
       // Reset notification state first
       resetNotificationState();
@@ -53,7 +52,6 @@ export default function LogoutButton({
       // Navigate to auth screen (router.replace already handles stack reset)
       router.replace('/(auth)/login');
       
-      console.log('✅ Complete logout successful');
       onLogoutComplete?.();
     } catch (error) {
       console.error('❌ Logout error:', error);

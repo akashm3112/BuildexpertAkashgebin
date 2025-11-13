@@ -151,9 +151,7 @@ export default function BookingsScreen() {
     const socket = socketIOClient(`${API_BASE_URL}`);
     socket.on('connect', () => console.log('Socket connected:', socket.id));
     socket.emit('join', user.id);
-    console.log('Joining room:', user.id);
     socket.on('booking_created', (data) => {
-      console.log('Received booking_created event', data);
       if (data && data.booking) {
         setBookings(prev => [data.booking, ...prev]); // Prepend new booking for instant UI
       }
@@ -161,7 +159,6 @@ export default function BookingsScreen() {
       loadBookings(false);
     });
     socket.on('booking_updated', () => {
-      console.log('Received booking_updated event');
       loadBookings(false);
     });
     socket.on('disconnect', () => console.log('Socket disconnected'));
@@ -192,7 +189,6 @@ export default function BookingsScreen() {
         return;
       }
 
-      console.log('Fetching provider bookings...');
       
       const response = await fetch(`${API_BASE_URL}/api/providers/bookings`, {
         headers: {
@@ -200,14 +196,11 @@ export default function BookingsScreen() {
         }
       });
 
-      console.log('Response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Backend response:', data);
         
         if (data.status === 'success' && data.data.bookings) {
-          console.log('Bookings data received:', data.data.bookings);
           // Debug location data
           data.data.bookings.forEach((booking: any, index: number) => {
             console.log(`Booking ${index + 1} location data:`, {
@@ -222,8 +215,6 @@ export default function BookingsScreen() {
         }
       } else {
         const errorText = await response.text();
-        console.log('Failed to fetch bookings:', response.status);
-        console.log('Error response:', errorText);
         
         if (response.status === 403) {
           setError('Access denied. Only providers can view bookings.');
@@ -314,7 +305,6 @@ export default function BookingsScreen() {
     if (isOtherReportReason) reason = customReportOtherReason;
     if (!reason.trim() || !reportBooking) return;
 
-    console.log(`Reporting booking ${reportBooking.id} for reason: ${reason}`);
 
     setReportModalVisible(false);
     setReportBooking(null);
@@ -333,7 +323,6 @@ export default function BookingsScreen() {
   const handleRatingSubmit = async () => {
     if (!ratingBookingId || customerRating === 0) return;
 
-    console.log(`Booking ${ratingBookingId} completed. Customer rated: ${customerRating} stars. Feedback: ${ratingFeedback}`);
 
     await handleBookingAction(ratingBookingId, 'complete');
     setRatingModalVisible(false);
@@ -346,7 +335,6 @@ export default function BookingsScreen() {
   const handleRatingSkip = async () => {
     if (!ratingBookingId) return;
 
-    console.log(`Booking ${ratingBookingId} completed. Rating skipped.`);
     await handleBookingAction(ratingBookingId, 'complete');
     setRatingModalVisible(false);
     setRatingBookingId(null);

@@ -253,7 +253,6 @@ export default function EditProfileScreen() {
         ...(profileImageUrl && { profilePicUrl: profileImageUrl }),
       };
 
-      console.log('Sending update data:', updateData);
 
       // Update user profile via API
       const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
@@ -265,13 +264,10 @@ export default function EditProfileScreen() {
         body: JSON.stringify(updateData),
       });
 
-      console.log('Response status:', response.status);
       const responseText = await response.text();
-      console.log('Response body:', responseText);
 
       if (response.ok) {
         const responseData = JSON.parse(responseText);
-        console.log('Profile updated successfully:', responseData);
 
         // Update local user data
         const updatedUser = {

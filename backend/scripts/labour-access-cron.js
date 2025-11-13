@@ -29,7 +29,6 @@ const runLabourAccessCron = async () => {
 if (require.main === module) {
   runLabourAccessCron()
     .then((results) => {
-      console.log('Labour access cron job completed successfully:', results);
       process.exit(0);
     })
     .catch((error) => {

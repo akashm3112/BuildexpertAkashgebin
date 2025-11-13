@@ -99,7 +99,6 @@ export default function ProfileScreen() {
         // Initialize userProfile with user context data (but don't set name if it's empty)
         if (user) {
           const initialImage = user.profile_pic_url || '';
-          console.log('🖼️ Initial profile picture URL:', initialImage);
           console.log('👤 User context data:', {
             fullName: user.fullName,
             full_name: user.full_name,
@@ -147,16 +146,13 @@ export default function ProfileScreen() {
         });
         
         if (shouldFetchProfile) {
-          console.log('🔄 Fetching profile data (cache expired or name missing)');
           fetchUserProfile();
         } else {
-          console.log('✅ Using cached profile data');
         }
         
         if (shouldFetchStats) {
           fetchStats();
         } else {
-          console.log('✅ Using cached stats data');
         }
         
         // Mark as initialized after first run
@@ -171,7 +167,6 @@ export default function ProfileScreen() {
   // Fetch stats function
   const fetchStats = async () => {
     try {
-      console.log('🔄 Fetching stats from backend...');
       
       let token = user?.token;
       if (!token) {
@@ -179,49 +174,37 @@ export default function ProfileScreen() {
         token = storedToken || undefined;
       }
       if (!token) {
-        console.log('🔍 fetchStats: No token available');
         return;
       }
       
-      console.log('🔍 fetchStats: Token available, making API calls...');
 
       // Fetch service count (existing logic)
-      console.log('🔍 fetchStats: Fetching service registrations...');
       const serviceRes = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      console.log('🔍 fetchStats: Service registrations response status:', serviceRes.status);
       if (serviceRes.ok) {
         const data = await serviceRes.json();
         setServiceCount(data.data.registeredServices.length);
-        console.log('✅ fetchStats: Service count set to:', data.data.registeredServices.length);
       } else {
         const errorText = await serviceRes.text();
-        console.log('❌ fetchStats: Service registrations error:', serviceRes.status, errorText);
       }
 
       // Fetch completed bookings for jobs done
-      console.log('🔍 fetchStats: Fetching completed bookings...');
       const jobsRes = await fetch(`${API_BASE_URL}/api/providers/bookings?status=completed`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      console.log('🔍 fetchStats: Completed bookings response status:', jobsRes.status);
       if (jobsRes.ok) {
         const data = await jobsRes.json();
         setJobsDone(data.data.bookings.length);
-        console.log('✅ fetchStats: Jobs done set to:', data.data.bookings.length);
       } else {
         const errorText = await jobsRes.text();
-        console.log('❌ fetchStats: Completed bookings error:', jobsRes.status, errorText);
         setJobsDone(0);
       }
 
       // Fetch all bookings to calculate average rating
-      console.log('🔍 fetchStats: Fetching all bookings for ratings...');
       const bookingsRes = await fetch(`${API_BASE_URL}/api/providers/bookings`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      console.log('🔍 fetchStats: All bookings response status:', bookingsRes.status);
       if (bookingsRes.ok) {
         const data = await bookingsRes.json();
         const bookings = data.data.bookings;
@@ -232,15 +215,12 @@ export default function ProfileScreen() {
           const avg = ratings.reduce((sum: number, r: number) => sum + r, 0) / ratings.length;
           setAverageRating(Math.round(avg * 10) / 10);
           setTotalRatings(ratings.length);
-          console.log('✅ fetchStats: Average rating set to:', Math.round(avg * 10) / 10, 'from', ratings.length, 'ratings');
         } else {
           setAverageRating(0);
           setTotalRatings(0);
-          console.log('✅ fetchStats: No ratings found, set to 0');
         }
       } else {
         const errorText = await bookingsRes.text();
-        console.log('❌ fetchStats: All bookings error:', bookingsRes.status, errorText);
         setAverageRating(0);
         setTotalRatings(0);
       }
@@ -248,7 +228,6 @@ export default function ProfileScreen() {
       // Update cache tracking
       setLastStatsFetch(Date.now());
       setIsStatsLoaded(true);
-      console.log('✅ Stats data cached successfully');
     } catch (e) {
       setServiceCount(0);
       setJobsDone(0);
@@ -318,7 +297,6 @@ export default function ProfileScreen() {
 
   // Debug: Log userProfile changes
   useEffect(() => {
-    console.log('📊 Current userProfile state:', userProfile);
     
     // Cache the image URL when it changes
     if (userProfile.image && userProfile.image.trim() !== '') {
@@ -328,13 +306,11 @@ export default function ProfileScreen() {
 
   // Debug: Log user context data and update profile if needed
   useEffect(() => {
-    console.log('👤 Current user context:', user);
     
     // If user context has a valid name and current profile doesn't, update it
     const userName = user?.fullName || user?.full_name;
     if (user && userName && userName.trim() !== '' && 
         (!userProfile.name || userProfile.name.trim() === '' || userProfile.name === t('profile.serviceProvider'))) {
-      console.log('🔄 Updating profile name from user context:', userName);
       setUserProfile(prev => ({
         ...prev,
         name: userName
@@ -345,7 +321,6 @@ export default function ProfileScreen() {
     const userProfilePic = user?.profile_pic_url || user?.profilePicUrl;
     if (user && userProfilePic && userProfilePic.trim() !== '' && 
         (!userProfile.image || userProfile.image.trim() === '')) {
-      console.log('🔄 Updating profile picture from user context:', userProfilePic);
       setUserProfile(prev => ({
         ...prev,
         image: userProfilePic
@@ -446,7 +421,6 @@ export default function ProfileScreen() {
 
   // Manual refresh function for users who want fresh data
   const handleRefreshProfile = async () => {
-    console.log('🔄 Manual refresh requested by user');
     setRefreshing(true);
     setLastProfileFetch(0); // Force refresh by resetting cache time
     setLastStatsFetch(0);
@@ -468,7 +442,6 @@ export default function ProfileScreen() {
       await AsyncStorage.setItem('cached_profile_image', imageUrl);
       setCachedImageUrl(imageUrl);
     } catch (error) {
-      console.log('❌ Failed to cache profile image:', error);
     }
   };
 
@@ -477,11 +450,9 @@ export default function ProfileScreen() {
       const cached = await AsyncStorage.getItem('cached_profile_image');
       if (cached) {
         setCachedImageUrl(cached);
-        console.log('📦 Loaded cached profile image:', cached);
         return cached;
       }
     } catch (error) {
-      console.log('❌ Failed to load cached profile image:', error);
     }
     return null;
   };
@@ -490,7 +461,6 @@ export default function ProfileScreen() {
     try {
       const pendingUpload = await AsyncStorage.getItem('pending_profile_upload');
       if (pendingUpload) {
-        console.log('🔄 Found pending profile upload, attempting to retry...');
         
         // Try to upload the pending image
         const token = await AsyncStorage.getItem('token');
@@ -499,7 +469,6 @@ export default function ProfileScreen() {
           try {
             const testResponse = await fetch(`${API_BASE_URL}/health`, { method: 'GET' });
             if (testResponse.ok) {
-              console.log('✅ Network connectivity restored, retrying upload...');
               
               // Remove the pending upload flag before attempting
               await AsyncStorage.removeItem('pending_profile_upload');
@@ -508,7 +477,6 @@ export default function ProfileScreen() {
               await uploadProfilePicture(pendingUpload);
             }
           } catch (networkError) {
-            console.log('🌐 Network still not available, keeping pending upload');
           }
         }
       }
@@ -519,11 +487,9 @@ export default function ProfileScreen() {
 
   const fetchUserProfile = async () => {
     try {
-      console.log('🔄 Fetching user profile from backend...');
       
       const token = await tokenManager.getValidToken();
       if (!token) {
-        console.log('❌ No valid token available for profile fetch');
         return;
       }
 
@@ -534,7 +500,6 @@ export default function ProfileScreen() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('📥 Provider profile response:', data);
         
         const profileData = data.data?.profile || {};
         
@@ -564,15 +529,12 @@ export default function ProfileScreen() {
         // Update cache tracking
         setLastProfileFetch(Date.now());
         setIsProfileLoaded(true);
-        console.log('✅ Profile data cached successfully');
         
         // If we got a valid name, ensure it's displayed
         if (profileData.full_name && profileData.full_name.trim() !== '') {
-          console.log('✅ Valid name fetched:', profileData.full_name);
         }
       } else {
         // Fallback to user profile endpoint if provider endpoint fails
-        console.log('⚠️ Provider profile endpoint failed, falling back to user profile');
         
         response = await fetch(`${API_BASE_URL}/api/users/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -580,7 +542,6 @@ export default function ProfileScreen() {
 
         if (response.ok) {
           const data = await response.json();
-          console.log('📥 User profile response:', data);
           
           const profileData = data.data?.user || data.data || {};
           
@@ -610,12 +571,10 @@ export default function ProfileScreen() {
           // Update cache tracking
           setLastProfileFetch(Date.now());
           setIsProfileLoaded(true);
-          console.log('✅ Profile data cached successfully');
           
           // If we got a valid name, ensure it's displayed
           if (profileData.fullName || profileData.full_name) {
             const validName = profileData.fullName || profileData.full_name;
-            console.log('✅ Valid name fetched from user endpoint:', validName);
           }
         }
       }
@@ -625,13 +584,7 @@ export default function ProfileScreen() {
   };
 
   const handleProfilePictureAction = () => {
-    console.log('👤 Current userProfile:', userProfile);
-    console.log('📦 Current cachedImageUrl:', cachedImageUrl);
-    console.log('👤 User context profile_pic_url:', user?.profile_pic_url);
-    console.log('👤 User context profilePicUrl:', user?.profilePicUrl);
-    console.log('👤 userProfile.name:', userProfile.name);
-    console.log('👤 userProfile.name length:', userProfile.name?.length);
-    console.log('👤 userProfile.name trimmed:', userProfile.name?.trim());
+    
     
     // Check if there's any profile picture (current, cached, or from user context)
     const hasProfilePicture = (userProfile.image && userProfile.image.trim() !== '') || 
@@ -725,10 +678,6 @@ export default function ProfileScreen() {
         return;
       }
 
-      console.log('📤 Starting profile picture upload...');
-      console.log('🖼️ Image URI:', imageUri);
-      console.log('🌐 API Base URL:', API_BASE_URL);
-
       optimizedImage = await ImageManipulator.manipulateAsync(
         imageUri,
         [{ resize: { width: 1080 } }],
@@ -740,8 +689,9 @@ export default function ProfileScreen() {
         return;
       }
 
-      if (optimizedImage.uri) {
-        setUserProfile(prev => ({ ...prev, image: optimizedImage.uri }));
+      const localUri = optimizedImage?.uri;
+      if (localUri) {
+        setUserProfile(prev => ({ ...prev, image: localUri }));
       }
 
       const payload = `data:image/jpeg;base64,${optimizedImage.base64}`;
@@ -757,11 +707,9 @@ export default function ProfileScreen() {
         }),
       });
       
-      console.log('📡 Upload response status:', uploadResponse.status);
 
       if (uploadResponse.ok) {
         const data = await uploadResponse.json();
-        console.log('📤 Upload response:', data);
         
         let newImageUrl = '';
         if (data.data && data.data.user && data.data.user.profilePicUrl) {
@@ -774,7 +722,6 @@ export default function ProfileScreen() {
           newImageUrl = data.profile_pic_url;
         }
         
-        console.log('🖼️ New image URL:', newImageUrl);
         
         if (newImageUrl) {
           setUserProfile(prev => ({ ...prev, image: newImageUrl }));
@@ -804,13 +751,11 @@ export default function ProfileScreen() {
       // Check if it's a network connectivity issue
       const errorMessage = (error as Error)?.message || '';
       if (errorMessage.includes('Network request failed') || errorMessage.includes('Unable to resolve host')) {
-        console.log('🌐 Network connectivity issue during upload');
         
         // Store the image locally for later upload when network is restored
         try {
           const optimizedForOffline = optimizedImage?.uri || imageUri;
           await AsyncStorage.setItem('pending_profile_upload', optimizedForOffline);
-          console.log('💾 Stored image locally for later upload');
           
           // Update UI with local image immediately
           setUserProfile(prev => ({ ...prev, image: optimizedForOffline }));
@@ -829,7 +774,6 @@ export default function ProfileScreen() {
 
   const handleDeleteProfilePicture = async () => {
     try {
-      console.log('🗑️ Starting profile picture deletion...');
       
       const token = await AsyncStorage.getItem('token');
       if (!token) {
@@ -837,7 +781,6 @@ export default function ProfileScreen() {
         return;
       }
 
-      console.log('📤 Sending delete request with profilePicUrl: ""');
       
       const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
         method: 'PUT',
@@ -850,12 +793,9 @@ export default function ProfileScreen() {
         }),
       });
 
-      console.log('📥 Response status:', response.status);
-      console.log('📥 Response ok:', response.ok);
 
       if (response.ok) {
         const responseData = await response.json();
-        console.log('📥 Response data:', responseData);
         
         setUserProfile(prev => ({ ...prev, image: '' }));
         await AsyncStorage.removeItem('cached_profile_image');
@@ -965,12 +905,10 @@ export default function ProfileScreen() {
                 resizeMode="cover"
                 onLoadStart={() => {
                   const imageUri = userProfile.image || cachedImageUrl || user?.profile_pic_url || user?.profilePicUrl;
-                  console.log('🔄 Image loading started:', imageUri);
                   setImageLoading(true);
                   
                   // Set a timeout to fallback to text avatar if image takes too long
                   const timeout = setTimeout(() => {
-                    console.log('⏰ Image load timeout - falling back to text avatar');
                     setUserProfile(prev => ({ ...prev, image: '' }));
                     setImageLoading(false);
                   }, 5000); // 5 second timeout
@@ -978,7 +916,6 @@ export default function ProfileScreen() {
                   setImageLoadTimeout(timeout);
                 }}
                 onLoadEnd={() => {
-                  console.log('✅ Image loaded successfully');
                   setImageLoading(false);
                   
                   // Clear timeout if image loads successfully
@@ -988,8 +925,6 @@ export default function ProfileScreen() {
                   }
                 }}
                 onError={(error) => {
-                  console.log('❌ Image load error:', error);
-                  console.log('🔄 Falling back to text avatar');
                   
                   // Clear timeout on error
                   if (imageLoadTimeout) {
@@ -1000,15 +935,11 @@ export default function ProfileScreen() {
                   // Check if it's a network error
                   const errorMessage = error.nativeEvent?.error || '';
                   if (errorMessage.includes('Unable to resolve host') || errorMessage.includes('Network request failed')) {
-                    console.log('🌐 Network connectivity issue detected');
-                    console.log('💡 Using text avatar as fallback for network issues');
                     
                     // For network errors, keep the image URL but show text avatar
                     // This way when network is restored, the image can be retried
-                    console.log('📦 Keeping image URL for future retry:', userProfile.image);
                   } else {
                     // For other errors (invalid URL, etc.), clear the image
-                    console.log('🗑️ Clearing invalid image URL');
                     setUserProfile(prev => ({ ...prev, image: '' }));
                     // Also clear from cache if it's invalid
                     AsyncStorage.removeItem('cached_profile_image').catch(console.error);

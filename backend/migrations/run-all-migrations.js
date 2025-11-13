@@ -129,6 +129,13 @@ const migrations = [
     description: 'Stores pending push notifications for users without active tokens',
     function: createPendingPushNotificationsTable,
     required: true
+  },
+  {
+    id: '016',
+    name: 'Add Blocked Identifiers Table',
+    description: 'Creates blocked_identifiers table for admin to block phone numbers and emails',
+    function: createBlockedIdentifiersTable,
+    required: true
   }
 ];
 
@@ -146,7 +153,6 @@ const createMigrationsTable = async () => {
         execution_time_ms INTEGER
       );
     `);
-    console.log('✅ Migrations tracking table ready');
   } catch (error) {
     console.error('❌ Error creating migrations table:', error);
     throw error;
@@ -194,8 +200,7 @@ const recordMigration = async (migration, success, errorMessage = null, executio
 // Run a single migration
 const runMigration = async (migration) => {
   const startTime = Date.now();
-  console.log(`\n🚀 Running migration ${migration.id}: ${migration.name}`);
-  console.log(`📝 Description: ${migration.description}`);
+
   
   try {
     // Execute the migration function
@@ -204,7 +209,6 @@ const runMigration = async (migration) => {
     
     // If we get here, migration was successful
     await recordMigration(migration, true, null, executionTime);
-    console.log(`✅ Migration ${migration.id} completed successfully (${executionTime}ms)`);
     return { success: true, executionTime };
   } catch (error) {
     const executionTime = Date.now() - startTime;
@@ -223,15 +227,11 @@ const runAllMigrations = async (options = {}) => {
   } = options;
   
   try {
-    console.log('🚀 Starting comprehensive database migration...');
-    console.log(`🔧 Environment: ${config.isProduction() ? 'Production' : 'Development'}`);
-    console.log(`📊 Total migrations: ${migrations.length}`);
+   
     
     if (verbose) {
-      console.log('\n📋 Migration Plan:');
       migrations.forEach((migration, index) => {
         const status = migration.required ? 'Required' : 'Optional';
-        console.log(`  ${index + 1}. ${migration.id} - ${migration.name} (${status})`);
       });
     }
 
@@ -246,7 +246,6 @@ const runAllMigrations = async (options = {}) => {
     for (const migration of migrations) {
       // Check if migration should be skipped
       if (skipOptional && !migration.required) {
-        console.log(`⏭️  Skipping optional migration ${migration.id}: ${migration.name}`);
         skippedCount++;
         continue;
       }
@@ -254,7 +253,6 @@ const runAllMigrations = async (options = {}) => {
       // Check if migration has already been executed
       const alreadyExecuted = await isMigrationExecuted(migration.id);
       if (alreadyExecuted && !force) {
-        console.log(`✅ Migration ${migration.id} already executed, skipping`);
         skippedCount++;
         continue;
       }
@@ -279,37 +277,27 @@ const runAllMigrations = async (options = {}) => {
     }
 
     // Print summary
-    console.log('\n📊 Migration Summary:');
-    console.log(`✅ Executed: ${executedCount}`);
-    console.log(`⏭️  Skipped: ${skippedCount}`);
-    console.log(`❌ Failed: ${failedCount}`);
-    console.log(`📊 Total: ${migrations.length}`);
+    
 
     if (failedCount > 0) {
-      console.log('\n❌ Failed Migrations:');
       results
         .filter(r => !r.result.success)
         .forEach(r => {
-          console.log(`  - ${r.migration.id}: ${r.migration.name} - ${r.result.error}`);
         });
     }
 
     if (executedCount > 0) {
-      console.log('\n✅ Successfully Executed Migrations:');
       results
         .filter(r => r.result.success)
         .forEach(r => {
-          console.log(`  - ${r.migration.id}: ${r.migration.name} (${r.result.executionTime}ms)`);
         });
     }
 
     const overallSuccess = failedCount === 0 || (failedCount > 0 && results.every(r => !r.migration.required || r.result.success));
     
     if (overallSuccess) {
-      console.log('\n🎉 All required migrations completed successfully!');
       return { success: true, executedCount, skippedCount, failedCount, results };
     } else {
-      console.log('\n❌ Migration process completed with errors');
       return { success: false, executedCount, skippedCount, failedCount, results };
     }
 
@@ -322,7 +310,6 @@ const runAllMigrations = async (options = {}) => {
 // Show migration status
 const showMigrationStatus = async () => {
   try {
-    console.log('📊 Migration Status:');
     
     const executedMigrations = await query(`
       SELECT id, name, executed_at, success, execution_time_ms 
@@ -331,14 +318,12 @@ const showMigrationStatus = async () => {
     `);
     
     if (executedMigrations.rows.length === 0) {
-      console.log('  No migrations have been executed yet.');
       return;
     }
     
     executedMigrations.rows.forEach(migration => {
       const status = migration.success ? '✅' : '❌';
       const time = migration.execution_time_ms ? `(${migration.execution_time_ms}ms)` : '';
-      console.log(`  ${status} ${migration.id} - ${migration.name} ${time}`);
     });
     
   } catch (error) {
@@ -369,10 +354,8 @@ if (require.main === module) {
     runAllMigrations(options)
       .then(result => {
         if (result.success) {
-          console.log('\n🎉 Migration process completed successfully!');
           process.exit(0);
         } else {
-          console.log('\n❌ Migration process completed with errors');
           process.exit(1);
         }
       })

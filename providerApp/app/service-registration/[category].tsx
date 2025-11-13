@@ -131,15 +131,12 @@ export default function ServiceRegistration() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Backend response data:', data);
         
         const serviceData = data.data.registeredServices.find(
           (s: any) => s.provider_service_id === serviceId
         );
 
-        console.log('Found service data:', serviceData);
-        console.log('Working proof URLs:', serviceData?.working_proof_urls);
-        console.log('Engineering certificate URL:', serviceData?.engineering_certificate_url);
+       
 
         if (serviceData) {
           // Ensure working_proof_urls is always an array
@@ -147,7 +144,6 @@ export default function ServiceRegistration() {
             ? serviceData.working_proof_urls 
             : [];
           
-          console.log('Processed working proof URLs:', workingProofUrls);
           
           // Map backend data to form data
           setFormData({
@@ -162,7 +158,6 @@ export default function ServiceRegistration() {
             engineeringCertificate: serviceData.engineering_certificate_url || undefined,
           });
           
-          console.log('Form data set with photos:', workingProofUrls);
         } else {
           showAlert(t('alerts.error'), t('alerts.serviceDataNotFound'), 'error');
           router.back();
@@ -362,25 +357,20 @@ export default function ServiceRegistration() {
   // Convert file URI to base64
   const convertToBase64 = async (uri: string): Promise<string> => {
     try {
-      console.log('Converting URI to base64:', uri);
       
       // If it's already a base64 URL, return as is
       if (uri.startsWith('data:image/')) {
-        console.log('Already base64, returning as is');
         return uri;
       }
       
       // If it's a file URI, convert to base64
       if (uri.startsWith('file://')) {
-        console.log('Converting file URI to base64...');
         
         try {
-          console.log('Reading file as base64...');
           const base64 = await FileSystem.readAsStringAsync(uri, {
             encoding: 'base64' as any,
           });
           
-          console.log('Base64 conversion successful, length:', base64.length);
           
           // Determine the file extension from the URI
           const extension = uri.split('.').pop()?.toLowerCase() || 'jpg';
@@ -388,13 +378,11 @@ export default function ServiceRegistration() {
           
           return `data:${mimeType};base64,${base64}`;
         } catch (fileError) {
-          console.log('File read error:', fileError);
           return '';
         }
       }
       
       // If it's already a remote URL, return as is
-      console.log('Remote URL, returning as is');
       return uri;
     } catch (error) {
       console.error('Error converting to base64:', error);
@@ -440,22 +428,17 @@ export default function ServiceRegistration() {
         const storedToken = await AsyncStorage.getItem('token');
         token = storedToken || undefined;
       }
-      console.log('Token used for registration:', token);
       
       // Convert working proof images to base64
       let workingProofUrls: string[] = [];
       if (formData.photos.length > 0) {
-        console.log('Converting', formData.photos.length, 'images to base64...');
         workingProofUrls = await convertMultipleToBase64(formData.photos);
-        console.log('Successfully converted images to base64');
       }
       
       // Convert engineering certificate to base64 if it's a file URI
       let engineeringCertificateUrl = formData.engineeringCertificate;
       if (engineeringCertificateUrl && engineeringCertificateUrl.startsWith('file://')) {
-        console.log('Converting engineering certificate to base64...');
         engineeringCertificateUrl = await convertToBase64(engineeringCertificateUrl);
-        console.log('Successfully converted certificate to base64');
       }
       
       // Prepare payload for backend
@@ -471,7 +454,6 @@ export default function ServiceRegistration() {
         engineeringCertificateUrl: engineeringCertificateUrl || undefined
       };
       
-      console.log('Sending payload with', workingProofUrls.length, 'working proof images');
       
       const method = isEditMode ? 'PUT' : 'POST';
       const response = await fetch(`${API_BASE_URL}/api/services/${category}/providers`, {
@@ -772,7 +754,6 @@ export default function ServiceRegistration() {
 
                 <View style={styles.photosContainer}>
                   {formData.photos.map((photo, index) => {
-                    console.log(`Rendering photo ${index}:`, photo);
                     return (
                       <View key={index} style={styles.photoWrapper}>
                         <Image 

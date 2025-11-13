@@ -7,7 +7,6 @@ const { query } = require('../database/connection');
  */
 const addAuthSecurityTables = async () => {
   try {
-    console.log('🔐 Creating authentication security tables...');
 
     // 1. Token Blacklist Table
     await query(`
@@ -24,7 +23,6 @@ const addAuthSecurityTables = async () => {
         CONSTRAINT fk_token_blacklist_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
-    console.log('✅ Token blacklist table created');
 
     // 2. Create indexes for token_blacklist
     await query(`
@@ -36,7 +34,6 @@ const addAuthSecurityTables = async () => {
     await query(`
       CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires_at ON token_blacklist(expires_at);
     `);
-    console.log('✅ Token blacklist indexes created');
 
     // 3. User Sessions Table
     await query(`
@@ -58,7 +55,6 @@ const addAuthSecurityTables = async () => {
         CONSTRAINT fk_user_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
-    console.log('✅ User sessions table created');
 
     // 4. Create indexes for user_sessions
     await query(`
@@ -76,7 +72,6 @@ const addAuthSecurityTables = async () => {
     await query(`
       CREATE INDEX IF NOT EXISTS idx_user_sessions_last_activity ON user_sessions(last_activity);
     `);
-    console.log('✅ User sessions indexes created');
 
     // 5. Login Attempts Table
     await query(`
@@ -93,7 +88,6 @@ const addAuthSecurityTables = async () => {
         CONSTRAINT fk_login_attempts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
       );
     `);
-    console.log('✅ Login attempts table created');
 
     // 6. Create indexes for login_attempts
     await query(`
@@ -108,7 +102,6 @@ const addAuthSecurityTables = async () => {
     await query(`
       CREATE INDEX IF NOT EXISTS idx_login_attempts_user_id ON login_attempts(user_id);
     `);
-    console.log('✅ Login attempts indexes created');
 
     // 7. Security Events Table
     await query(`
@@ -126,7 +119,6 @@ const addAuthSecurityTables = async () => {
         CONSTRAINT fk_security_events_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
       );
     `);
-    console.log('✅ Security events table created');
 
     // 8. Create indexes for security_events
     await query(`
@@ -141,7 +133,6 @@ const addAuthSecurityTables = async () => {
     await query(`
       CREATE INDEX IF NOT EXISTS idx_security_events_created_at ON security_events(created_at);
     `);
-    console.log('✅ Security events indexes created');
 
     // 9. Create cleanup function
     await query(`
@@ -166,7 +157,6 @@ const addAuthSecurityTables = async () => {
       END;
       $$ LANGUAGE plpgsql;
     `);
-    console.log('✅ Cleanup function created');
 
     // 10. Add table comments for documentation
     await query(`
@@ -184,9 +174,7 @@ const addAuthSecurityTables = async () => {
     await query(`
       COMMENT ON FUNCTION cleanup_expired_auth_data IS 'Removes expired tokens, sessions, and old security data';
     `);
-    console.log('✅ Table comments added');
 
-    console.log('🎉 Authentication security tables migration completed successfully!');
   } catch (error) {
     console.error('❌ Error creating auth security tables:', error);
     throw error;
@@ -199,7 +187,6 @@ module.exports = addAuthSecurityTables;
 if (require.main === module) {
   addAuthSecurityTables()
     .then(() => {
-      console.log('✅ Migration completed successfully');
       process.exit(0);
     })
     .catch(error => {

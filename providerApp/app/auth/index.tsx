@@ -255,12 +255,7 @@ function AuthScreen() {
           token: data.data.token
         };
         
-        console.log('🔐 Login successful!');
-        console.log('   User ID:', userData.id);
-        console.log('   Phone:', userData.phone);
-        console.log('   Role:', userData.role);
-        console.log('   Role type:', typeof userData.role);
-        console.log('   Is admin?', userData.role === 'admin');
+        
         
         // Save to context and wait for completion
         await login(userData);
@@ -272,12 +267,10 @@ function AuthScreen() {
         
         // Redirect based on user role with explicit logging
         if (userData.role === 'admin') {
-          console.log('👑 Redirecting admin to /admin/dashboard');
           setTimeout(() => {
             router.replace('/admin/dashboard');
           }, 300);
         } else {
-          console.log('👷 Redirecting provider to /(tabs)');
           setTimeout(() => {
             router.replace('/(tabs)');
           }, 300);
