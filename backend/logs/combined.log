@@ -9908,3 +9908,150 @@
 {"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"35RIlo5LB11LWveuAAAL","timestamp":"2025-11-14 09:52:44","totalConnections":2,"userId":null}
 {"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"p-JIPA_JFBRqu-H0AAAK","timestamp":"2025-11-14 09:52:45","totalConnections":2,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
 {"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"35RIlo5LB11LWveuAAAL","timestamp":"2025-11-14 09:52:45","totalConnections":2,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"153s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"p-JIPA_JFBRqu-H0AAAK","timestamp":"2025-11-14 09:55:18","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"153s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"35RIlo5LB11LWveuAAAL","timestamp":"2025-11-14 09:55:18","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"eUp5N-qe8Ctuj1WhAAAO","timestamp":"2025-11-14 09:57:49","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"vV7IGHEHFHazIhSAAAAP","timestamp":"2025-11-14 09:57:49","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"eUp5N-qe8Ctuj1WhAAAO","timestamp":"2025-11-14 09:57:49","totalConnections":2,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"vV7IGHEHFHazIhSAAAAP","timestamp":"2025-11-14 09:57:50","totalConnections":2,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Timer registered: otpStore-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17"}
+{"level":"info","message":"Map registered for monitoring: otpStore (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17"}
+{"cleanupInterval":60000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpStore","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17","ttl":300000}
+{"level":"info","message":"Timer registered: pendingSignups-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17"}
+{"level":"info","message":"Map registered for monitoring: pendingSignups (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: pendingSignups","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17","ttl":600000}
+{"level":"info","message":"Timer registered: passwordResetSessions-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17"}
+{"level":"info","message":"Map registered for monitoring: passwordResetSessions (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: passwordResetSessions","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17","ttl":600000}
+{"level":"info","message":"Timer registered: otpAttempts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17"}
+{"level":"info","message":"Map registered for monitoring: otpAttempts (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17"}
+{"cleanupInterval":300000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpAttempts","service":"buildxpert-api","timestamp":"2025-11-14 10:01:17","ttl":900000}
+{"level":"info","message":"Timer registered: booking-creation-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Timer registered: booking-creation-refill (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Initializing memory leak prevention...","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Memory leak prevention initialized","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Timer registered: activeCalls-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Map registered for monitoring: activeCalls (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: activeCalls","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18","ttl":86400000}
+{"level":"info","message":"Timer registered: callTimeouts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Map registered for monitoring: callTimeouts (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: callTimeouts","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18","ttl":86400000}
+{"level":"info","message":"Timer registered: socket-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Socket cleanup job started","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Timer registered: memory-monitor (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"checkInterval":"60000ms","level":"info","message":"Memory monitor started","service":"buildxpert-api","threshold":"500MB","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"🧹 Starting scheduled auth data cleanup...","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Timer registered: auth-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"🕐 Auth cleanup job initialized (runs every 24 hours)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"level":"info","message":"Timer registered: notification-queue (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18"}
+{"batchSize":25,"category":"resilience","interval":2000,"level":"warn","message":"🛡️ Resilience: Notification queue processor started","service":"buildxpert-api","timestamp":"2025-11-14 10:01:18","workerId":"node-22420-fl465x"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"1X1mzXnSmqJSTx7MAAAB","timestamp":"2025-11-14 10:01:18","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"1X1mzXnSmqJSTx7MAAAB","timestamp":"2025-11-14 10:01:18","totalConnections":1,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"5YC4SJHE5zQC2T-_AAAD","timestamp":"2025-11-14 10:01:18","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"5YC4SJHE5zQC2T-_AAAD","timestamp":"2025-11-14 10:01:18","totalConnections":2,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","loginAttemptsRemoved":0,"message":"Security data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","timestamp":"2025-11-14 10:01:20"}
+{"duration":"2070ms","level":"info","loginAttemptsRemoved":0,"message":"✅ Auth data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","sessionsRemoved":0,"timestamp":"2025-11-14T04:31:20.207Z","tokensRemoved":0}
+{"level":"info","message":"Timer registered: otpStore-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Map registered for monitoring: otpStore (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"cleanupInterval":60000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpStore","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22","ttl":300000}
+{"level":"info","message":"Timer registered: pendingSignups-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Map registered for monitoring: pendingSignups (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: pendingSignups","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22","ttl":600000}
+{"level":"info","message":"Timer registered: passwordResetSessions-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Map registered for monitoring: passwordResetSessions (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: passwordResetSessions","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22","ttl":600000}
+{"level":"info","message":"Timer registered: otpAttempts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Map registered for monitoring: otpAttempts (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"cleanupInterval":300000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpAttempts","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22","ttl":900000}
+{"level":"info","message":"Timer registered: booking-creation-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Timer registered: booking-creation-refill (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Initializing memory leak prevention...","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Memory leak prevention initialized","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Timer registered: activeCalls-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Map registered for monitoring: activeCalls (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: activeCalls","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22","ttl":86400000}
+{"level":"info","message":"Timer registered: callTimeouts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Map registered for monitoring: callTimeouts (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: callTimeouts","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22","ttl":86400000}
+{"level":"info","message":"Timer registered: socket-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Socket cleanup job started","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Timer registered: memory-monitor (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"checkInterval":"60000ms","level":"info","message":"Memory monitor started","service":"buildxpert-api","threshold":"500MB","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"🧹 Starting scheduled auth data cleanup...","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Timer registered: auth-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"🕐 Auth cleanup job initialized (runs every 24 hours)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"level":"info","message":"Timer registered: notification-queue (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22"}
+{"batchSize":25,"category":"resilience","interval":2000,"level":"warn","message":"🛡️ Resilience: Notification queue processor started","service":"buildxpert-api","timestamp":"2025-11-14 10:01:22","workerId":"node-9908-10ju5i"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"nnUVh8J2YfAk6NsaAAAB","timestamp":"2025-11-14 10:01:23","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"nnUVh8J2YfAk6NsaAAAB","timestamp":"2025-11-14 10:01:23","totalConnections":1,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"_9ORmbPNgTHO0r-6AAAD","timestamp":"2025-11-14 10:01:23","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"_9ORmbPNgTHO0r-6AAAD","timestamp":"2025-11-14 10:01:23","totalConnections":2,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","loginAttemptsRemoved":0,"message":"Security data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","timestamp":"2025-11-14 10:01:24"}
+{"duration":"2021ms","level":"info","loginAttemptsRemoved":0,"message":"✅ Auth data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","sessionsRemoved":0,"timestamp":"2025-11-14T04:31:24.672Z","tokensRemoved":0}
+{"duration":"564s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"_9ORmbPNgTHO0r-6AAAD","timestamp":"2025-11-14 10:10:47","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"564s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"nnUVh8J2YfAk6NsaAAAB","timestamp":"2025-11-14 10:10:47","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"DUM509eGM8iawCLEAAAG","timestamp":"2025-11-14 10:11:08","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"_kxEe2Cc9yPovdxhAAAH","timestamp":"2025-11-14 10:11:08","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"DUM509eGM8iawCLEAAAG","timestamp":"2025-11-14 10:11:08","totalConnections":2,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"_kxEe2Cc9yPovdxhAAAH","timestamp":"2025-11-14 10:11:08","totalConnections":2,"userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"106s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"DUM509eGM8iawCLEAAAG","timestamp":"2025-11-14 10:12:55","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"duration":"106s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"_kxEe2Cc9yPovdxhAAAH","timestamp":"2025-11-14 10:12:55","userId":"5f444411-a90f-4891-8867-3db292846b53"}
+{"deviceName":"Unknown on Unknown","ipAddress":"192.168.0.102","level":"info","message":"Session created","service":"buildxpert-api","timestamp":"2025-11-14 10:13:19","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"eventType":"login","level":"info","message":"Security event logged","service":"buildxpert-api","severity":"info","timestamp":"2025-11-14 10:13:20","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"VKS7W4Z-QTZaItuZAAAL","timestamp":"2025-11-14 10:13:21","totalConnections":1,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"VKS7W4Z-QTZaItuZAAAL","timestamp":"2025-11-14 10:13:21","totalConnections":1,"userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"SBji_8pKLt8eBwAKAAAM","timestamp":"2025-11-14 10:13:21","totalConnections":2,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"SBji_8pKLt8eBwAKAAAM","timestamp":"2025-11-14 10:13:21","totalConnections":2,"userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-14 10:13:21","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-14 10:13:23","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-14 10:13:23","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-14 10:13:23","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"7WSsxdb3cxL0EF53AAAN","timestamp":"2025-11-14 10:13:23","totalConnections":3,"userId":null}
+{"level":"info","message":"Socket connection registered","service":"buildxpert-api","socketId":"7WSsxdb3cxL0EF53AAAN","timestamp":"2025-11-14 10:13:23","totalConnections":3,"userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-14 10:13:25","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-14 10:13:25","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-14 10:13:32","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-14 10:13:33","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-14 10:13:33","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-14 10:13:37","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-14 10:13:37","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-14 10:13:37","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-14 10:13:43","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"found":false,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-14 10:13:44","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"No provider profile found","service":"buildxpert-api","timestamp":"2025-11-14 10:13:44","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"duration":"25s","level":"info","message":"Socket connection unregistered","remainingConnections":2,"service":"buildxpert-api","socketId":"SBji_8pKLt8eBwAKAAAM","timestamp":"2025-11-14 10:13:47","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"duration":"26s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"VKS7W4Z-QTZaItuZAAAL","timestamp":"2025-11-14 10:13:47","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"duration":"23s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"7WSsxdb3cxL0EF53AAAN","timestamp":"2025-11-14 10:13:47","userId":"1e6b4c52-1520-48d3-9096-4469f83b567a"}
+{"level":"info","message":"Timer registered: otpStore-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Map registered for monitoring: otpStore (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"cleanupInterval":60000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpStore","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32","ttl":300000}
+{"level":"info","message":"Timer registered: pendingSignups-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Map registered for monitoring: pendingSignups (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: pendingSignups","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32","ttl":600000}
+{"level":"info","message":"Timer registered: passwordResetSessions-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Map registered for monitoring: passwordResetSessions (max size: 5000)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"cleanupInterval":120000,"level":"info","maxSize":5000,"message":"ManagedMap created: passwordResetSessions","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32","ttl":600000}
+{"level":"info","message":"Timer registered: otpAttempts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Map registered for monitoring: otpAttempts (max size: 10000)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"cleanupInterval":300000,"level":"info","maxSize":10000,"message":"ManagedMap created: otpAttempts","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32","ttl":900000}
+{"level":"info","message":"Timer registered: booking-creation-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Timer registered: booking-creation-refill (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Initializing memory leak prevention...","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Memory leak prevention initialized","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Timer registered: activeCalls-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Map registered for monitoring: activeCalls (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: activeCalls","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32","ttl":86400000}
+{"level":"info","message":"Timer registered: callTimeouts-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Map registered for monitoring: callTimeouts (max size: 1000)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"cleanupInterval":600000,"level":"info","maxSize":1000,"message":"ManagedMap created: callTimeouts","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32","ttl":86400000}
+{"level":"info","message":"Timer registered: socket-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Socket cleanup job started","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Timer registered: memory-monitor (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"checkInterval":"60000ms","level":"info","message":"Memory monitor started","service":"buildxpert-api","threshold":"500MB","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"🧹 Starting scheduled auth data cleanup...","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Timer registered: auth-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"🕐 Auth cleanup job initialized (runs every 24 hours)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"level":"info","message":"Timer registered: notification-queue (interval)","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32"}
+{"batchSize":25,"category":"resilience","interval":2000,"level":"warn","message":"🛡️ Resilience: Notification queue processor started","service":"buildxpert-api","timestamp":"2025-11-14 10:14:32","workerId":"node-19192-wpgexd"}
+{"level":"info","loginAttemptsRemoved":0,"message":"Security data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","timestamp":"2025-11-14 10:14:35"}
+{"duration":"2155ms","level":"info","loginAttemptsRemoved":0,"message":"✅ Auth data cleanup completed","securityEventsRemoved":0,"service":"buildxpert-api","sessionsRemoved":0,"timestamp":"2025-11-14T04:44:35.042Z","tokensRemoved":0}

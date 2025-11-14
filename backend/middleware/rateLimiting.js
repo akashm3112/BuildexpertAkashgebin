@@ -1,11 +1,3 @@
-/**
- * ============================================================================
- * COMPREHENSIVE RATE LIMITING MIDDLEWARE
- * Purpose: Prevent API abuse and DoS attacks across all endpoints
- * Features: Flexible rate limits for different endpoint types
- * ============================================================================
- */
-
 const rateLimit = require('express-rate-limit');
 const logger = require('../utils/logger');
 
@@ -151,17 +143,19 @@ const searchLimiter = rateLimit({
 
 /**
  * Admin action limiter
- * Limit: 50 requests per 15 minutes per admin
+ * Limit: 100 requests per 15 minutes per admin (increased for admin dashboard usage)
  */
 const adminActionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50,
+  max: 100, // Increased from 50 to 100 for admin dashboard
   message: { status: 'error', message: 'Too many admin actions. Please wait.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
     return req.user?.id?.toString() || req.ip;
-  }
+  },
+  skipSuccessfulRequests: false, // Count all requests
+  skipFailedRequests: false
 });
 
 /**
