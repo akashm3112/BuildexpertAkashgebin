@@ -79,6 +79,7 @@ interface Report {
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isTablet = screenWidth >= 768;
 const isSmallScreen = screenWidth < 375;
+const isMediumScreen = screenWidth >= 375 && screenWidth < 768;
 
 const getResponsiveValue = (small: number, medium: number, large: number) => {
   if (isSmallScreen) return small;
@@ -90,6 +91,12 @@ const getResponsiveFontSize = (small: number, medium: number, large: number) => 
   if (isSmallScreen) return small;
   if (isTablet) return large;
   return medium;
+};
+
+const getResponsivePadding = () => {
+  if (isSmallScreen) return 12;
+  if (isTablet) return 24;
+  return 16;
 };
 
 export default function ReportsScreen() {
@@ -163,6 +170,8 @@ export default function ReportsScreen() {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         console.error('No authentication token found');
+        setIsLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
@@ -179,13 +188,21 @@ export default function ReportsScreen() {
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'success') {
-          setReports(data.data.reports || []);
+          const reportsData = data.data?.reports || [];
+          console.log(`Loaded ${reportsData.length} reports`);
+          setReports(reportsData);
+        } else {
+          console.error('API returned error status:', data.message || 'Unknown error');
+          setReports([]);
         }
       } else {
-        console.error('Failed to fetch reports:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to fetch reports:', response.status, errorData.message || '');
+        setReports([]);
       }
     } catch (error) {
       console.error('Error fetching reports:', error);
+      setReports([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -528,53 +545,49 @@ export default function ReportsScreen() {
           </View>
 
           <View style={styles.reportActions}>
-            <View style={styles.statusActions}>
-              {item.status === 'open' && (
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.resolveButton]}
-                  onPress={() => updateReportStatus(item.id, 'resolved')}
-                >
-                  <CheckCircle size={getResponsiveValue(14, 16, 18)} color="white" />
-                  <Text style={styles.actionButtonText}>Resolve</Text>
-                </TouchableOpacity>
-              )}
-              
-              {item.status === 'resolved' && (
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.closeButton]}
-                  onPress={() => updateReportStatus(item.id, 'closed')}
-                >
-                  <XCircle size={getResponsiveValue(14, 16, 18)} color="white" />
-                  <Text style={styles.actionButtonText}>Close</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            {item.status === 'open' && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.resolveButton]}
+                onPress={() => updateReportStatus(item.id, 'resolved')}
+              >
+                <CheckCircle size={getResponsiveValue(14, 16, 18)} color="white" />
+                <Text style={styles.actionButtonText}>Resolve</Text>
+              </TouchableOpacity>
+            )}
+            
+            {item.status === 'resolved' && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.closeButton]}
+                onPress={() => updateReportStatus(item.id, 'closed')}
+              >
+                <XCircle size={getResponsiveValue(14, 16, 18)} color="white" />
+                <Text style={styles.actionButtonText}>Close</Text>
+              </TouchableOpacity>
+            )}
 
-            <View style={styles.removeActions}>
-              {userRemovalTargetId ? (
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.removeButton]}
-                  onPress={() => removeUser(userRemovalTargetId, userRemovalTargetName)}
-                >
-                  <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
-                  <Text style={styles.actionButtonText}>
-                    {item.reported_type === 'User' ? 'Remove Reported User' : 'Remove Reporter'}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
+            {userRemovalTargetId ? (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.removeButton]}
+                onPress={() => removeUser(userRemovalTargetId, userRemovalTargetName)}
+              >
+                <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
+                <Text style={styles.actionButtonText} numberOfLines={1}>
+                  {item.reported_type === 'User' ? 'Remove User' : 'Remove Reporter'}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
 
-              {providerRemovalTargetId ? (
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.removeButton]}
-                  onPress={() => removeProvider(providerRemovalTargetId, providerRemovalTargetName)}
-                >
-                  <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
-                  <Text style={styles.actionButtonText}>
-                    {item.reported_type === 'Provider' ? 'Remove Reported Provider' : 'Remove Reporter'}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
+            {providerRemovalTargetId ? (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.removeButton]}
+                onPress={() => removeProvider(providerRemovalTargetId, providerRemovalTargetName)}
+              >
+                <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
+                <Text style={styles.actionButtonText} numberOfLines={1}>
+                  {item.reported_type === 'Provider' ? 'Remove Provider' : 'Remove Reporter'}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </LinearGradient>
       </Animated.View>
@@ -969,9 +982,9 @@ const styles = StyleSheet.create({
   // Header Styles
   header: {
     backgroundColor: '#FFFFFF',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingHorizontal: getResponsivePadding(),
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     ...Platform.select({
@@ -990,37 +1003,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    width: '100%',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: isSmallScreen ? 36 : 40,
+    height: isSmallScreen ? 36 : 40,
+    borderRadius: isSmallScreen ? 18 : 20,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   headerInfo: {
     flex: 1,
-    marginLeft: 16,
+    marginLeft: 12,
+    marginRight: 12,
+    minWidth: 0, // Allows text to shrink
   },
   title: {
-    fontSize: 22,
+    fontSize: getResponsiveFontSize(18, 20, 24),
     fontWeight: '700',
     color: '#111827',
+    flexShrink: 1,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(12, 13, 14),
     color: '#6B7280',
-    marginTop: 4,
+    marginTop: 2,
     fontWeight: '500',
+    flexShrink: 1,
   },
   filterToggleButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: isSmallScreen ? 36 : 40,
+    height: isSmallScreen ? 36 : 40,
+    borderRadius: isSmallScreen ? 18 : 20,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   filterToggleButtonActive: {
     backgroundColor: '#EBF4FF',
@@ -1031,18 +1051,19 @@ const styles = StyleSheet.create({
   // Stats Section
   statsSection: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
   statsScrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: getResponsivePadding(),
+    paddingRight: getResponsivePadding() + 4,
   },
   statsCard: {
-    width: 160,
-    height: 100,
-    borderRadius: 16,
-    marginRight: 16,
+    width: isSmallScreen ? 140 : isTablet ? 180 : 160,
+    height: isSmallScreen ? 90 : isTablet ? 110 : 100,
+    borderRadius: 12,
+    marginRight: 12,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -1058,7 +1079,7 @@ const styles = StyleSheet.create({
   },
   statsGradient: {
     flex: 1,
-    padding: 16,
+    padding: isSmallScreen ? 12 : 16,
   },
   statsContent: {
     flex: 1,
@@ -1067,26 +1088,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   statsIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: isSmallScreen ? 36 : isTablet ? 44 : 40,
+    height: isSmallScreen ? 36 : isTablet ? 44 : 40,
+    borderRadius: isSmallScreen ? 18 : isTablet ? 22 : 20,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   statsTextContainer: {
     flex: 1,
     alignItems: 'flex-end',
     justifyContent: 'center',
+    marginLeft: 8,
   },
   statsValue: {
-    fontSize: 24,
+    fontSize: getResponsiveFontSize(20, 22, 26),
     fontWeight: '700',
     color: 'white',
-    lineHeight: 28,
+    lineHeight: getResponsiveFontSize(24, 26, 30),
   },
   statsTitle: {
-    fontSize: 12,
+    fontSize: getResponsiveFontSize(11, 12, 13),
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '600',
     marginTop: 2,
@@ -1096,8 +1119,8 @@ const styles = StyleSheet.create({
   // Search Section
   searchSection: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: getResponsivePadding(),
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
@@ -1106,17 +1129,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: isSmallScreen ? 12 : 16,
+    paddingVertical: isSmallScreen ? 10 : 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(14, 15, 16),
     color: '#111827',
-    marginLeft: 12,
+    marginLeft: 10,
     fontWeight: '500',
+    minWidth: 0, // Allows text input to shrink
   },
 
   // Filter Section
@@ -1126,24 +1150,28 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   filterScrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: getResponsivePadding(),
+    paddingVertical: 12,
+    paddingRight: getResponsivePadding() + 4,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 12,
+    paddingHorizontal: isSmallScreen ? 14 : 16,
+    paddingVertical: isSmallScreen ? 7 : 8,
+    marginRight: 10,
     borderRadius: 20,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: 'transparent',
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   activeFilterButton: {
     backgroundColor: '#3B82F6',
     borderColor: '#2563EB',
   },
   filterButtonText: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(13, 14, 15),
     fontWeight: '600',
     color: '#6B7280',
   },
@@ -1157,7 +1185,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   listContainer: {
-    padding: 20,
+    padding: getResponsivePadding(),
     paddingBottom: 100,
   },
 
@@ -1180,117 +1208,123 @@ const styles = StyleSheet.create({
     }),
   },
   reportGradient: {
-    padding: 20,
+    padding: getResponsivePadding(),
   },
   reportHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 12,
+    width: '100%',
   },
   reportInfo: {
     flex: 1,
+    marginRight: 8,
+    minWidth: 0, // Allows text to shrink
   },
   reportTypeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
+    flexWrap: 'wrap',
   },
   reportType: {
-    fontSize: 18,
+    fontSize: getResponsiveFontSize(16, 17, 18),
     fontWeight: '700',
     color: '#111827',
-    marginLeft: 8,
+    marginLeft: 6,
+    flexShrink: 1,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: isSmallScreen ? 10 : 12,
+    paddingVertical: isSmallScreen ? 5 : 6,
     borderRadius: 16,
     alignSelf: 'flex-start',
+    marginTop: 4,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: getResponsiveFontSize(11, 12, 13),
     fontWeight: '700',
     color: '#FFFFFF',
     marginLeft: 4,
   },
   moreButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: isSmallScreen ? 32 : 36,
+    height: isSmallScreen ? 32 : 36,
+    borderRadius: isSmallScreen ? 16 : 18,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   reportDescriptionContainer: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   reportDescription: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(14, 15, 16),
     color: '#374151',
-    lineHeight: 24,
+    lineHeight: getResponsiveFontSize(20, 22, 24),
     fontWeight: '500',
   },
   reportDetails: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 10,
+    width: '100%',
   },
   detailIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: isSmallScreen ? 32 : 36,
+    height: isSmallScreen ? 32 : 36,
+    borderRadius: isSmallScreen ? 16 : 18,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
+    flexShrink: 0,
   },
   detailContent: {
     flex: 1,
+    minWidth: 0, // Allows text to shrink
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(12, 13, 14),
     color: '#6B7280',
     fontWeight: '600',
     marginBottom: 2,
   },
   detailText: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(14, 15, 16),
     color: '#111827',
     fontWeight: '600',
+    flexWrap: 'wrap',
   },
   detailPhone: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(12, 13, 14),
     color: '#6B7280',
     marginTop: 2,
   },
   reportActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     flexWrap: 'wrap',
-  },
-  statusActions: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  removeActions: {
-    flexDirection: 'row',
-    flex: 1,
-    justifyContent: 'flex-end',
+    marginTop: 12,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginLeft: 8,
+    justifyContent: 'center',
+    paddingHorizontal: isSmallScreen ? 14 : 16,
+    paddingVertical: isSmallScreen ? 10 : 12,
+    borderRadius: 10,
+    minHeight: 40,
+    marginRight: 8,
+    marginBottom: 8,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1313,10 +1347,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
   },
   actionButtonText: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(12, 13, 14),
     fontWeight: '700',
     color: '#FFFFFF',
     marginLeft: 6,
+    flexShrink: 1,
+    textAlign: 'center',
   },
 
   // Loading and Empty States
@@ -1361,8 +1397,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   modalHeader: {
-    paddingTop: 50,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingHorizontal: getResponsivePadding(),
     paddingBottom: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -1383,16 +1419,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    width: '100%',
   },
   modalTitleContainer: {
     flex: 1,
-    marginRight: 16,
+    marginRight: 12,
+    minWidth: 0,
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: getResponsiveFontSize(20, 22, 24),
     fontWeight: '700',
     color: '#111827',
     marginBottom: 8,
+    flexShrink: 1,
   },
   modalStatusBadge: {
     paddingHorizontal: 12,
@@ -1415,7 +1454,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flex: 1,
-    padding: 20,
+    padding: getResponsivePadding(),
   },
   modalSection: {
     marginBottom: 24,
@@ -1434,7 +1473,7 @@ const styles = StyleSheet.create({
   modalInfoCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    padding: isSmallScreen ? 12 : 16,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1450,7 +1489,7 @@ const styles = StyleSheet.create({
   modalActionsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
+    padding: isSmallScreen ? 12 : 16,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1501,10 +1540,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: isSmallScreen ? 12 : 14,
+    paddingHorizontal: isSmallScreen ? 16 : 20,
     borderRadius: 10,
     marginVertical: 6,
+    width: '100%',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1518,10 +1558,11 @@ const styles = StyleSheet.create({
     }),
   },
   modalActionButtonText: {
-    fontSize: 15,
+    fontSize: getResponsiveFontSize(14, 15, 16),
     fontWeight: '700',
     color: '#FFFFFF',
     marginLeft: 8,
+    textAlign: 'center',
   },
   modalResolveButton: {
     backgroundColor: '#10B981',

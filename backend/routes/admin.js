@@ -283,23 +283,27 @@ router.get('/reports', auth, requireRole(['admin']), async (req, res) => {
 
       let userReportsRows = [];
 
+      // Fetch from user_reports_providers table (current table)
       if (await tableExists('public.user_reports_providers')) {
         try {
           const userReportsQuery = await query(`
             SELECT 
               urp.id, 
-              urp.report_type, 
+              urp.incident_type as report_type, 
               urp.description, 
               urp.status, 
               urp.created_at, 
               urp.updated_at,
               urp.reported_by_user_id, 
               urp.reported_provider_id,
+              urp.incident_date,
+              urp.incident_time,
+              urp.evidence,
               u.full_name as reporter_name, 
               u.phone as reporter_phone,
               p.full_name as reported_provider_name, 
               p.phone as reported_provider_phone,
-              pp.service_description as reported_provider_business,
+              pp.business_name as reported_provider_business,
               'user_report' as report_source
             FROM user_reports_providers urp
             LEFT JOIN users u ON urp.reported_by_user_id = u.id
@@ -308,20 +312,29 @@ router.get('/reports', auth, requireRole(['admin']), async (req, res) => {
             ${whereClause}
             ORDER BY urp.created_at DESC
           `, queryParams);
-          userReportsRows = userReportsQuery.rows;
+          userReportsRows = userReportsRows.concat(userReportsQuery.rows);
         } catch (error) {
-          logger.warn('Failed to fetch user_reports_providers data', { error: error.message });
+          logger.error('Failed to fetch user_reports_providers data', { error: error.message, stack: error.stack });
         }
       }
 
-      if (await tableExists('public.provider_reports')) {
-        try {
+      // Fetch from legacy provider_reports table (if it exists as a table, not just a view)
+      // Check if it's a table (not a view)
+      try {
+        const tableTypeCheck = await query(`
+          SELECT table_type 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'provider_reports'
+        `);
+        
+        if (tableTypeCheck.rows.length > 0 && tableTypeCheck.rows[0].table_type === 'BASE TABLE') {
           const legacyWhere = status !== 'all' ? 'WHERE LOWER(pr.status) = LOWER($1)' : '';
           const legacyParams = status !== 'all' ? [status] : [];
           const legacyReports = await query(`
             SELECT 
               pr.id,
-              pr.report_type,
+              COALESCE(pr.report_type, pr.incident_type) as report_type,
               pr.description,
               pr.status,
               pr.created_at,
@@ -332,7 +345,7 @@ router.get('/reports', auth, requireRole(['admin']), async (req, res) => {
               u.phone as reporter_phone,
               p.full_name as reported_provider_name,
               p.phone as reported_provider_phone,
-              pp.service_description as reported_provider_business,
+              pp.business_name as reported_provider_business,
               'legacy_user_report' as report_source
             FROM provider_reports pr
             LEFT JOIN users u ON pr.reported_by_user_id = u.id
@@ -341,10 +354,10 @@ router.get('/reports', auth, requireRole(['admin']), async (req, res) => {
             ${legacyWhere}
             ORDER BY pr.created_at DESC
           `, legacyParams);
-          userReportsRows = legacyReports.rows;
-        } catch (error) {
-          logger.warn('Failed to fetch legacy provider_reports data', { error: error.message });
+          userReportsRows = userReportsRows.concat(legacyReports.rows);
         }
+      } catch (error) {
+        logger.warn('Failed to fetch legacy provider_reports data', { error: error.message });
       }
 
       allReports = allReports.concat(userReportsRows.map(r => ({
@@ -353,45 +366,6 @@ router.get('/reports', auth, requireRole(['admin']), async (req, res) => {
         reporter_type: 'User',
         reported_type: 'Provider'
       })));
-
-      if (await tableExists('public.provider_reports')) {
-        try {
-          const legacyWhere = status !== 'all' ? 'WHERE pr.status = $1' : '';
-          const legacyParams = status !== 'all' ? [status] : [];
-          const legacyReports = await query(`
-            SELECT 
-              pr.id,
-              pr.report_type,
-              pr.description,
-              pr.status,
-              pr.created_at,
-              pr.updated_at,
-              pr.reported_by_user_id,
-              pr.reported_provider_id,
-              u.full_name as reporter_name,
-              u.phone as reporter_phone,
-              p.full_name as reported_provider_name,
-              p.phone as reported_provider_phone,
-              pp.service_description as reported_provider_business,
-              'legacy_user_report' as report_source
-            FROM provider_reports pr
-            LEFT JOIN users u ON pr.reported_by_user_id = u.id
-            LEFT JOIN users p ON pr.reported_provider_id = p.id
-            LEFT JOIN provider_profiles pp ON p.id = pp.user_id
-            ${legacyWhere}
-            ORDER BY pr.created_at DESC
-          `, legacyParams);
-
-          allReports = allReports.concat(legacyReports.rows.map(r => ({
-            ...r,
-            report_category: 'User Report',
-            reporter_type: 'User',
-            reported_type: 'Provider'
-          })));
-        } catch (error) {
-          logger.warn('Failed to fetch legacy provider_reports data', { error: error.message });
-        }
-      }
     }
 
     // Fetch provider reports (providers reporting users)
@@ -471,10 +445,11 @@ router.get('/reports', auth, requireRole(['admin']), async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Admin reports error', { error: error.message });
-    res.json({
+    logger.error('Admin reports error', { error: error.message, stack: error.stack });
+    res.status(500).json({
       status: 'error',
-      message: 'Failed to fetch reports'
+      message: 'Failed to fetch reports',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -506,6 +481,27 @@ router.put('/reports/:id/status', auth, requireRole(['admin']), async (req, res)
         'UPDATE provider_reports_users SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
         [status, id]
       );
+    }
+
+    // If still not found, try legacy provider_reports table (if it exists as a table)
+    if (result.rows.length === 0 && await tableExists('public.provider_reports')) {
+      try {
+        const tableTypeCheck = await query(`
+          SELECT table_type 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'provider_reports'
+        `);
+        
+        if (tableTypeCheck.rows.length > 0 && tableTypeCheck.rows[0].table_type === 'BASE TABLE') {
+          result = await query(
+            'UPDATE provider_reports SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+            [status, id]
+          );
+        }
+      } catch (legacyError) {
+        logger.warn('Failed to update legacy provider_reports', { error: legacyError.message });
+      }
     }
 
     if (result.rows.length === 0) {
