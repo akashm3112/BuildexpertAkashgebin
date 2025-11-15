@@ -364,16 +364,8 @@ router.post('/signup', [signupLimiter, ...validateSignup], async (req, res) => {
     }
   } catch (error) {
     logger.error('Signup error', { 
-      error: error.message, 
-      stack: error.stack,
-      body: {
-        fullName: req.body?.fullName,
-        email: req.body?.email,
-        phone: req.body?.phone,
-        role: req.body?.role,
-        hasProfilePic: !!req.body?.profilePicUrl,
-        profilePicLength: req.body?.profilePicUrl?.length
-      }
+      error: error, // Pass full error object for stack trace enhancement
+      req: req // Pass req for automatic context capture and sensitive data masking
     });
     res.status(500).json({
       status: 'error',
@@ -1183,7 +1175,10 @@ router.post('/login', [loginLimiter, ...validateLogin], async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Login error', { error: error.message });
+    logger.error('Login error', { 
+      error: error, // Pass full error object for stack trace enhancement
+      req: req // Pass req for automatic context capture and sensitive data masking
+    });
     
     // Log failed attempt on server error
     if (phone) {

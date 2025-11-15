@@ -113,7 +113,8 @@ const query = async (text, params) => {
           queryPreview: typeof text === 'string' ? text.substring(0, 120) : 'dynamic query',
           paramsCount: Array.isArray(params) ? params.length : 0,
           attempts: attempt + 1,
-          failureCategory: retryable ? 'resilience' : 'logic'
+          failureCategory: retryable ? 'resilience' : 'logic',
+          error: error // Pass full error for stack trace enhancement
         });
         throw error;
       }

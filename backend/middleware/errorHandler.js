@@ -208,18 +208,14 @@ const errorHandler = (err, req, res, next) => {
     const failureCategory = error.failureCategory
       || (error.retryable || isRetryableError(error) || error.statusCode >= 500 ? 'resilience' : 'logic');
 
+    // Use enhanced logger with request context capture
     const logPayload = {
       message: error.message,
       errorCode: error.errorCode,
       statusCode: error.statusCode,
-      url: req.url,
-      method: req.method,
-      userId: req.user?.id,
-      ip: req.ip,
-      userAgent: req.headers['user-agent'],
-      stack: error.stack,
-      originalError: error.originalError?.message,
-      errorCategory: error.errorCategory
+      errorCategory: error.errorCategory,
+      error: error, // Pass full error object for stack trace enhancement
+      req: req // Pass req for automatic context capture
     };
 
     if (failureCategory === 'resilience') {
