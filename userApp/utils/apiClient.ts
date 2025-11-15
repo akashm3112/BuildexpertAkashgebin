@@ -1,0 +1,698 @@
+import { API_BASE_URL } from '@/constants/api';
+import { tokenManager } from './tokenManager';
+
+// -------------------- TYPES --------------------
+export interface ApiError {
+  message: string;
+  status?: number;
+  code?: string;
+  data?: any;
+  isNetworkError: boolean;
+  isTimeout: boolean;
+  isServerError: boolean;
+  isClientError: boolean;
+}
+
+export interface RequestConfig extends RequestInit {
+  timeout?: number;
+  retries?: number;
+  retryDelay?: number;
+  skipAuth?: boolean;
+  skipErrorHandling?: boolean;
+  allowDedup?: boolean; // Allow deduplication for non-GET methods
+}
+
+export interface ApiResponse<T = any> {
+  data: T;
+  status: number;
+  headers: Headers;
+  ok: boolean;
+}
+
+// -------------------- GLOBAL HANDLERS --------------------
+let globalErrorHandler: ((error: ApiError) => void) | null = null;
+let globalLogout: (() => Promise<void>) | null = null;
+
+export const setGlobalErrorHandler = (handler: (error: ApiError) => void) => {
+  globalErrorHandler = handler;
+};
+
+export const setGlobalLogout = (logoutFn: () => Promise<void>) => {
+  globalLogout = logoutFn;
+};
+
+let isLoggingOut = false;
+
+// -------------------- CONSTANTS --------------------
+const DEFAULT_TIMEOUT = 30000; // 30s
+const DEFAULT_RETRIES = 3;
+const DEFAULT_RETRY_DELAY = 1000; // 1s
+
+const RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504];
+const RETRYABLE_ERROR_CODES = ['ECONNABORTED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET'];
+const UNSAFE_HTTP_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
+// Rate limiting: max requests per window
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100; // max requests per window
+const RATE_LIMIT_MAX_ENTRIES = 1000; // Max entries in rate limit store (LRU)
+const GLOBAL_RATE_LIMIT_MAX_REQUESTS = 1000; // Global cap across all endpoints
+
+// Request deduplication cache TTL
+const DEDUP_CACHE_TTL = 5000; // 5 seconds
+const DEDUP_CACHE_MAX_ENTRIES = 500; // Max entries in dedup cache (LRU)
+
+// Unified cleanup interval
+const CLEANUP_INTERVAL = 30000; // 30 seconds
+
+// -------------------- RATE LIMITING --------------------
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+  lastAccess: number; // For LRU eviction
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+let globalRequestCount = 0;
+let globalResetAt = Date.now() + RATE_LIMIT_WINDOW;
+
+// Extract endpoint path from URL for rate limiting
+const getEndpointKey = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    // Use pathname as endpoint key (e.g., /api/users, /api/auth/login)
+    return urlObj.pathname;
+  } catch {
+    // If URL parsing fails, use the full URL
+    return url;
+  }
+};
+
+// LRU eviction for rate limit store
+const evictLRUFromRateLimit = (): void => {
+  if (rateLimitStore.size <= RATE_LIMIT_MAX_ENTRIES) return;
+  
+  const entries = Array.from(rateLimitStore.entries());
+  entries.sort((a, b) => a[1].lastAccess - b[1].lastAccess);
+  
+  // Remove oldest 10% of entries
+  const toRemove = Math.ceil(rateLimitStore.size * 0.1);
+  for (let i = 0; i < toRemove; i++) {
+    rateLimitStore.delete(entries[i][0]);
+  }
+};
+
+const checkRateLimit = (endpoint: string, method: string): boolean => {
+  const now = Date.now();
+  
+  // Check global rate limit
+  if (now > globalResetAt) {
+    globalRequestCount = 0;
+    globalResetAt = now + RATE_LIMIT_WINDOW;
+  }
+  
+  if (globalRequestCount >= GLOBAL_RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+  
+  // Per-endpoint rate limiting: endpoint:method
+  const key = `${endpoint}:${method}`;
+  const entry = rateLimitStore.get(key);
+  
+  if (!entry || now > entry.resetAt) {
+    // Evict if needed before adding new entry
+    if (rateLimitStore.size >= RATE_LIMIT_MAX_ENTRIES) {
+      evictLRUFromRateLimit();
+    }
+    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW, lastAccess: now });
+    globalRequestCount++;
+    return true;
+  }
+  
+  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    entry.lastAccess = now; // Update access time
+    return false;
+  }
+  
+  entry.count++;
+  entry.lastAccess = now;
+  globalRequestCount++;
+  return true;
+};
+
+// -------------------- REQUEST DEDUPLICATION --------------------
+interface DedupCacheEntry<T> {
+  promise: Promise<ApiResponse<T>>;
+  timestamp: number;
+  expiresAt: number; // Atomic expiration time
+}
+
+const dedupCache = new Map<string, DedupCacheEntry<any>>();
+
+const getRequestKey = (url: string, method: string, body?: any): string => {
+  // Only deduplicate GET requests or requests with identical bodies
+  if (method === 'GET') {
+    return `${method}:${url}`;
+  }
+  // For other methods, include body hash for deduplication
+  if (body) {
+    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+    return `${method}:${url}:${bodyStr}`;
+  }
+  return `${method}:${url}`;
+};
+
+// LRU eviction for dedup cache
+const evictLRUFromDedup = (): void => {
+  if (dedupCache.size <= DEDUP_CACHE_MAX_ENTRIES) return;
+  
+  const entries = Array.from(dedupCache.entries());
+  entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+  
+  // Remove oldest 10% of entries
+  const toRemove = Math.ceil(dedupCache.size * 0.1);
+  for (let i = 0; i < toRemove; i++) {
+    dedupCache.delete(entries[i][0]);
+  }
+};
+
+const getDedupedRequest = <T>(key: string, allowDedup: boolean, method: string): Promise<ApiResponse<T>> | null => {
+  // Only dedupe GET/HEAD by default, or if explicitly allowed
+  if (!allowDedup && method !== 'GET' && method !== 'HEAD') {
+    return null;
+  }
+  
+  const entry = dedupCache.get(key);
+  if (!entry) return null;
+  
+  // Atomic check using expiresAt (set at creation time)
+  const now = Date.now();
+  if (now > entry.expiresAt) {
+    dedupCache.delete(key);
+    return null;
+  }
+  
+  return entry.promise;
+};
+
+const setDedupedRequest = <T>(key: string, promise: Promise<ApiResponse<T>>, allowDedup: boolean, method: string): void => {
+  // Only cache GET/HEAD by default, or if explicitly allowed
+  if (!allowDedup && method !== 'GET' && method !== 'HEAD') {
+    return;
+  }
+  
+  const now = Date.now();
+  // Set expiration time atomically at creation
+  const expiresAt = now + DEDUP_CACHE_TTL;
+  
+  // Evict if needed before adding new entry
+  if (dedupCache.size >= DEDUP_CACHE_MAX_ENTRIES) {
+    evictLRUFromDedup();
+  }
+  
+  dedupCache.set(key, { promise, timestamp: now, expiresAt });
+  
+  // Cleanup after promise resolves/rejects (atomic deletion)
+  promise.finally(() => {
+    // Use expiresAt check to prevent race conditions
+    const entry = dedupCache.get(key);
+    if (entry && Date.now() > entry.expiresAt) {
+      dedupCache.delete(key);
+    }
+  });
+};
+
+// -------------------- UNIFIED CLEANUP --------------------
+// Single cleanup interval for both rate limit and dedup cache
+setInterval(() => {
+  const now = Date.now();
+  
+  // Cleanup expired rate limit entries
+  for (const [key, entry] of rateLimitStore.entries()) {
+    if (now > entry.resetAt) {
+      rateLimitStore.delete(key);
+    }
+  }
+  
+  // Cleanup expired dedup cache entries (atomic check)
+  for (const [key, entry] of dedupCache.entries()) {
+    if (now > entry.expiresAt) {
+      dedupCache.delete(key);
+    }
+  }
+  
+  // Reset global counter if window expired
+  if (now > globalResetAt) {
+    globalRequestCount = 0;
+    globalResetAt = now + RATE_LIMIT_WINDOW;
+  }
+}, CLEANUP_INTERVAL);
+
+// -------------------- TOKEN REFRESH QUEUE --------------------
+let tokenRefreshPromise: Promise<string | null> | null = null;
+const tokenRefreshQueue: Array<{
+  resolve: (token: string | null) => void;
+  reject: (error: any) => void;
+}> = [];
+
+const queueTokenRefresh = async (forceRefresh: boolean = false): Promise<string | null> => {
+  // If refresh is already in progress, queue this request
+  if (tokenRefreshPromise && !forceRefresh) {
+    return new Promise<string | null>((resolve, reject) => {
+      tokenRefreshQueue.push({ resolve, reject });
+    });
+  }
+  
+  // Start refresh (force refresh if requested)
+  const refreshFn = forceRefresh 
+    ? tokenManager.forceRefreshToken()
+    : tokenManager.getValidToken();
+  
+  tokenRefreshPromise = refreshFn.catch((error: any) => {
+    // If refresh fails, reject all queued requests
+    tokenRefreshQueue.forEach(({ reject }) => reject(error));
+    tokenRefreshQueue.length = 0;
+    throw error;
+  });
+  
+  try {
+    const token = await tokenRefreshPromise;
+    // Resolve all queued requests
+    tokenRefreshQueue.forEach(({ resolve }) => resolve(token));
+    tokenRefreshQueue.length = 0;
+    return token;
+  } finally {
+    tokenRefreshPromise = null;
+  }
+};
+
+// -------------------- UTILS --------------------
+const isFormData = (body: any): body is FormData => body instanceof FormData;
+
+const joinUrl = (base: string, endpoint: string): string => {
+  const baseTrimmed = base.replace(/\/+$/, '');
+  const endpointTrimmed = endpoint.replace(/^\/+/, '');
+  return `${baseTrimmed}/${endpointTrimmed}`;
+};
+
+// Normalize URL with query parameters
+const normalizeUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    // Sort query parameters for consistency
+    const sortedParams = new URLSearchParams();
+    urlObj.searchParams.sort();
+    for (const [key, value] of urlObj.searchParams.entries()) {
+      sortedParams.append(key, value);
+    }
+    urlObj.search = sortedParams.toString();
+    return urlObj.toString();
+  } catch {
+    // If URL parsing fails, return as-is
+    return url;
+  }
+};
+
+// Merge multiple AbortSignals (simplified, race-safe)
+const mergeAbortSignals = (...signals: (AbortSignal | null | undefined)[]): AbortSignal | undefined => {
+  const validSignals = signals.filter((s): s is AbortSignal => s !== null && s !== undefined);
+  if (validSignals.length === 0) return undefined;
+  if (validSignals.length === 1) return validSignals[0];
+  
+  // Check if any signal is already aborted
+  for (const signal of validSignals) {
+    if (signal.aborted) {
+      return signal; // Return aborted signal immediately
+    }
+  }
+  
+  // Use AbortSignal.any() if available (modern browsers)
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any(validSignals);
+  }
+  
+  // Fallback: manual merge for older browsers (race-safe)
+  const controller = new AbortController();
+  let aborted = false;
+  
+  const abort = () => {
+    if (!aborted) {
+      aborted = true;
+      controller.abort();
+    }
+  };
+  
+  validSignals.forEach(signal => {
+    // Double-check aborted state
+    if (signal.aborted) {
+      abort();
+    } else {
+      signal.addEventListener('abort', abort, { once: true });
+    }
+  });
+  
+  return controller.signal;
+};
+
+const normalizeError = (error: any, response?: Response): ApiError => {
+  const message = error?.message || 'An unexpected error occurred';
+  const code = error?.code;
+
+  const isNetworkError =
+    message.includes('Network request failed') ||
+    message.includes('Failed to fetch') ||
+    message.includes('ECONNREFUSED') ||
+    message.includes('ENOTFOUND') ||
+    code === 'NETWORK_ERROR' ||
+    message.includes('CORS') ||
+    message.includes('Cross-Origin') ||
+    message.includes('Access-Control');
+
+  const isTimeout =
+    error?.name === 'AbortError' ||
+    code === 'TIMEOUT' ||
+    message.toLowerCase().includes('timeout') ||
+    message.includes('ETIMEDOUT');
+
+  const status = response?.status || error?.status;
+  const isServerError = status ? status >= 500 && status < 600 : false;
+  const isClientError = status ? status >= 400 && status < 500 : false;
+
+  return {
+    message,
+    status,
+    code,
+    data: error?.data,
+    isNetworkError,
+    isTimeout,
+    isServerError,
+    isClientError,
+  };
+};
+
+const isRetryable = (error: ApiError, attempt: number, maxRetries: number, method?: string): boolean => {
+  if (attempt >= maxRetries) return false;
+
+  // Don't retry unsafe methods on client errors except 408/429
+  if (method && UNSAFE_HTTP_METHODS.includes(method.toUpperCase())) {
+    if (error.isClientError && ![408, 429].includes(error.status!)) return false;
+  }
+
+  if (error.isNetworkError || error.isTimeout) return true;
+  if (error.status && RETRYABLE_STATUS_CODES.includes(error.status)) return true;
+  if (error.code && RETRYABLE_ERROR_CODES.includes(error.code)) return true;
+
+  return false;
+};
+
+// Exponential backoff with jitter
+const calculateRetryDelay = (attempt: number, baseDelay: number, retryAfter?: number): number => {
+  // If server specifies retry-after, use it (with a minimum)
+  if (retryAfter && retryAfter > 0) {
+    return Math.max(retryAfter * 1000, baseDelay); // Convert seconds to ms
+  }
+  const exponential = baseDelay * Math.pow(2, attempt);
+  const jitter = Math.random() * baseDelay;
+  return exponential + jitter;
+};
+
+const prepareBody = (data: any): string | FormData | Blob | undefined => {
+  if (data === undefined || data === null) return undefined;
+  if (isFormData(data)) return data;
+  if (data instanceof Blob) return data;
+  if (typeof data === 'string') return data;
+  return JSON.stringify(data);
+};
+
+// Parse response body (extracted to reduce duplication)
+const parseResponseBody = async (response: Response): Promise<any> => {
+  const contentType = response.headers.get('content-type') || '';
+  const contentLength = response.headers.get('content-length');
+  
+  // Handle empty responses
+  if (contentLength === '0' || response.status === 204) {
+    return null;
+  }
+  
+  // Handle JSON responses
+  if (contentType.includes('application/json')) {
+    try {
+      const text = await response.text();
+      return text.trim() ? JSON.parse(text) : null;
+    } catch (jsonError: any) {
+      // Only throw parse error if response is not ok
+      if (!response.ok) {
+        throw normalizeError({ 
+          message: 'Failed to parse JSON response', 
+          code: 'PARSE_ERROR', 
+          data: jsonError.message 
+        }, response);
+      }
+      // For successful responses with invalid JSON, return null
+      return null;
+    }
+  }
+  
+  // Handle binary/blob responses
+  if (contentType.includes('application/octet-stream') || 
+      contentType.includes('image/') || 
+      contentType.includes('application/pdf')) {
+    return await response.blob();
+  }
+  
+  // Handle text responses
+  if (contentType.includes('text/')) {
+    return await response.text();
+  }
+  
+  // Default: try text, fallback to null
+  try {
+    return await response.text();
+  } catch {
+    return null;
+  }
+};
+
+// -------------------- INTERCEPTORS --------------------
+const requestInterceptor = async (config: RequestConfig, forceTokenRefresh: boolean = false): Promise<RequestConfig> => {
+  const headers = new Headers(config.headers);
+
+  // Don't set Content-Type for FormData or Blob (browser will set it with boundary)
+  if (config.body && !headers.has('Content-Type')) {
+    if (!isFormData(config.body) && !(config.body instanceof Blob)) {
+      headers.set('Content-Type', 'application/json');
+    }
+  }
+
+  if (!config.skipAuth) {
+    try {
+      // Use queued token refresh to prevent multiple simultaneous refreshes
+      const token = await queueTokenRefresh(forceTokenRefresh);
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+    } catch (tokenError) {
+      // If token retrieval fails, continue without token (will get 401)
+      console.warn('Failed to get auth token:', tokenError);
+    }
+  }
+
+  return { ...config, headers };
+};
+
+const responseInterceptor = async <T>(response: Response, config: RequestConfig, retryWithRefresh: () => Promise<ApiResponse<T>>): Promise<ApiResponse<T>> => {
+  if (response.status === 401 && !config.skipErrorHandling && !isLoggingOut) {
+    // Try to refresh token and retry once
+    if (!config.skipAuth) {
+      try {
+        // Force refresh token on 401
+        await queueTokenRefresh(true);
+        // Retry the request with new token
+        return await retryWithRefresh();
+      } catch (refreshError) {
+        // Refresh failed, proceed with logout
+        console.warn('Token refresh failed on 401:', refreshError);
+      }
+    }
+    
+    // If refresh failed or skipAuth, trigger logout
+    if (globalLogout) {
+      isLoggingOut = true;
+      try {
+        await globalLogout();
+      } catch (err) {
+        console.error('Logout error', err);
+      } finally {
+        setTimeout(() => { isLoggingOut = false; }, 1000);
+      }
+    }
+    throw normalizeError({ message: 'Authentication required', status: 401 }, response);
+  }
+
+  if (response.status === 403 && !config.skipErrorHandling) {
+    throw normalizeError({ message: 'Access forbidden', status: 403 }, response);
+  }
+
+  // Parse response body (refactored to reduce duplication)
+  const data = await parseResponseBody(response);
+
+  if (!response.ok) {
+    const apiError = normalizeError({ 
+      message: (data && typeof data === 'object' && data.message) ? data.message : response.statusText, 
+      status: response.status,
+      data 
+    }, response);
+    if (!config.skipErrorHandling && globalErrorHandler) globalErrorHandler(apiError);
+    throw apiError;
+  }
+
+  return { data, status: response.status, headers: response.headers, ok: response.ok };
+};
+
+// -------------------- MAIN REQUEST --------------------
+export const apiRequest = async <T = any>(endpoint: string, config: RequestConfig = {}): Promise<ApiResponse<T>> => {
+  const { timeout = DEFAULT_TIMEOUT, retries = DEFAULT_RETRIES, retryDelay = DEFAULT_RETRY_DELAY, allowDedup = false, ...fetchConfig } = config;
+  let url = endpoint.startsWith('http') ? endpoint : joinUrl(API_BASE_URL, endpoint);
+  
+  // Normalize URL (sort query params)
+  url = normalizeUrl(url);
+  
+  const method = (config.method || fetchConfig.method || 'GET').toUpperCase();
+  const endpointKey = getEndpointKey(url);
+
+  // Check rate limiting per endpoint
+  if (!checkRateLimit(endpointKey, method)) {
+    throw normalizeError({
+      message: 'Rate limit exceeded. Please try again later.',
+      code: 'RATE_LIMIT_EXCEEDED',
+    });
+  }
+
+  // Check for duplicate request
+  const requestKey = getRequestKey(url, method, fetchConfig.body);
+  const dedupedRequest = getDedupedRequest<T>(requestKey, allowDedup, method);
+  if (dedupedRequest) {
+    return dedupedRequest;
+  }
+
+  // Create the actual request
+  const requestPromise = executeRequest<T>(url, method, config, fetchConfig);
+  
+  // Cache the promise for deduplication
+  setDedupedRequest(requestKey, requestPromise, allowDedup, method);
+  
+  return requestPromise;
+};
+
+const executeRequest = async <T = any>(
+  url: string,
+  method: string,
+  config: RequestConfig,
+  fetchConfig: RequestInit
+): Promise<ApiResponse<T>> => {
+  const { timeout = DEFAULT_TIMEOUT, retries = DEFAULT_RETRIES, retryDelay = DEFAULT_RETRY_DELAY } = config;
+  
+  let lastError: ApiError | null = null;
+  let hasRetriedWithRefresh = false; // Track if we've already retried with token refresh
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    // Request interceptor inside retry loop (so token refresh happens on each retry)
+    const interceptedConfig = await requestInterceptor(fetchConfig, attempt > 0);
+    
+    // Create timeout abort controller
+    const timeoutController = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    // Merge user's signal with timeout signal
+    const userSignal = fetchConfig.signal;
+    const mergedSignal = mergeAbortSignals(timeoutController.signal, userSignal);
+
+    try {
+      timeoutId = setTimeout(() => {
+        timeoutController.abort();
+      }, timeout);
+
+      // Create retry function for 401 handling
+      const retryWithRefresh = async (): Promise<ApiResponse<T>> => {
+        if (hasRetriedWithRefresh) {
+          throw normalizeError({ message: 'Authentication required', status: 401 });
+        }
+        hasRetriedWithRefresh = true;
+        // Retry with fresh token
+        const refreshedConfig = await requestInterceptor(fetchConfig, true);
+        const retryResponse = await fetch(url, {
+          ...refreshedConfig,
+          signal: mergedSignal,
+        });
+        return await responseInterceptor<T>(retryResponse, config, async () => {
+          throw normalizeError({ message: 'Authentication required after refresh', status: 401 });
+        });
+      };
+
+      const response = await fetch(url, { 
+        ...interceptedConfig, 
+        signal: mergedSignal 
+      });
+      
+      // Clear timeout on success
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      
+      // Extract retry-after header for 429 errors
+      const retryAfter = response.status === 429 
+        ? parseInt(response.headers.get('retry-after') || '0', 10)
+        : undefined;
+      
+      const result = await responseInterceptor<T>(response, config, retryWithRefresh);
+      
+      return result;
+      
+    } catch (error: any) {
+      // Cleanup timeout
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      
+      // Check if aborted by user signal
+      if (userSignal?.aborted) {
+        throw normalizeError({ 
+          message: 'Request aborted by user', 
+          code: 'ABORTED' 
+        });
+      }
+      
+      lastError = normalizeError(error);
+
+      if (!isRetryable(lastError, attempt, retries, method)) break;
+
+      // Get retry-after from error response if available
+      const retryAfter = lastError.data?.retryAfter || 
+                        (lastError.status === 429 ? 1 : undefined);
+      
+      const delay = calculateRetryDelay(attempt, retryDelay, retryAfter);
+      if (attempt < retries) {
+        await new Promise(res => setTimeout(res, delay));
+      }
+    }
+  }
+
+  if (!config.skipErrorHandling && lastError && globalErrorHandler) globalErrorHandler(lastError);
+  throw lastError || normalizeError({ message: 'Request failed after retries' });
+};
+
+// -------------------- CONVENIENCE METHODS --------------------
+export const apiGet = <T = any>(endpoint: string, config?: RequestConfig) =>
+  apiRequest<T>(endpoint, { ...config, method: 'GET' });
+
+export const apiPost = <T = any>(endpoint: string, data?: any, config?: RequestConfig) =>
+  apiRequest<T>(endpoint, { ...config, method: 'POST', body: prepareBody(data) });
+
+export const apiPut = <T = any>(endpoint: string, data?: any, config?: RequestConfig) =>
+  apiRequest<T>(endpoint, { ...config, method: 'PUT', body: prepareBody(data) });
+
+export const apiPatch = <T = any>(endpoint: string, data?: any, config?: RequestConfig) =>
+  apiRequest<T>(endpoint, { ...config, method: 'PATCH', body: prepareBody(data) });
+
+export const apiDelete = <T = any>(endpoint: string, config?: RequestConfig) =>
+  apiRequest<T>(endpoint, { ...config, method: 'DELETE' });
