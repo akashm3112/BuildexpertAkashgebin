@@ -31,7 +31,7 @@ import {
   Trash2,
   Filter,
   Search,
-  MoreVertical,
+  Info,
   Clock,
   Shield,
   Eye,
@@ -500,7 +500,7 @@ export default function ReportsScreen() {
                 setShowReportModal(true);
               }}
             >
-              <MoreVertical size={getResponsiveValue(16, 18, 20)} color="#6B7280" />
+              <Info size={getResponsiveValue(22, 24, 26)} color="#6B7280" />
             </TouchableOpacity>
           </View>
 
@@ -963,7 +963,7 @@ export default function ReportsScreen() {
               </View>
 
               {/* Bottom Spacing */}
-              <View style={{ height: 40 }} />
+              <View style={{ height: 20 }} />
             </ScrollView>
           </View>
         )}
@@ -1325,26 +1325,30 @@ const styles = StyleSheet.create({
     minHeight: 40,
     marginRight: 8,
     marginBottom: 8,
+    borderWidth: 1,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.12,
         shadowRadius: 4,
       },
       android: {
-        elevation: 2,
+        elevation: 3,
       },
     }),
   },
   resolveButton: {
     backgroundColor: '#10B981',
+    borderColor: '#059669',
   },
   closeButton: {
     backgroundColor: '#6B7280',
+    borderColor: '#4B5563',
   },
   removeButton: {
     backgroundColor: '#EF4444',
+    borderColor: '#DC2626',
   },
   actionButtonText: {
     fontSize: getResponsiveFontSize(12, 13, 14),
@@ -1457,15 +1461,15 @@ const styles = StyleSheet.create({
     padding: getResponsivePadding(),
   },
   modalSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   modalSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   modalSectionTitle: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(15, 16, 17),
     fontWeight: '700',
     color: '#111827',
     marginLeft: 8,
@@ -1473,41 +1477,45 @@ const styles = StyleSheet.create({
   modalInfoCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: isSmallScreen ? 12 : 16,
+    padding: isSmallScreen ? 12 : 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
   modalActionsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: isSmallScreen ? 12 : 16,
+    padding: isSmallScreen ? 12 : 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
   modalInfoRow: {
     flexDirection: 'column',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   modalInfoLabel: {
-    fontSize: 13,
+    fontSize: getResponsiveFontSize(11, 12, 13),
     fontWeight: '600',
     color: '#6B7280',
     marginBottom: 4,
@@ -1515,15 +1523,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   modalInfoValue: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(14, 15, 16),
     fontWeight: '600',
     color: '#111827',
   },
   modalInfoValueMultiline: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(14, 15, 16),
     fontWeight: '500',
     color: '#111827',
-    lineHeight: 24,
+    lineHeight: 22,
   },
   modalInfoValueSmall: {
     fontSize: 13,
@@ -1534,7 +1542,7 @@ const styles = StyleSheet.create({
   modalDivider: {
     height: 1,
     backgroundColor: '#E5E7EB',
-    marginVertical: 8,
+    marginVertical: 6,
   },
   modalActionButton: {
     flexDirection: 'row',
@@ -1545,15 +1553,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginVertical: 6,
     width: '100%',
+    borderWidth: 1.5,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.12,
         shadowRadius: 4,
       },
       android: {
-        elevation: 2,
+        elevation: 3,
       },
     }),
   },
@@ -1566,17 +1575,22 @@ const styles = StyleSheet.create({
   },
   modalResolveButton: {
     backgroundColor: '#10B981',
+    borderColor: '#059669',
   },
   modalCloseReportButton: {
     backgroundColor: '#6B7280',
+    borderColor: '#4B5563',
   },
   modalReopenButton: {
     backgroundColor: '#F59E0B',
+    borderColor: '#D97706',
   },
   modalRemoveUserButton: {
     backgroundColor: '#EF4444',
+    borderColor: '#DC2626',
   },
   modalRemoveProviderButton: {
     backgroundColor: '#DC2626',
+    borderColor: '#B91C1C',
   },
 });
