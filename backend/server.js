@@ -28,6 +28,7 @@ const { initializeCleanupJob } = require('./utils/cleanupJob');
 const { validateCallPermissions } = require('./utils/callPermissions');
 const { WebRTCPermissionError } = require('./utils/errorTypes');
 const notificationQueue = require('./utils/notificationQueue');
+const { preloadTableCache } = require('./utils/tableCache');
 
 // Initialize memory leak prevention
 const { 
@@ -449,7 +450,7 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 BuildXpert API server running on port ${PORT}`);
   console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
@@ -461,6 +462,14 @@ server.listen(PORT, '0.0.0.0', () => {
   serviceExpiryManager.start();
   initializeCleanupJob(); // Auth data cleanup (tokens, sessions, security logs)
   notificationQueue.start();
+  
+  // Preload table cache for admin routes
+  try {
+    await preloadTableCache();
+  } catch (error) {
+    console.warn('⚠️  Failed to preload table cache:', error.message);
+  }
+  
   console.log('✅ All background services started');
 });
 

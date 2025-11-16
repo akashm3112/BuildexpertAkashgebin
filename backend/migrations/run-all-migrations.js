@@ -27,6 +27,7 @@ const alignServicePricing = require('./013-align-service-pricing');
 const notificationQueueAndCascade = require('./014-notification-queue-and-cascade');
 const createPendingPushNotificationsTable = require('./015-pending-push-notifications');
 const createBlockedIdentifiersTable = require('./016-add-blocked-identifiers-table');
+const optimizeReportStatusIndexes = require('./017-optimize-report-status-indexes');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -141,6 +142,13 @@ const migrations = [
     description: 'Creates blocked_identifiers table for admin to block phone numbers and emails',
     function: createBlockedIdentifiersTable,
     required: true
+  },
+  {
+    id: '017',
+    name: 'Optimize Report Status Indexes',
+    description: 'Adds functional indexes for case-insensitive status queries to improve admin dashboard performance',
+    function: optimizeReportStatusIndexes,
+    required: false // Optional optimization
   }
 ];
 

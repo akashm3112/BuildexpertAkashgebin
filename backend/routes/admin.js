@@ -1,45 +1,214 @@
 const express = require('express');
-const { query, getRow } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const logger = require('../utils/logger');
 const { adminActionLimiter } = require('../middleware/rateLimiting');
 const { sanitizeQuery } = require('../middleware/inputSanitization');
-const { blockIdentifiersForAccount } = require('../utils/blocklist');
+const {
+  validatePagination,
+  validateUUID,
+  validateStatus,
+  validateType,
+  validateBoolean
+} = require('../middleware/validation');
+const AdminService = require('../services/adminService');
 
 const router = express.Router();
+
+// ============================================================================
+// MIDDLEWARE - MUST BE BEFORE ALL ROUTES
+// ============================================================================
+// Apply rate limiting and sanitization to ALL admin routes
+router.use(adminActionLimiter);
+router.use(sanitizeQuery());
+
+// ============================================================================
+// ROUTES
+// ============================================================================
+
+// @route   GET /api/admin/stats
+// @desc    Get admin dashboard statistics
+// @access  Private (Admin only)
+router.get('/stats', auth, requireRole(['admin']), async (req, res) => {
+  try {
+    const stats = await AdminService.getDashboardStats();
+    res.json({
+      status: 'success',
+      data: stats
+    });
+  } catch (error) {
+    logger.error('Admin stats error', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch admin statistics'
+    });
+  }
+});
+
+// @route   GET /api/admin/users
+// @desc    Get all users for admin management
+// @access  Private (Admin only)
+router.get('/users', 
+  auth, 
+  requireRole(['admin']), 
+  validatePagination,
+  async (req, res) => {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      
+      const result = await AdminService.getUsers(page, limit);
+      
+      res.json({
+        status: 'success',
+        data: {
+          users: result.users,
+          pagination: {
+            currentPage: page,
+            totalPages: Math.ceil(result.totalCount / limit),
+            totalCount: result.totalCount,
+            limit
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Admin users error', { error: error.message });
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to fetch users'
+      });
+    }
+  }
+);
+
+// @route   GET /api/admin/providers
+// @desc    Get all providers for admin management
+// @access  Private (Admin only)
+router.get('/providers',
+  auth,
+  requireRole(['admin']),
+  validatePagination,
+  async (req, res) => {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      
+      const result = await AdminService.getProviders(page, limit);
+      
+      res.json({
+        status: 'success',
+        data: {
+          providers: result.providers,
+          pagination: {
+            currentPage: page,
+            totalPages: Math.ceil(result.totalCount / limit),
+            totalCount: result.totalCount,
+            limit
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Admin providers error', { error: error.message });
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to fetch providers'
+      });
+    }
+  }
+);
+
+// @route   GET /api/admin/reports
+// @desc    Get all reports (user reports about providers AND provider reports about users)
+// @access  Private (Admin only)
+router.get('/reports',
+  auth,
+  requireRole(['admin']),
+  validatePagination,
+  validateStatus(['open', 'resolved', 'closed', 'all']),
+  validateType(['all', 'user', 'provider']),
+  async (req, res) => {
+    try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      const status = req.query.status || 'all';
+      const type = req.query.type || 'all';
+      
+      const result = await AdminService.getReports(page, limit, status, type);
+      
+      res.json({
+        status: 'success',
+        data: {
+          reports: result.reports,
+          pagination: {
+            currentPage: page,
+            totalPages: Math.ceil(result.totalCount / limit),
+            totalCount: result.totalCount,
+            limit
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Admin reports error', { error: error.message, stack: error.stack });
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to fetch reports',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+// @route   PUT /api/admin/reports/:id/status
+// @desc    Update report status (open, resolved, closed)
+// @access  Private (Admin only)
+router.put('/reports/:id/status',
+  auth,
+  requireRole(['admin']),
+  validateUUID('id'),
+  validateStatus(['open', 'resolved', 'closed']),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      
+      const report = await AdminService.updateReportStatus(id, status);
+      
+      res.json({
+        status: 'success',
+        message: 'Report status updated successfully',
+        data: report
+      });
+    } catch (error) {
+      if (error.message === 'Report not found') {
+        return res.status(404).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      
+      logger.error('Admin update report error', { error: error.message });
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to update report status'
+      });
+    }
+  }
+);
+
 // @route   DELETE /api/admin/reports/pending
 // @desc    Delete all pending reports across all tables
 // @access  Private (Admin only)
 router.delete('/reports/pending', auth, requireRole(['admin']), async (req, res) => {
   try {
-    const deletedUserReports = await query(
-      `DELETE FROM user_reports_providers WHERE status = 'open' RETURNING id`
-    );
-
-    const deletedProviderReports = await query(
-      `DELETE FROM provider_reports_users WHERE status = 'open' RETURNING id`
-    );
-
-    let deletedLegacyReports = { rows: [] };
-    if (await tableExists('public.provider_reports')) {
-      deletedLegacyReports = await query(
-        `DELETE FROM provider_reports WHERE status = 'open' RETURNING id`
-      );
-    }
-
-    const totalDeleted =
-      deletedUserReports.rows.length +
-      deletedProviderReports.rows.length +
-      deletedLegacyReports.rows.length;
-
+    const result = await AdminService.deletePendingReports();
+    
     res.json({
       status: 'success',
       message: 'Pending reports cleared successfully',
       data: {
-        totalDeleted,
-        deletedUserReports: deletedUserReports.rows.map(r => r.id),
-        deletedProviderReports: deletedProviderReports.rows.map(r => r.id),
-        deletedLegacyReports: deletedLegacyReports.rows.map(r => r.id)
+        totalDeleted: result.totalDeleted,
+        deletedUserReports: result.deletedUserReports,
+        deletedProviderReports: result.deletedProviderReports,
+        deletedLegacyReports: result.deletedLegacyReports
       }
     });
   } catch (error) {
@@ -51,732 +220,176 @@ router.delete('/reports/pending', auth, requireRole(['admin']), async (req, res)
   }
 });
 
-
-const tableExists = async (tableName) => {
-  try {
-    const result = await query(`SELECT to_regclass($1) as table_name`, [tableName]);
-    return !!result.rows[0]?.table_name;
-  } catch (error) {
-    logger.warn('Failed to check table existence', { tableName, error: error.message });
-    return false;
-  }
-};
-
-// Apply rate limiting and sanitization to all admin routes
-router.use(adminActionLimiter);
-router.use(sanitizeQuery());
-
-// @route   GET /api/admin/stats
-// @desc    Get admin dashboard statistics
-// @access  Private (Admin only)
-router.get('/stats', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    // Get total users count
-    const usersResult = await query('SELECT COUNT(*) as count FROM users WHERE role = $1', ['user']);
-    const totalUsers = parseInt(usersResult.rows[0].count);
-
-    // Get total providers count
-    const providersResult = await query('SELECT COUNT(*) as count FROM users WHERE role = $1', ['provider']);
-    const totalProviders = parseInt(providersResult.rows[0].count);
-
-    // Get total bookings count
-    const bookingsResult = await query('SELECT COUNT(*) as count FROM bookings');
-    const totalBookings = parseInt(bookingsResult.rows[0].count);
-
-    // Get total revenue (sum of all completed payments)
-    const revenueResult = await query(`
-      SELECT COALESCE(SUM(amount), 0) as total 
-      FROM payment_transactions 
-      WHERE status = 'completed'
-    `);
-    const totalRevenue = parseFloat(revenueResult.rows[0].total) || 0;
-
-    // Get reports counts by status from BOTH tables
-    let reportsStats = { total: 0, open: 0, resolved: 0, closed: 0 };
-    try {
-      if (await tableExists('public.user_reports_providers')) {
-        const userReportsTotal = await query(`SELECT COUNT(*) as count FROM user_reports_providers`);
-        const userReportsOpen = await query(`SELECT COUNT(*) as count FROM user_reports_providers WHERE LOWER(status) = 'open'`);
-        const userReportsResolved = await query(`SELECT COUNT(*) as count FROM user_reports_providers WHERE LOWER(status) = 'resolved'`);
-        const userReportsClosed = await query(`SELECT COUNT(*) as count FROM user_reports_providers WHERE LOWER(status) = 'closed'`);
-
-        reportsStats.total += parseInt(userReportsTotal.rows[0].count);
-        reportsStats.open += parseInt(userReportsOpen.rows[0].count);
-        reportsStats.resolved += parseInt(userReportsResolved.rows[0].count);
-        reportsStats.closed += parseInt(userReportsClosed.rows[0].count);
-      }
-
-      if (await tableExists('public.provider_reports_users')) {
-        const providerReportsTotal = await query(`SELECT COUNT(*) as count FROM provider_reports_users`);
-        const providerReportsOpen = await query(`SELECT COUNT(*) as count FROM provider_reports_users WHERE LOWER(status) = 'open'`);
-        const providerReportsResolved = await query(`SELECT COUNT(*) as count FROM provider_reports_users WHERE LOWER(status) = 'resolved'`);
-        const providerReportsClosed = await query(`SELECT COUNT(*) as count FROM provider_reports_users WHERE LOWER(status) = 'closed'`);
-
-        reportsStats.total += parseInt(providerReportsTotal.rows[0].count);
-        reportsStats.open += parseInt(providerReportsOpen.rows[0].count);
-        reportsStats.resolved += parseInt(providerReportsResolved.rows[0].count);
-        reportsStats.closed += parseInt(providerReportsClosed.rows[0].count);
-      }
-
-      if (await tableExists('public.provider_reports')) {
-        const legacyTotal = await query(`SELECT COUNT(*) as count FROM provider_reports`);
-        const legacyOpen = await query(`SELECT COUNT(*) as count FROM provider_reports WHERE LOWER(status) = 'open'`);
-        const legacyResolved = await query(`SELECT COUNT(*) as count FROM provider_reports WHERE LOWER(status) = 'resolved'`);
-        const legacyClosed = await query(`SELECT COUNT(*) as count FROM provider_reports WHERE LOWER(status) = 'closed'`);
-
-        reportsStats.total += parseInt(legacyTotal.rows[0].count);
-        reportsStats.open += parseInt(legacyOpen.rows[0].count);
-        reportsStats.resolved += parseInt(legacyResolved.rows[0].count);
-        reportsStats.closed += parseInt(legacyClosed.rows[0].count);
-      }
-
-    } catch (error) {
-      logger.warn('Reports tables not found, setting all report stats to 0', { error: error.message });
-    }
-
-    res.json({
-      status: 'success',
-      data: {
-        totalUsers,
-        totalProviders,
-        totalBookings,
-        totalRevenue,
-        pendingReports: reportsStats.open, // For backward compatibility with main dashboard
-        reportsStats // For reports tab
-      }
-    });
-  } catch (error) {
-    logger.error('Admin stats error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch admin statistics'
-    });
-  }
-});
-
-// @route   GET /api/admin/users
-// @desc    Get all users for admin management
-// @access  Private (Admin only)
-router.get('/users', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
-
-    // Get users with pagination
-    const usersResult = await query(`
-      SELECT 
-        u.id, u.full_name, u.email, u.phone, u.role, u.is_verified, u.created_at,
-        COUNT(b.id) as total_bookings
-      FROM users u
-      LEFT JOIN bookings b ON u.id = b.user_id
-      WHERE u.role = 'user'
-      GROUP BY u.id, u.full_name, u.email, u.phone, u.role, u.is_verified, u.created_at
-      ORDER BY u.created_at DESC
-      LIMIT $1 OFFSET $2
-    `, [limit, offset]);
-
-    // Get total count
-    const countResult = await query('SELECT COUNT(*) as count FROM users WHERE role = $1', ['user']);
-    const totalCount = parseInt(countResult.rows[0].count);
-
-    res.json({
-      status: 'success',
-      data: {
-        users: usersResult.rows,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalCount / limit),
-          totalCount,
-          limit: parseInt(limit)
-        }
-      }
-    });
-  } catch (error) {
-    logger.error('Admin users error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch users'
-    });
-  }
-});
-
-// @route   GET /api/admin/providers
-// @desc    Get all providers for admin management
-// @access  Private (Admin only)
-router.get('/providers', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
-
-    // Get providers (check if provider_profiles table exists first)
-    let providersResult;
-    try {
-      // Try with provider_profiles join
-      providersResult = await query(`
-        SELECT 
-          u.id, u.full_name, u.email, u.phone, u.role, u.is_verified, u.created_at,
-          pp.business_name, pp.experience_years, pp.rating, pp.total_reviews
-        FROM users u
-        LEFT JOIN provider_profiles pp ON u.id = pp.user_id
-        WHERE u.role = 'provider'
-        ORDER BY u.created_at DESC
-        LIMIT $1 OFFSET $2
-      `, [limit, offset]);
-    } catch (error) {
-      // Fallback to basic user query if provider_profiles table doesn't exist
-      providersResult = await query(`
-        SELECT 
-          u.id, u.full_name, u.email, u.phone, u.role, u.is_verified, u.created_at,
-          NULL as business_name, NULL as experience_years, NULL as rating, NULL as total_reviews
-        FROM users u
-        WHERE u.role = 'provider'
-        ORDER BY u.created_at DESC
-        LIMIT $1 OFFSET $2
-      `, [limit, offset]);
-    }
-
-    // Get total count
-    const countResult = await query('SELECT COUNT(*) as count FROM users WHERE role = $1', ['provider']);
-    const totalCount = parseInt(countResult.rows[0].count);
-
-    res.json({
-      status: 'success',
-      data: {
-        providers: providersResult.rows,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalCount / limit),
-          totalCount,
-          limit: parseInt(limit)
-        }
-      }
-    });
-  } catch (error) {
-    logger.error('Admin providers error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch providers'
-    });
-  }
-});
-
-// @route   GET /api/admin/reports
-// @desc    Get all reports (user reports about providers AND provider reports about users)
-// @access  Private (Admin only)
-router.get('/reports', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { page = 1, limit = 20, status = 'all', type = 'all' } = req.query;
-    const offset = (page - 1) * limit;
-
-    let allReports = [];
-    let totalCount = 0;
-
-    // Fetch user reports (users reporting providers)
-    if (type === 'all' || type === 'user') {
-      let whereClause = '';
-      let queryParams = [];
-
-      if (status !== 'all') {
-        whereClause = 'WHERE LOWER(urp.status) = LOWER($1)';
-        queryParams.push(status);
-      }
-
-      let userReportsRows = [];
-
-      // Fetch from user_reports_providers table (current table)
-      if (await tableExists('public.user_reports_providers')) {
-        try {
-          const userReportsQuery = await query(`
-            SELECT 
-              urp.id, 
-              urp.incident_type as report_type, 
-              urp.description, 
-              urp.status, 
-              urp.created_at, 
-              urp.updated_at,
-              urp.reported_by_user_id, 
-              urp.reported_provider_id,
-              urp.incident_date,
-              urp.incident_time,
-              urp.evidence,
-              u.full_name as reporter_name, 
-              u.phone as reporter_phone,
-              p.full_name as reported_provider_name, 
-              p.phone as reported_provider_phone,
-              pp.business_name as reported_provider_business,
-              'user_report' as report_source
-            FROM user_reports_providers urp
-            LEFT JOIN users u ON urp.reported_by_user_id = u.id
-            LEFT JOIN users p ON urp.reported_provider_id = p.id
-            LEFT JOIN provider_profiles pp ON p.id = pp.user_id
-            ${whereClause}
-            ORDER BY urp.created_at DESC
-          `, queryParams);
-          userReportsRows = userReportsRows.concat(userReportsQuery.rows);
-        } catch (error) {
-          logger.error('Failed to fetch user_reports_providers data', { error: error.message, stack: error.stack });
-        }
-      }
-
-      // Fetch from legacy provider_reports table (if it exists as a table, not just a view)
-      // Check if it's a table (not a view)
-      try {
-        const tableTypeCheck = await query(`
-          SELECT table_type 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'provider_reports'
-        `);
-        
-        if (tableTypeCheck.rows.length > 0 && tableTypeCheck.rows[0].table_type === 'BASE TABLE') {
-          const legacyWhere = status !== 'all' ? 'WHERE LOWER(pr.status) = LOWER($1)' : '';
-          const legacyParams = status !== 'all' ? [status] : [];
-          const legacyReports = await query(`
-            SELECT 
-              pr.id,
-              COALESCE(pr.report_type, pr.incident_type) as report_type,
-              pr.description,
-              pr.status,
-              pr.created_at,
-              pr.updated_at,
-              pr.reported_by_user_id,
-              pr.reported_provider_id,
-              u.full_name as reporter_name,
-              u.phone as reporter_phone,
-              p.full_name as reported_provider_name,
-              p.phone as reported_provider_phone,
-              pp.business_name as reported_provider_business,
-              'legacy_user_report' as report_source
-            FROM provider_reports pr
-            LEFT JOIN users u ON pr.reported_by_user_id = u.id
-            LEFT JOIN users p ON pr.reported_provider_id = p.id
-            LEFT JOIN provider_profiles pp ON p.id = pp.user_id
-            ${legacyWhere}
-            ORDER BY pr.created_at DESC
-          `, legacyParams);
-          userReportsRows = userReportsRows.concat(legacyReports.rows);
-        }
-      } catch (error) {
-        logger.warn('Failed to fetch legacy provider_reports data', { error: error.message });
-      }
-
-      allReports = allReports.concat(userReportsRows.map(r => ({
-        ...r,
-        report_category: 'User Report',
-        reporter_type: 'User',
-        reported_type: 'Provider'
-      })));
-    }
-
-    // Fetch provider reports (providers reporting users)
-    if (type === 'all' || type === 'provider') {
-      let whereClause = '';
-      let queryParams = [];
-
-      if (status !== 'all') {
-        whereClause = 'WHERE LOWER(pru.status) = LOWER($1)';
-        queryParams.push(status);
-      }
-
-      let providerReportsRows = [];
-
-      if (await tableExists('public.provider_reports_users')) {
-        try {
-          const providerReportsQuery = await query(`
-            SELECT 
-              pru.id,
-              pru.incident_type as report_type,
-              pru.description,
-              pru.status,
-              pru.created_at,
-              pru.updated_at,
-              pru.provider_id,
-              pru.customer_name,
-              pru.customer_user_id,
-              pru.incident_date,
-              pru.incident_time,
-              pru.evidence,
-              p.full_name as provider_name,
-              p.phone as provider_phone,
-              u.full_name as customer_user_name,
-              u.phone as customer_user_phone,
-              'provider_report' as report_source
-            FROM provider_reports_users pru
-            LEFT JOIN users p ON pru.provider_id = p.id
-            LEFT JOIN users u ON pru.customer_user_id = u.id
-            ${whereClause}
-            ORDER BY pru.created_at DESC
-          `, queryParams);
-          providerReportsRows = providerReportsQuery.rows;
-        } catch (error) {
-          logger.warn('Failed to fetch provider_reports_users data', { error: error.message });
-        }
-      }
-
-      allReports = allReports.concat(providerReportsRows.map(r => ({
-        ...r,
-        report_category: 'Provider Report',
-        reporter_type: 'Provider',
-        reported_type: 'User',
-        reporter_name: r.provider_name,
-        reporter_phone: r.provider_phone,
-        reported_provider_name: r.customer_user_name || r.customer_name,
-        reported_provider_phone: r.customer_user_phone
-      })));
-    }
-
-    // Sort all reports by created_at
-    allReports.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    // Apply pagination
-    totalCount = allReports.length;
-    const paginatedReports = allReports.slice(offset, offset + parseInt(limit));
-
-    res.json({
-      status: 'success',
-      data: {
-        reports: paginatedReports,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalCount / limit),
-          totalCount,
-          limit: parseInt(limit)
-        }
-      }
-    });
-  } catch (error) {
-    logger.error('Admin reports error', { error: error.message, stack: error.stack });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch reports',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// @route   PUT /api/admin/reports/:id/status
-// @desc    Update report status (open, resolved, closed)
-// @access  Private (Admin only)
-router.put('/reports/:id/status', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    if (!['open', 'resolved', 'closed'].includes(status)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid status. Must be open, resolved, or closed'
-      });
-    }
-
-    // Try updating in user_reports_providers first
-    let result = await query(
-      'UPDATE user_reports_providers SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [status, id]
-    );
-
-    // If not found, try provider_reports_users
-    if (result.rows.length === 0) {
-      result = await query(
-        'UPDATE provider_reports_users SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-        [status, id]
-      );
-    }
-
-    // If still not found, try legacy provider_reports table (if it exists as a table)
-    if (result.rows.length === 0 && await tableExists('public.provider_reports')) {
-      try {
-        const tableTypeCheck = await query(`
-          SELECT table_type 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'provider_reports'
-        `);
-        
-        if (tableTypeCheck.rows.length > 0 && tableTypeCheck.rows[0].table_type === 'BASE TABLE') {
-          result = await query(
-            'UPDATE provider_reports SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-            [status, id]
-          );
-        }
-      } catch (legacyError) {
-        logger.warn('Failed to update legacy provider_reports', { error: legacyError.message });
-      }
-    }
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Report not found'
-      });
-    }
-
-    res.json({
-      status: 'success',
-      message: 'Report status updated successfully',
-      data: result.rows[0]
-    });
-  } catch (error) {
-    logger.error('Admin update report error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to update report status'
-    });
-  }
-});
-
 // @route   DELETE /api/admin/users/:id
 // @desc    Remove a user from the app
 // @access  Private (Admin only)
-router.delete('/users/:id', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Check if user exists
-    const user = await getRow('SELECT * FROM users WHERE id = $1 AND role = $2', [id, 'user']);
-    if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'User not found'
-      });
-    }
-
-    // Block account identifiers before removing user
+router.delete('/users/:id',
+  auth,
+  requireRole(['admin']),
+  validateUUID('id'),
+  async (req, res) => {
     try {
-      await blockIdentifiersForAccount({
-        phone: user.phone,
-        email: user.email,
-        reason: 'Removed by admin due to reports or policy violations',
-        blockedBy: req.user?.id,
-        metadata: {
-          source: 'admin_remove_user',
-          originalRole: user.role,
-          adminId: req.user?.id || null,
-          removedAt: new Date().toISOString()
-        }
+      const { id } = req.params;
+      const adminId = req.user?.id;
+      
+      await AdminService.deleteUser(id, adminId);
+      
+      res.json({
+        status: 'success',
+        message: 'User removed successfully'
       });
-    } catch (blockError) {
-      logger.error('Failed to block user identifiers prior to deletion', {
-        error: blockError.message,
-        userId: id
-      });
-      return res.status(500).json({
+    } catch (error) {
+      if (error.message === 'User not found') {
+        return res.status(404).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      
+      if (error.message.includes('Failed to block')) {
+        return res.status(500).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      
+      logger.error('Admin delete user error', { error: error.message, userId: req.params.id });
+      res.status(500).json({
         status: 'error',
-        message: 'Failed to block user account. Deletion aborted.'
+        message: 'Failed to remove user'
       });
     }
-
-    // Delete related data first to avoid foreign key constraints
-    // Delete notifications
-    await query('DELETE FROM notifications WHERE user_id = $1', [id]);
-    
-    // Delete reports made by this user
-    await query('DELETE FROM user_reports_providers WHERE reported_by_user_id = $1', [id]);
-    
-    // Delete bookings (this will cascade to ratings)
-    await query('DELETE FROM bookings WHERE user_id = $1', [id]);
-    
-    // Delete addresses (this has CASCADE, but being explicit)
-    await query('DELETE FROM addresses WHERE user_id = $1', [id]);
-    
-    // Delete user
-    await query('DELETE FROM users WHERE id = $1', [id]);
-
-    res.json({
-      status: 'success',
-      message: 'User removed successfully'
-    });
-  } catch (error) {
-    logger.error('Admin delete user error', { error: error.message, userId: req.params.id });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to remove user'
-    });
   }
-});
+);
 
 // @route   DELETE /api/admin/providers/:id
 // @desc    Remove a provider from the app
 // @access  Private (Admin only)
-router.delete('/providers/:id', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Check if provider exists
-    const provider = await getRow('SELECT * FROM users WHERE id = $1 AND role = $2', [id, 'provider']);
-    if (!provider) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Provider not found'
-      });
-    }
-
-    // Get provider profile ID for cascading deletions
-    const providerProfile = await getRow('SELECT id FROM provider_profiles WHERE user_id = $1', [id]);
-    
-    // Delete related data first to avoid foreign key constraints
-    // Delete notifications
-    await query('DELETE FROM notifications WHERE user_id = $1', [id]);
-    
-    // Delete provider reports (reports about this provider and reports made by this provider)
-    await query('DELETE FROM user_reports_providers WHERE reported_provider_id = $1 OR reported_by_user_id = $1', [id]);
-    
-    // Delete bookings first (to avoid foreign key constraint)
-    if (providerProfile) {
-      await query(`
-        DELETE FROM bookings 
-        WHERE provider_service_id IN (
-          SELECT ps.id FROM provider_services ps 
-          WHERE ps.provider_id = $1
-        )
-      `, [providerProfile.id]);
-    }
-    
-    // Delete provider services after bookings are deleted
-    if (providerProfile) {
-      await query('DELETE FROM provider_services WHERE provider_id = $1', [providerProfile.id]);
-    }
-    
-    // Delete addresses (this has CASCADE, but being explicit)
-    await query('DELETE FROM addresses WHERE user_id = $1', [id]);
-    
-    // Block account identifiers before removing provider
+router.delete('/providers/:id',
+  auth,
+  requireRole(['admin']),
+  validateUUID('id'),
+  async (req, res) => {
     try {
-      await blockIdentifiersForAccount({
-        phone: provider.phone,
-        email: provider.email,
-        reason: 'Removed by admin due to reports or policy violations',
-        blockedBy: req.user?.id,
-        metadata: {
-          source: 'admin_remove_provider',
-          originalRole: provider.role,
-          adminId: req.user?.id || null,
-          removedAt: new Date().toISOString()
-        }
+      const { id } = req.params;
+      const adminId = req.user?.id;
+      
+      await AdminService.deleteProvider(id, adminId);
+      
+      res.json({
+        status: 'success',
+        message: 'Provider removed successfully'
       });
-    } catch (blockError) {
-      logger.error('Failed to block provider identifiers prior to deletion', {
-        error: blockError.message,
-        providerId: id
-      });
-      return res.status(500).json({
+    } catch (error) {
+      if (error.message === 'Provider not found') {
+        return res.status(404).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      
+      if (error.message.includes('Failed to block')) {
+        return res.status(500).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      
+      logger.error('Admin delete provider error', { error: error.message, providerId: req.params.id });
+      res.status(500).json({
         status: 'error',
-        message: 'Failed to block provider account. Deletion aborted.'
+        message: 'Failed to remove provider'
       });
     }
-
-    // Delete provider profile (this has CASCADE)
-    if (providerProfile) {
-      await query('DELETE FROM provider_profiles WHERE id = $1', [providerProfile.id]);
-    }
-    
-    // Delete user
-    await query('DELETE FROM users WHERE id = $1', [id]);
-
-    res.json({
-      status: 'success',
-      message: 'Provider removed successfully'
-    });
-  } catch (error) {
-    logger.error('Admin delete provider error', { error: error.message, providerId: req.params.id });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to remove provider'
-    });
   }
-});
+);
 
 // @route   PUT /api/admin/users/:id/verify
 // @desc    Verify or unverify a user
 // @access  Private (Admin only)
-router.put('/users/:id/verify', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { isVerified } = req.body;
-
-    const result = await query(
-      'UPDATE users SET is_verified = $1 WHERE id = $2 AND role = $3 RETURNING *',
-      [isVerified, id, 'user']
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
+router.put('/users/:id/verify',
+  auth,
+  requireRole(['admin']),
+  validateUUID('id'),
+  validateBoolean('isVerified', 'body'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isVerified } = req.body;
+      
+      const user = await AdminService.updateUserVerification(id, 'user', isVerified);
+      
+      res.json({
+        status: 'success',
+        message: `User ${isVerified ? 'verified' : 'unverified'} successfully`,
+        data: user
+      });
+    } catch (error) {
+      if (error.message === 'User not found') {
+        return res.status(404).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      
+      logger.error('Admin verify user error', { error: error.message });
+      res.status(500).json({
         status: 'error',
-        message: 'User not found'
+        message: 'Failed to update user verification status'
       });
     }
-
-    res.json({
-      status: 'success',
-      message: `User ${isVerified ? 'verified' : 'unverified'} successfully`,
-      data: result.rows[0]
-    });
-  } catch (error) {
-    logger.error('Admin verify user error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to update user verification status'
-    });
   }
-});
+);
 
 // @route   PUT /api/admin/providers/:id/verify
 // @desc    Verify or unverify a provider
 // @access  Private (Admin only)
-router.put('/providers/:id/verify', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { isVerified } = req.body;
-
-    const result = await query(
-      'UPDATE users SET is_verified = $1 WHERE id = $2 AND role = $3 RETURNING *',
-      [isVerified, id, 'provider']
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
+router.put('/providers/:id/verify',
+  auth,
+  requireRole(['admin']),
+  validateUUID('id'),
+  validateBoolean('isVerified', 'body'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isVerified } = req.body;
+      
+      const provider = await AdminService.updateUserVerification(id, 'provider', isVerified);
+      
+      res.json({
+        status: 'success',
+        message: `Provider ${isVerified ? 'verified' : 'unverified'} successfully`,
+        data: provider
+      });
+    } catch (error) {
+      if (error.message === 'Provider not found') {
+        return res.status(404).json({
+          status: 'error',
+          message: error.message
+        });
+      }
+      
+      logger.error('Admin verify provider error', { error: error.message });
+      res.status(500).json({
         status: 'error',
-        message: 'Provider not found'
+        message: 'Failed to update provider verification status'
       });
     }
-
-    res.json({
-      status: 'success',
-      message: `Provider ${isVerified ? 'verified' : 'unverified'} successfully`,
-      data: result.rows[0]
-    });
-  } catch (error) {
-    logger.error('Admin verify provider error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to update provider verification status'
-    });
   }
-});
+);
 
 // @route   GET /api/admin/all-users
 // @desc    Get all users for admin dashboard (alternative endpoint)
 // @access  Private (Admin only)
 router.get('/all-users', auth, requireRole(['admin']), async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
     // Get all users without pagination for admin dashboard
-    const usersResult = await query(`
-      SELECT 
-        u.id, u.full_name, u.email, u.phone, u.role, u.is_verified, u.created_at,
-        COUNT(b.id) as total_bookings
-      FROM users u
-      LEFT JOIN bookings b ON u.id = b.user_id
-      WHERE u.role = 'user'
-      GROUP BY u.id, u.full_name, u.email, u.phone, u.role, u.is_verified, u.created_at
-      ORDER BY u.created_at DESC
-    `);
-
+    const result = await AdminService.getUsers(1, 10000); // Large limit to get all
+    
     res.json({
       status: 'success',
       data: {
-        users: usersResult.rows
+        users: result.users
       }
     });
   } catch (error) {
@@ -794,34 +407,12 @@ router.get('/all-users', auth, requireRole(['admin']), async (req, res) => {
 router.get('/all-providers', auth, requireRole(['admin']), async (req, res) => {
   try {
     // Get all providers without pagination for admin dashboard
-    let providersResult;
-    try {
-      // Try with provider_profiles join
-      providersResult = await query(`
-        SELECT 
-          u.id, u.full_name, u.email, u.phone, u.role, u.is_verified, u.created_at,
-          pp.business_name, pp.experience_years, pp.rating, pp.total_reviews
-        FROM users u
-        LEFT JOIN provider_profiles pp ON u.id = pp.user_id
-        WHERE u.role = 'provider'
-        ORDER BY u.created_at DESC
-      `);
-    } catch (error) {
-      // Fallback to basic user query if provider_profiles table doesn't exist
-      providersResult = await query(`
-        SELECT 
-          u.id, u.full_name, u.email, u.phone, u.role, u.is_verified, u.created_at,
-          NULL as business_name, NULL as experience_years, NULL as rating, NULL as total_reviews
-        FROM users u
-        WHERE u.role = 'provider'
-        ORDER BY u.created_at DESC
-      `);
-    }
-
+    const result = await AdminService.getProviders(1, 10000); // Large limit to get all
+    
     res.json({
       status: 'success',
       data: {
-        providers: providersResult.rows
+        providers: result.providers
       }
     });
   } catch (error) {
