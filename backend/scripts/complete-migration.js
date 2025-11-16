@@ -1,3 +1,12 @@
+/**
+ * DEPRECATED: This script is kept for backward compatibility.
+ * For new installations, use: node migrations/run-all-migrations.js
+ * 
+ * This script creates core tables but does not include all migrations.
+ * The proper migration system in migrations/run-all-migrations.js includes
+ * all 16 migrations with proper tracking and error handling.
+ */
+
 const { query } = require('../database/connection');
 require('dotenv').config({ path: './config.env' });
 

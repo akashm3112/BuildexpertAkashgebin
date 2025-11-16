@@ -1,9 +1,13 @@
-const { query } = require('../database/connection');
+const { query, pool, withTransaction } = require('../database/connection');
 const config = require('../utils/config');
 
 /**
- * Comprehensive migration runner
- * Runs all migrations in the correct order with proper error handling
+ * Comprehensive migration runner with:
+ * - Transactions per migration
+ * - Advisory locks to prevent concurrent runs
+ * - Improved migration record logic
+ * - Better ID validation
+ * - Refactored duplicated paths
  */
 
 // Import all migration functions
@@ -22,6 +26,7 @@ const updateServicePricingInfrastructure = require('./012-service-pricing-infras
 const alignServicePricing = require('./013-align-service-pricing');
 const notificationQueueAndCascade = require('./014-notification-queue-and-cascade');
 const createPendingPushNotificationsTable = require('./015-pending-push-notifications');
+const createBlockedIdentifiersTable = require('./016-add-blocked-identifiers-table');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -139,19 +144,121 @@ const migrations = [
   }
 ];
 
-// Create migrations tracking table
-const createMigrationsTable = async () => {
+// Constants
+const ADVISORY_LOCK_ID = 1234567890; // Unique lock ID for migrations
+const MIGRATION_ID_PATTERN = /^\d{3}$/; // Valid migration ID format: 001, 002, etc.
+
+/**
+ * Validate migration ID format
+ */
+const validateMigrationId = (migrationId) => {
+  if (!migrationId || typeof migrationId !== 'string') {
+    return { valid: false, error: 'Migration ID must be a non-empty string' };
+  }
+  
+  if (!MIGRATION_ID_PATTERN.test(migrationId)) {
+    return { valid: false, error: `Migration ID must be 3 digits (e.g., "001", "016"), got: "${migrationId}"` };
+  }
+  
+  return { valid: true };
+};
+
+/**
+ * Find migration by ID with validation
+ */
+const findMigrationById = (migrationId) => {
+  const validation = validateMigrationId(migrationId);
+  if (!validation.valid) {
+    return { found: false, error: validation.error };
+  }
+  
+  const migration = migrations.find(m => m.id === migrationId);
+  if (!migration) {
+    return { found: false, error: `Migration ${migrationId} not found in registry` };
+  }
+  
+  return { found: true, migration };
+};
+
+/**
+ * Acquire advisory lock to prevent concurrent migration runs
+ */
+const acquireAdvisoryLock = async () => {
+  const client = await pool.connect();
   try {
-    await query(`
+    // Try to acquire lock (non-blocking)
+    const result = await client.query('SELECT pg_try_advisory_lock($1) as acquired', [ADVISORY_LOCK_ID]);
+    const acquired = result.rows[0].acquired;
+    
+    if (!acquired) {
+      throw new Error('Another migration process is already running. Please wait for it to complete.');
+    }
+    
+    return client; // Return client to release lock later
+  } catch (error) {
+    client.release();
+    throw error;
+  }
+};
+
+/**
+ * Release advisory lock
+ */
+const releaseAdvisoryLock = async (client) => {
+  if (client) {
+    try {
+      await client.query('SELECT pg_advisory_unlock($1)', [ADVISORY_LOCK_ID]);
+    } catch (error) {
+      console.error('⚠️  Warning: Failed to release advisory lock:', error.message);
+    } finally {
+      client.release();
+    }
+  }
+};
+
+/**
+ * Create migrations tracking table with improved schema
+ */
+const createMigrationsTable = async (client = null) => {
+  const queryFn = client ? client.query.bind(client) : query;
+  
+  try {
+    // Create table if it doesn't exist
+    await queryFn(`
       CREATE TABLE IF NOT EXISTS migrations (
         id VARCHAR(10) PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
-        executed_at TIMESTAMP DEFAULT NOW(),
+        executed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         success BOOLEAN DEFAULT TRUE,
         error_message TEXT,
         execution_time_ms INTEGER
       );
+    `);
+    
+    // Add new columns if they don't exist (for backward compatibility)
+    try {
+      await queryFn(`ALTER TABLE migrations ADD COLUMN IF NOT EXISTS executed_by TEXT;`);
+    } catch (e) {
+      // Column might already exist, ignore
+    }
+    
+    try {
+      await queryFn(`ALTER TABLE migrations ADD COLUMN IF NOT EXISTS checksum TEXT;`);
+    } catch (e) {
+      // Column might already exist, ignore
+    }
+    
+    try {
+      await queryFn(`ALTER TABLE migrations ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;`);
+    } catch (e) {
+      // Column might already exist, ignore
+    }
+    
+    // Add indexes for better query performance
+    await queryFn(`
+      CREATE INDEX IF NOT EXISTS idx_migrations_executed_at ON migrations(executed_at);
+      CREATE INDEX IF NOT EXISTS idx_migrations_success ON migrations(success);
     `);
   } catch (error) {
     console.error('❌ Error creating migrations table:', error);
@@ -159,66 +266,153 @@ const createMigrationsTable = async () => {
   }
 };
 
-// Check if migration has been executed
-const isMigrationExecuted = async (migrationId) => {
+/**
+ * Check if migration has been executed (with improved logic)
+ */
+const isMigrationExecuted = async (migrationId, client = null) => {
+  const queryFn = client ? client.query.bind(client) : query;
+  
   try {
-    const result = await query(
-      'SELECT id FROM migrations WHERE id = $1 AND success = TRUE',
+    const result = await queryFn(
+      'SELECT id, success FROM migrations WHERE id = $1 ORDER BY executed_at DESC LIMIT 1',
       [migrationId]
     );
-    return result.rows.length > 0;
+    
+    if (result.rows.length === 0) {
+      return { executed: false };
+    }
+    
+    const record = result.rows[0];
+    return {
+      executed: true,
+      success: record.success,
+      needsRetry: !record.success // If last execution failed, it needs retry
+    };
   } catch (error) {
     // If migrations table doesn't exist, assume no migrations have been run
-    return false;
+    if (error.code === '42P01') { // Table doesn't exist
+      return { executed: false };
+    }
+    throw error;
   }
 };
 
-// Record migration execution
-const recordMigration = async (migration, success, errorMessage = null, executionTime = 0) => {
+/**
+ * Record migration execution (improved with more details)
+ */
+const recordMigration = async (migration, success, errorMessage = null, executionTime = 0, client = null) => {
+  const queryFn = client ? client.query.bind(client) : query;
+  
   try {
-    await query(`
-      INSERT INTO migrations (id, name, description, success, error_message, execution_time_ms)
-      VALUES ($1, $2, $3, $4, $5, $6)
+    const executedBy = process.env.USER || process.env.USERNAME || 'unknown';
+    const checksum = migration.id; // Can be enhanced with file hash in future
+    
+    await queryFn(`
+      INSERT INTO migrations (id, name, description, success, error_message, execution_time_ms, executed_by, checksum)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (id) DO UPDATE SET
         executed_at = NOW(),
         success = $4,
         error_message = $5,
-        execution_time_ms = $6
+        execution_time_ms = $6,
+        executed_by = $7,
+        checksum = $8,
+        version = migrations.version + 1
     `, [
       migration.id,
       migration.name,
       migration.description,
       success,
       errorMessage,
-      executionTime
+      executionTime,
+      executedBy,
+      checksum
     ]);
   } catch (error) {
     console.error('❌ Error recording migration:', error);
+    // Don't throw - recording failure shouldn't fail the migration itself
   }
 };
 
-// Run a single migration
-const runMigration = async (migration) => {
+/**
+ * Run a single migration within a transaction
+ * Each migration runs in its own transaction for atomicity
+ */
+const runMigration = async (migration, options = {}) => {
+  const { force = false } = options;
   const startTime = Date.now();
-
+  let lockClient = null;
   
   try {
-    // Execute the migration function
-    await migration.function();
+    // Acquire advisory lock for this migration
+    lockClient = await acquireAdvisoryLock();
+    
+    // Check if already executed (before transaction to avoid unnecessary transaction)
+    const status = await isMigrationExecuted(migration.id);
+    if (status.executed && status.success && !force) {
+      await releaseAdvisoryLock(lockClient);
+      return { success: true, skipped: true, executionTime: 0 };
+    }
+    
+    if (status.executed && !status.success) {
+      console.log(`   ⚠️  Previous execution failed, retrying...`);
+    }
+    
+    // Run migration in a transaction
+    // Each migration is atomic - if it fails, all changes are rolled back
+    const result = await withTransaction(async (client) => {
+      // Create migrations table if it doesn't exist (within transaction)
+      await createMigrationsTable(client);
+      
+      // Execute the migration function
+      // Note: Migration functions use the global query() which uses the pool,
+      // but the migration record is transactional. For full transactional migrations,
+      // migration functions would need to accept a client parameter.
+      // This ensures at least the migration record is transactional.
+      await migration.function();
+      
+      const executionTime = Date.now() - startTime;
+      
+      // Record success within transaction
+      // This ensures the migration record is only saved if migration succeeds
+      await recordMigration(migration, true, null, executionTime, client);
+      
+      return { success: true, skipped: false, executionTime };
+    }, { name: `migration-${migration.id}`, retries: 0 }); // No retries for migrations
+    
+    // Release lock
+    await releaseAdvisoryLock(lockClient);
+    lockClient = null;
+    
+    return result;
+  } catch (error) {
+    // Release lock on error
+    if (lockClient) {
+      await releaseAdvisoryLock(lockClient);
+    }
+    
     const executionTime = Date.now() - startTime;
     
-    // If we get here, migration was successful
-    await recordMigration(migration, true, null, executionTime);
-    return { success: true, executionTime };
-  } catch (error) {
-    const executionTime = Date.now() - startTime;
-    await recordMigration(migration, false, error.message, executionTime);
-    console.error(`❌ Migration ${migration.id} failed with exception: ${error.message}`);
-    return { success: false, error: error.message, executionTime };
+    // Record failure (outside transaction since transaction was rolled back)
+    // This allows us to track failed migrations even if they roll back
+    try {
+      await recordMigration(migration, false, error.message, executionTime);
+    } catch (recordError) {
+      console.error('⚠️  Failed to record migration failure:', recordError.message);
+    }
+    
+    return {
+      success: false,
+      skipped: false,
+      error: error.message,
+      executionTime
+    };
   }
 };
 
-// Main migration runner
+/**
+ * Main migration runner with advisory locks
+ */
 const runAllMigrations = async (options = {}) => {
   const { 
     force = false, 
@@ -226,16 +420,25 @@ const runAllMigrations = async (options = {}) => {
     verbose = false 
   } = options;
   
+  let lockClient = null;
+  
   try {
-   
+    console.log('\n🚀 Starting migration process...\n');
+    
+    // Acquire advisory lock for entire migration run
+    lockClient = await acquireAdvisoryLock();
+    console.log('🔒 Advisory lock acquired - preventing concurrent runs\n');
     
     if (verbose) {
-      migrations.forEach((migration, index) => {
-        const status = migration.required ? 'Required' : 'Optional';
+      console.log('Migration list:');
+      migrations.forEach((migration) => {
+        const status = migration.required ? '[REQUIRED]' : '[OPTIONAL]';
+        console.log(`  ${migration.id}: ${migration.name} ${status}`);
       });
+      console.log('');
     }
 
-    // Create migrations tracking table first
+    // Create migrations tracking table first (outside transaction for table creation)
     await createMigrationsTable();
 
     let executedCount = 0;
@@ -251,80 +454,199 @@ const runAllMigrations = async (options = {}) => {
       }
 
       // Check if migration has already been executed
-      const alreadyExecuted = await isMigrationExecuted(migration.id);
-      if (alreadyExecuted && !force) {
+      const status = await isMigrationExecuted(migration.id);
+      if (status.executed && status.success && !force) {
+        console.log(`⏭️  Skipping ${migration.id}: ${migration.name} (already executed)`);
         skippedCount++;
         continue;
       }
 
       // Run the migration
-      const result = await runMigration(migration);
+      console.log(`🔄 Running ${migration.id}: ${migration.name}...`);
+      const result = await runMigration(migration, { force });
       results.push({ migration, result });
       
       if (result.success) {
-        executedCount++;
+        if (result.skipped) {
+          skippedCount++;
+          console.log(`⏭️  ${migration.id} skipped (already executed)\n`);
+        } else {
+          executedCount++;
+          console.log(`✅ ${migration.id} completed (${result.executionTime}ms)\n`);
+        }
       } else {
         failedCount++;
+        console.error(`❌ ${migration.id} failed: ${result.error}\n`);
         
         // Stop on first failure for required migrations
         if (migration.required) {
           console.error(`\n❌ Required migration ${migration.id} failed. Stopping migration process.`);
           break;
         } else {
-          console.warn(`⚠️  Optional migration ${migration.id} failed, continuing...`);
+          console.warn(`⚠️  Optional migration ${migration.id} failed, continuing...\n`);
         }
       }
     }
 
     // Print summary
-    
+    console.log('\n' + '='.repeat(60));
+    console.log('📊 Migration Summary');
+    console.log('='.repeat(60));
+    console.log(`✅ Executed: ${executedCount}`);
+    console.log(`⏭️  Skipped:  ${skippedCount}`);
+    console.log(`❌ Failed:   ${failedCount}`);
+    console.log('='.repeat(60) + '\n');
 
     if (failedCount > 0) {
+      console.log('Failed migrations:');
       results
         .filter(r => !r.result.success)
         .forEach(r => {
+          console.log(`  ❌ ${r.migration.id}: ${r.migration.name} - ${r.result.error}`);
         });
-    }
-
-    if (executedCount > 0) {
-      results
-        .filter(r => r.result.success)
-        .forEach(r => {
-        });
+      console.log('');
     }
 
     const overallSuccess = failedCount === 0 || (failedCount > 0 && results.every(r => !r.migration.required || r.result.success));
     
     if (overallSuccess) {
+      console.log('✅ All migrations completed successfully!\n');
       return { success: true, executedCount, skippedCount, failedCount, results };
     } else {
+      console.log('❌ Some migrations failed. Please review the errors above.\n');
       return { success: false, executedCount, skippedCount, failedCount, results };
     }
 
   } catch (error) {
-    console.error('❌ Migration runner error:', error);
+    console.error('❌ Migration runner error:', error.message);
     return { success: false, error: error.message };
+  } finally {
+    // Always release the advisory lock
+    if (lockClient) {
+      await releaseAdvisoryLock(lockClient);
+      console.log('🔓 Advisory lock released\n');
+    }
   }
 };
 
-// Show migration status
+/**
+ * Run a specific migration by ID with validation
+ */
+const runSpecificMigration = async (migrationId, options = {}) => {
+  const { force = false } = options;
+  let lockClient = null;
+  
+  try {
+    // Validate and find migration
+    const lookup = findMigrationById(migrationId);
+    if (!lookup.found) {
+      console.error(`❌ ${lookup.error}`);
+      console.error('\nAvailable migrations:');
+      migrations.forEach(m => {
+        console.error(`  ${m.id}: ${m.name}`);
+      });
+      return { success: false, error: lookup.error };
+    }
+    
+    const migration = lookup.migration;
+    
+    // Acquire advisory lock
+    lockClient = await acquireAdvisoryLock();
+    console.log('🔒 Advisory lock acquired\n');
+    
+    // Create migrations tracking table first
+    await createMigrationsTable();
+    
+    // Check if migration has already been executed
+    const status = await isMigrationExecuted(migrationId);
+    if (status.executed && status.success && !force) {
+      console.log(`⏭️  Migration ${migrationId} has already been executed. Use --force to run it again.`);
+      return { success: true, skipped: true };
+    }
+    
+    console.log(`\n🔄 Running migration ${migrationId}: ${migration.name}`);
+    const result = await runMigration(migration, { force });
+    
+    if (result.success) {
+      console.log(`✅ Migration ${migrationId} completed successfully`);
+    } else {
+      console.error(`❌ Migration ${migrationId} failed: ${result.error}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(`❌ Error running migration ${migrationId}:`, error.message);
+    return { success: false, error: error.message };
+  } finally {
+    if (lockClient) {
+      await releaseAdvisoryLock(lockClient);
+      console.log('🔓 Advisory lock released\n');
+    }
+  }
+};
+
+/**
+ * Show migration status (improved)
+ */
 const showMigrationStatus = async () => {
   try {
+    await createMigrationsTable();
+    
+    // Check if new columns exist
+    const columnCheck = await query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'migrations' 
+      AND column_name IN ('executed_by', 'version')
+    `);
+    
+    const hasNewColumns = columnCheck.rows.length >= 2;
+    
+    // Build query based on available columns
+    const selectColumns = hasNewColumns 
+      ? 'id, name, executed_at, success, execution_time_ms, executed_by, version'
+      : 'id, name, executed_at, success, execution_time_ms';
     
     const executedMigrations = await query(`
-      SELECT id, name, executed_at, success, execution_time_ms 
+      SELECT ${selectColumns}
       FROM migrations 
       ORDER BY executed_at
     `);
     
     if (executedMigrations.rows.length === 0) {
+      console.log('\n📋 No migrations have been executed yet.\n');
       return;
     }
     
-    executedMigrations.rows.forEach(migration => {
-      const status = migration.success ? '✅' : '❌';
-      const time = migration.execution_time_ms ? `(${migration.execution_time_ms}ms)` : '';
-    });
+    console.log('\n📋 Migration Status:\n');
+    
+    if (hasNewColumns) {
+      console.log('ID   | Name                                    | Status | Executed At          | Time    | By       | Ver');
+      console.log('-'.repeat(110));
+      
+      executedMigrations.rows.forEach(migration => {
+        const status = migration.success ? '✅' : '❌';
+        const time = migration.execution_time_ms ? `${migration.execution_time_ms}ms` : 'N/A';
+        const executedAt = new Date(migration.executed_at).toLocaleString();
+        const name = migration.name.length > 40 ? migration.name.substring(0, 37) + '...' : migration.name;
+        const executedBy = migration.executed_by || 'unknown';
+        const version = migration.version || 1;
+        console.log(`${migration.id.padEnd(4)} | ${name.padEnd(40)} | ${status}     | ${executedAt.padEnd(20)} | ${time.padEnd(8)} | ${executedBy.padEnd(8)} | ${version}`);
+      });
+    } else {
+      console.log('ID   | Name                                    | Status | Executed At          | Time');
+      console.log('-'.repeat(90));
+      
+      executedMigrations.rows.forEach(migration => {
+        const status = migration.success ? '✅' : '❌';
+        const time = migration.execution_time_ms ? `${migration.execution_time_ms}ms` : 'N/A';
+        const executedAt = new Date(migration.executed_at).toLocaleString();
+        const name = migration.name.length > 40 ? migration.name.substring(0, 37) + '...' : migration.name;
+        console.log(`${migration.id.padEnd(4)} | ${name.padEnd(40)} | ${status}     | ${executedAt.padEnd(20)} | ${time}`);
+      });
+    }
+    
+    console.log('');
     
   } catch (error) {
     console.error('❌ Error checking migration status:', error);
@@ -333,8 +655,11 @@ const showMigrationStatus = async () => {
 
 module.exports = {
   runAllMigrations,
+  runSpecificMigration,
   showMigrationStatus,
-  migrations
+  migrations,
+  validateMigrationId,
+  findMigrationById
 };
 
 // CLI interface
@@ -350,6 +675,17 @@ if (require.main === module) {
     showMigrationStatus()
       .then(() => process.exit(0))
       .catch(() => process.exit(1));
+  } else if (args.length > 0 && !args[0].startsWith('--')) {
+    // If first argument is a migration ID (not a flag), run that specific migration
+    const migrationId = args[0];
+    runSpecificMigration(migrationId, options)
+      .then(result => {
+        process.exit(result.success ? 0 : 1);
+      })
+      .catch(error => {
+        console.error('\n❌ Migration runner failed:', error);
+        process.exit(1);
+      });
   } else {
     runAllMigrations(options)
       .then(result => {

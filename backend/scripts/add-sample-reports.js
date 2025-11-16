@@ -2,6 +2,7 @@ const { query } = require('../database/connection');
 
 /**
  * Add sample reports for testing
+ * This is a seed script, not a migration
  */
 const addSampleReports = async () => {
   try {
@@ -89,16 +90,17 @@ const addSampleReports = async () => {
   }
 };
 
-// Run the migration
+// Run the script
 if (require.main === module) {
   addSampleReports()
     .then(() => {
       process.exit(0);
     })
     .catch((error) => {
-      console.error('❌ Sample reports migration failed:', error);
+      console.error('❌ Sample reports script failed:', error);
       process.exit(1);
     });
 }
 
 module.exports = { addSampleReports };
+
