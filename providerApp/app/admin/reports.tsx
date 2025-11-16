@@ -175,7 +175,8 @@ export default function ReportsScreen() {
       const { tokenManager } = await import('@/utils/tokenManager');
       const token = await tokenManager.getValidToken();
       if (!token) {
-        console.error('No authentication token found');
+        console.error('No authentication token found for reports');
+        Alert.alert('Authentication Error', 'Please log in again to view reports.');
         setIsLoading(false);
         setIsRefreshing(false);
         return;

@@ -74,25 +74,44 @@ export default function AdminDashboard() {
       }
 
       const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
+      let token = await tokenManager.getValidToken();
       if (!token) {
+        console.error('No authentication token found for dashboard stats');
         setLoading(false);
         setRefreshing(false);
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
+      let response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
+      // If 401, try to refresh token and retry
+      if (response.status === 401) {
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
+            headers: {
+              'Authorization': `Bearer ${refreshedToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+      }
+
       if (response.ok) {
         const data = await response.json();
         setStats(data.data);
       } else {
-        console.error('Failed to fetch dashboard stats:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to fetch dashboard stats:', response.status, errorData.message || '');
+        // If 403, it means the user doesn't have admin role
+        if (response.status === 403) {
+          console.error('Access denied: User does not have admin role. Please log out and log in again.');
+        }
       }
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);

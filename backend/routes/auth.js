@@ -112,10 +112,10 @@ const loginLimiter = rateLimit({
   }
 });
 
-// Signup endpoint - moderate rate limiting (3 signups per hour per IP)
+// Signup endpoint - moderate rate limiting (100 signups per hour per IP - temporarily increased for testing)
 const signupLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3,
+  max: 100, // Temporarily increased from 3 to 100 to allow testing
   message: { status: 'error', message: 'Too many signup attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,

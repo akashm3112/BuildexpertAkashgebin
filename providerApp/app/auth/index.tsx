@@ -249,10 +249,21 @@ function AuthScreen() {
       const data = await response.json();
       
       if (response.ok) {
+        // Store tokens using TokenManager if available
+        const { tokenManager } = await import('@/utils/tokenManager');
+        if (data.data.accessToken && data.data.refreshToken) {
+          await tokenManager.storeTokenPair(
+            data.data.accessToken,
+            data.data.refreshToken,
+            data.data.accessTokenExpiresAt,
+            data.data.refreshTokenExpiresAt
+          );
+        }
+        
         // Save user data to context
         const userData = {
           ...data.data.user,
-          token: data.data.token
+          token: data.data.token || data.data.accessToken
         };
         
         

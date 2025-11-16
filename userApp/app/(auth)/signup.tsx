@@ -552,11 +552,21 @@ export default function SignupScreen() {
           }
         });
       } else {
-        Toast.show({
-          type: 'error',
-          text1: 'Signup Failed',
-          text2: data.message || 'Failed to create account. Please try again.',
-        });
+        // Check if it's a rate limit error (429)
+        if (response.status === 429 || (data.message && data.message.toLowerCase().includes('too many'))) {
+          showAlert(
+            'Signup Failed',
+            data.message || 'Too many signup attempts. Please try again in 1 hour.',
+            'error',
+            [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+          );
+        } else {
+          Toast.show({
+            type: 'error',
+            text1: 'Signup Failed',
+            text2: data.message || 'Failed to create account. Please try again.',
+          });
+        }
       }
     } catch (error) {
       console.error('Signup error:', error);
