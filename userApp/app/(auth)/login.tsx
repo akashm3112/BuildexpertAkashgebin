@@ -227,10 +227,21 @@ export default function LoginScreen() {
       const data = await response.json();
 
       if (response.ok) {
-        // Save user data to context
+        // Store tokens using TokenManager
+        const { tokenManager } = await import('@/utils/tokenManager');
+        if (data.data.accessToken && data.data.refreshToken) {
+          await tokenManager.storeTokenPair(
+            data.data.accessToken,
+            data.data.refreshToken,
+            data.data.accessTokenExpiresAt,
+            data.data.refreshTokenExpiresAt
+          );
+        }
+
+        // Save user data to context (keep token for backward compatibility)
         await login({
           ...data.data.user,
-          token: data.data.token,
+          token: data.data.accessToken, // Keep for backward compatibility
         });
 
         Toast.show({

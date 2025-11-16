@@ -892,6 +892,35 @@ router.post('/paytm-callback', webhookLimiter, async (req, res) => {
  */
 router.get('/transaction-history', auth, requireRole(['provider']), async (req, res) => {
   try {
+    const { page = 1, limit = 20 } = req.query;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const offset = (pageNum - 1) * limitNum;
+
+    // Validate pagination
+    if (isNaN(pageNum) || pageNum < 1) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'page must be a positive integer'
+      });
+    }
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'limit must be a positive integer between 1 and 100'
+      });
+    }
+
+    // Get total count
+    const countResult = await getRow(`
+      SELECT COUNT(*) as total
+      FROM payment_transactions
+      WHERE user_id = $1
+    `, [req.user.id]);
+    const total = parseInt(countResult?.total || 0, 10);
+    const totalPages = Math.ceil(total / limitNum);
+
+    // Get paginated transactions
     const transactions = await getRows(`
       SELECT 
         pt.*,
@@ -903,12 +932,21 @@ router.get('/transaction-history', auth, requireRole(['provider']), async (req, 
       LEFT JOIN services_master sm ON ps.service_id = sm.id
       WHERE pt.user_id = $1
       ORDER BY pt.created_at DESC
-      LIMIT 50
-    `, [req.user.id]);
+      LIMIT $2 OFFSET $3
+    `, [req.user.id, limitNum, offset]);
 
     res.json({
       status: 'success',
-      data: { transactions }
+      data: { 
+        transactions,
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          total,
+          limit: limitNum,
+          hasMore: pageNum < totalPages
+        }
+      }
     });
 
   } catch (error) {
@@ -1707,6 +1745,35 @@ router.get('/labour-access-status', auth, requireRole(['user']), async (req, res
  */
 router.get('/labour-transaction-history', auth, requireRole(['user']), async (req, res) => {
   try {
+    const { page = 1, limit = 20 } = req.query;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const offset = (pageNum - 1) * limitNum;
+
+    // Validate pagination
+    if (isNaN(pageNum) || pageNum < 1) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'page must be a positive integer'
+      });
+    }
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'limit must be a positive integer between 1 and 100'
+      });
+    }
+
+    // Get total count
+    const countResult = await getRow(`
+      SELECT COUNT(*) as total
+      FROM labour_payment_transactions
+      WHERE user_id = $1
+    `, [req.user.id]);
+    const total = parseInt(countResult?.total || 0, 10);
+    const totalPages = Math.ceil(total / limitNum);
+
+    // Get paginated transactions
     const transactions = await getRows(`
       SELECT 
         lpt.*,
@@ -1716,12 +1783,21 @@ router.get('/labour-transaction-history', auth, requireRole(['user']), async (re
       LEFT JOIN users u ON lpt.user_id = u.id
       WHERE lpt.user_id = $1
       ORDER BY lpt.created_at DESC
-      LIMIT 50
-    `, [req.user.id]);
+      LIMIT $2 OFFSET $3
+    `, [req.user.id, limitNum, offset]);
 
     res.json({
       status: 'success',
-      data: { transactions }
+      data: { 
+        transactions,
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          total,
+          limit: limitNum,
+          hasMore: pageNum < totalPages
+        }
+      }
     });
 
   } catch (error) {

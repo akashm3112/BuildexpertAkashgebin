@@ -1,6 +1,7 @@
 const { cleanupExpiredTokens } = require('./tokenBlacklist');
 const { cleanupExpiredSessions } = require('./sessionManager');
 const { cleanupOldSecurityData } = require('./securityAudit');
+const { cleanupExpiredRefreshTokens } = require('./refreshToken');
 const logger = require('./logger');
 const { registry } = require('./memoryLeakPrevention');
 
@@ -15,9 +16,10 @@ const runCleanup = async () => {
     logger.info('🧹 Starting scheduled auth data cleanup...');
     
     // Run all cleanup tasks in parallel for efficiency
-    const [tokensRemoved, sessionsRemoved, securityDataStats] = await Promise.all([
+    const [tokensRemoved, sessionsRemoved, refreshTokensRemoved, securityDataStats] = await Promise.all([
       cleanupExpiredTokens(),
       cleanupExpiredSessions(),
+      cleanupExpiredRefreshTokens(),
       cleanupOldSecurityData()
     ]);
     
@@ -26,6 +28,7 @@ const runCleanup = async () => {
     const stats = {
       tokensRemoved,
       sessionsRemoved,
+      refreshTokensRemoved,
       loginAttemptsRemoved: securityDataStats.loginAttemptsRemoved,
       securityEventsRemoved: securityDataStats.securityEventsRemoved,
       duration: `${duration}ms`,

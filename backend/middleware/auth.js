@@ -49,6 +49,14 @@ const auth = async (req, res, next) => {
       });
     }
     
+    // Check if token is an access token (not a refresh token)
+    if (decoded.type && decoded.type !== 'access') {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid token type. Access token required.'
+      });
+    }
+    
     // Check if token is blacklisted
     const isBlacklisted = await isTokenBlacklisted(decoded.jti);
     if (isBlacklisted) {

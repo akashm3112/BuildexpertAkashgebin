@@ -171,10 +171,40 @@ router.put('/profile', [
 });
 
 // @route   GET /api/providers/services
-// @desc    Get provider's registered services
+// @desc    Get provider's registered services with pagination
 // @access  Private
 router.get('/services', async (req, res) => {
   try {
+    const { page = 1, limit = 20 } = req.query;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const offset = (pageNum - 1) * limitNum;
+
+    // Validate pagination
+    if (isNaN(pageNum) || pageNum < 1) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'page must be a positive integer'
+      });
+    }
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'limit must be a positive integer between 1 and 100'
+      });
+    }
+
+    // Get total count
+    const countResult = await getRow(`
+      SELECT COUNT(*) as total
+      FROM provider_services ps
+      JOIN provider_profiles pp ON ps.provider_id = pp.id
+      WHERE pp.user_id = $1
+    `, [req.user.id]);
+    const total = parseInt(countResult?.total || 0, 10);
+    const totalPages = Math.ceil(total / limitNum);
+
+    // Get paginated services
     const services = await getRows(`
       SELECT 
         ps.*,
@@ -185,11 +215,21 @@ router.get('/services', async (req, res) => {
       JOIN provider_profiles pp ON ps.provider_id = pp.id
       WHERE pp.user_id = $1
       ORDER BY ps.created_at DESC
-    `, [req.user.id]);
+      LIMIT $2 OFFSET $3
+    `, [req.user.id, limitNum, offset]);
 
     res.json({
       status: 'success',
-      data: { services }
+      data: { 
+        services,
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          total,
+          limit: limitNum,
+          hasMore: pageNum < totalPages
+        }
+      }
     });
 
   } catch (error) {

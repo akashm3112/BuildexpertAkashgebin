@@ -248,7 +248,7 @@ const enhanceStackTrace = (error) => {
 
 // Capture full request context (sanitized)
 const captureRequestContext = (req) => {
-  if (!req) return null;
+  if (!req || typeof req !== 'object') return {};
   
   const context = {
     method: req.method,
@@ -258,16 +258,16 @@ const captureRequestContext = (req) => {
     query: req.query ? { ...req.query } : {},
     // Capture route parameters
     params: req.params ? { ...req.params } : {},
-    // Capture headers (sanitized)
+    // Capture headers (sanitized) - safely handle undefined headers
     headers: maskSensitiveData({
-      'user-agent': req.headers['user-agent'],
-      'content-type': req.headers['content-type'],
-      'content-length': req.headers['content-length'],
-      'accept': req.headers['accept'],
-      'referer': req.headers['referer'],
-      'origin': req.headers['origin'],
-      'x-forwarded-for': req.headers['x-forwarded-for'],
-      'x-real-ip': req.headers['x-real-ip']
+      'user-agent': req.headers?.['user-agent'],
+      'content-type': req.headers?.['content-type'],
+      'content-length': req.headers?.['content-length'],
+      'accept': req.headers?.['accept'],
+      'referer': req.headers?.['referer'],
+      'origin': req.headers?.['origin'],
+      'x-forwarded-for': req.headers?.['x-forwarded-for'],
+      'x-real-ip': req.headers?.['x-real-ip']
     }),
     // IP address
     ip: req.ip || req.connection?.remoteAddress,
@@ -314,10 +314,15 @@ const maskSensitiveFormat = winston.format((info) => {
     }
   }
   
-  // Add request context if available
-  if (info.req) {
-    info.requestContext = captureRequestContext(info.req);
-    delete info.req; // Remove original req to avoid duplication
+  // Add request context if available (safely handle undefined/null req)
+  if (info.req && typeof info.req === 'object') {
+    try {
+      info.requestContext = captureRequestContext(info.req);
+      delete info.req; // Remove original req to avoid duplication
+    } catch (error) {
+      // If capturing request context fails, just remove req and continue
+      delete info.req;
+    }
   }
   
   return info;
@@ -411,9 +416,14 @@ logger.log = function(level, message, meta = {}) {
     }
   }
   
-  // Enhance meta with request context if req is present
-  if (meta.req) {
-    meta.requestContext = captureRequestContext(meta.req);
+  // Enhance meta with request context if req is present (safely handle undefined/null req)
+  if (meta.req && typeof meta.req === 'object') {
+    try {
+      meta.requestContext = captureRequestContext(meta.req);
+    } catch (error) {
+      // If capturing request context fails, just remove req and continue
+      delete meta.req;
+    }
   }
   
   // Call original log method

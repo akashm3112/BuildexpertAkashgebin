@@ -33,7 +33,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const appState = useRef(AppState.currentState);
@@ -42,10 +42,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const fetchUnreadCount = async () => {
     if (!user?.id) {
       return;
-    }
-    
-    // Check if user has a token in context first
-    if (!user?.token) {
     }
     
     try {
@@ -225,9 +221,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     appState.current = nextAppState;
   };
 
-  // Set up real-time notifications via socket.io
+  // Set up real-time notifications via socket.io - wait for auth to finish loading
   useEffect(() => {
-    if (!user?.id) return;
+    if (authLoading || !user?.id) return;
 
     const socket = socketIOClient(`${API_BASE_URL}`);
     
@@ -266,7 +262,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return () => {
       socket.disconnect();
     };
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   // Set up app state listener
   useEffect(() => {
@@ -274,16 +270,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return () => subscription?.remove();
   }, []);
 
-  // Initial fetch when user changes
+  // Initial fetch when user changes - wait for auth to finish loading
   useEffect(() => {
-    if (user?.id) {
+    if (!authLoading && user?.id) {
       fetchUnreadCount();
       fetchNotifications();
-    } else {
+    } else if (!authLoading && !user?.id) {
       setUnreadCount(0);
       setNotifications([]);
     }
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   return (
     <NotificationContext.Provider value={{

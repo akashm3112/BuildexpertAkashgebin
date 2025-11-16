@@ -3,14 +3,19 @@ import { API_BASE_URL } from '@/constants/api';
 
 // -------------------- TYPES --------------------
 interface TokenData {
-  token: string;
-  expiresAt: number;
+  accessToken: string;
+  refreshToken: string;
+  accessTokenExpiresAt: number;
+  refreshTokenExpiresAt: number;
 }
 
 interface RefreshTokenResponse {
   status: string;
   data: {
-    token: string;
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresAt: string;
+    refreshTokenExpiresAt: string;
   };
   message?: string;
 }
@@ -114,19 +119,24 @@ export class TokenManager {
 
       const now = Date.now();
       
-      // If token is already expired, clear data and return null
-      if (tokenData.expiresAt <= now) {
-        await this.clearStoredData();
-        this.invalidateCache();
-        return null;
+      // If access token is already expired, try to refresh
+      if (tokenData.accessTokenExpiresAt <= now) {
+        // If refresh token is also expired, clear data and return null
+        if (tokenData.refreshTokenExpiresAt <= now) {
+          await this.clearStoredData();
+          this.invalidateCache();
+          return null;
+        }
+        // Try to refresh the access token
+        return await this.refreshToken();
       }
       
-      // If token will expire soon, try to refresh
-      if (tokenData.expiresAt - now < this.bufferTime) {
+      // If access token will expire soon, try to refresh
+      if (tokenData.accessTokenExpiresAt - now < this.bufferTime) {
         return await this.refreshToken();
       }
 
-      return tokenData.token;
+      return tokenData.accessToken;
     } catch (error) {
       console.error('Error getting valid token:', error);
       this.invalidateCache();
@@ -147,32 +157,77 @@ export class TokenManager {
         return this.memoryCache;
       }
 
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        this.invalidateCache();
-        return null;
+      // Try new format first (accessToken + refreshToken)
+      const accessToken = await AsyncStorage.getItem('accessToken');
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      const accessTokenExpiresAtStr = await AsyncStorage.getItem('accessTokenExpiresAt');
+      const refreshTokenExpiresAtStr = await AsyncStorage.getItem('refreshTokenExpiresAt');
+
+      if (accessToken && refreshToken && accessTokenExpiresAtStr && refreshTokenExpiresAtStr) {
+        const accessTokenExpiresAt = parseInt(accessTokenExpiresAtStr, 10);
+        const refreshTokenExpiresAt = parseInt(refreshTokenExpiresAtStr, 10);
+        
+        const tokenData: TokenData = {
+          accessToken,
+          refreshToken,
+          accessTokenExpiresAt,
+          refreshTokenExpiresAt
+        };
+
+        // Update cache
+        this.memoryCache = tokenData;
+        this.cacheTimestamp = now;
+
+        return tokenData;
       }
 
-      // Decode JWT to get expiration (React Native compatible)
-      const payload = decodeJWTPayload(token);
-      
-      if (!payload.exp || typeof payload.exp !== 'number') {
-        throw new Error('Invalid JWT: missing or invalid expiration');
+      // Fallback to old format (backward compatibility)
+      const oldToken = await AsyncStorage.getItem('token');
+      if (oldToken) {
+        // Decode JWT to get expiration (React Native compatible)
+        const payload = decodeJWTPayload(oldToken);
+        
+        if (!payload.exp || typeof payload.exp !== 'number') {
+          throw new Error('Invalid JWT: missing or invalid expiration');
+        }
+        
+        const expiresAt = payload.exp * 1000; // Convert to milliseconds
+        // Migrate to new format
+        const tokenData: TokenData = {
+          accessToken: oldToken,
+          refreshToken: '', // No refresh token in old format
+          accessTokenExpiresAt: expiresAt,
+          refreshTokenExpiresAt: expiresAt // Use same expiry as fallback
+        };
+
+        // Save in new format
+        await this.storeTokens(tokenData);
+
+        // Update cache
+        this.memoryCache = tokenData;
+        this.cacheTimestamp = now;
+
+        return tokenData;
       }
-      
-      const expiresAt = payload.exp * 1000; // Convert to milliseconds
-      const tokenData = { token, expiresAt };
 
-      // Update cache
-      this.memoryCache = tokenData;
-      this.cacheTimestamp = now;
-
-      return tokenData;
+      this.invalidateCache();
+      return null;
     } catch (error) {
       console.error('Error parsing stored token:', error);
       this.invalidateCache();
       return null;
     }
+  }
+
+  private async storeTokens(tokenData: TokenData): Promise<void> {
+    await AsyncStorage.multiSet([
+      ['accessToken', tokenData.accessToken],
+      ['refreshToken', tokenData.refreshToken],
+      ['accessTokenExpiresAt', tokenData.accessTokenExpiresAt.toString()],
+      ['refreshTokenExpiresAt', tokenData.refreshTokenExpiresAt.toString()],
+      // Keep 'token' for backward compatibility
+      ['token', tokenData.accessToken]
+    ]);
   }
 
   private async refreshToken(): Promise<string | null> {
@@ -192,8 +247,15 @@ export class TokenManager {
 
   private async performTokenRefresh(): Promise<string | null> {
     try {
-      const currentToken = await AsyncStorage.getItem('token');
-      if (!currentToken) {
+      const tokenData = await this.getStoredToken();
+      if (!tokenData || !tokenData.refreshToken) {
+        this.invalidateCache();
+        return null;
+      }
+
+      // Check if refresh token is expired
+      if (tokenData.refreshTokenExpiresAt <= Date.now()) {
+        await this.clearStoredData();
         this.invalidateCache();
         return null;
       }
@@ -202,8 +264,10 @@ export class TokenManager {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentToken}`,
         },
+        body: JSON.stringify({
+          refreshToken: tokenData.refreshToken
+        }),
       });
 
       if (!response.ok) {
@@ -217,38 +281,33 @@ export class TokenManager {
       const data: RefreshTokenResponse = await response.json();
       
       // Validate response structure
-      if (!data || !data.data || !data.data.token || typeof data.data.token !== 'string') {
+      if (!data || !data.data || !data.data.accessToken || !data.data.refreshToken) {
         console.error('Invalid refresh token response structure:', data);
         await this.clearStoredData();
         this.invalidateCache();
         return null;
       }
 
-      const newToken = data.data.token;
+      const newTokenData: TokenData = {
+        accessToken: data.data.accessToken,
+        refreshToken: data.data.refreshToken,
+        accessTokenExpiresAt: new Date(data.data.accessTokenExpiresAt).getTime(),
+        refreshTokenExpiresAt: new Date(data.data.refreshTokenExpiresAt).getTime()
+      };
       
-      // Store the new token
-      await AsyncStorage.setItem('token', newToken);
+      // Store the new tokens
+      await this.storeTokens(newTokenData);
       
       // Update in-memory cache
-      try {
-        const payload = decodeJWTPayload(newToken);
-        if (payload.exp && typeof payload.exp === 'number') {
-          this.memoryCache = {
-            token: newToken,
-            expiresAt: payload.exp * 1000,
-          };
-          this.cacheTimestamp = Date.now();
-        }
-      } catch (error) {
-        console.warn('Failed to cache new token:', error);
-      }
+      this.memoryCache = newTokenData;
+      this.cacheTimestamp = Date.now();
       
-      // Update user context if needed
+      // Update user context if needed (backward compatibility)
       try {
         const userData = await AsyncStorage.getItem('user');
         if (userData) {
           const user = JSON.parse(userData);
-          user.token = newToken;
+          user.token = newTokenData.accessToken; // Keep for backward compatibility
           await AsyncStorage.setItem('user', JSON.stringify(user));
         }
       } catch (error) {
@@ -256,7 +315,7 @@ export class TokenManager {
         // Non-critical error, continue
       }
 
-      return newToken;
+      return newTokenData.accessToken;
     } catch (error) {
       console.error('Error refreshing token:', error);
       await this.clearStoredData();
@@ -267,13 +326,33 @@ export class TokenManager {
 
   private async clearStoredData(): Promise<void> {
     try {
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('user');
+      await AsyncStorage.multiRemove([
+        'accessToken',
+        'refreshToken',
+        'accessTokenExpiresAt',
+        'refreshTokenExpiresAt',
+        'token', // Remove old format too
+        'user'
+      ]);
       this.invalidateCache();
     } catch (error) {
       console.error('Error clearing stored data:', error);
       this.invalidateCache();
     }
+  }
+
+  // Public method to store tokens after login/signup
+  async storeTokenPair(accessToken: string, refreshToken: string, accessTokenExpiresAt: string | Date, refreshTokenExpiresAt: string | Date): Promise<void> {
+    const tokenData: TokenData = {
+      accessToken,
+      refreshToken,
+      accessTokenExpiresAt: typeof accessTokenExpiresAt === 'string' ? new Date(accessTokenExpiresAt).getTime() : accessTokenExpiresAt.getTime(),
+      refreshTokenExpiresAt: typeof refreshTokenExpiresAt === 'string' ? new Date(refreshTokenExpiresAt).getTime() : refreshTokenExpiresAt.getTime()
+    };
+    
+    await this.storeTokens(tokenData);
+    this.memoryCache = tokenData;
+    this.cacheTimestamp = Date.now();
   }
 
   async isTokenValid(): Promise<boolean> {

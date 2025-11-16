@@ -379,17 +379,24 @@ router.put('/providers/:id/verify',
 );
 
 // @route   GET /api/admin/all-users
-// @desc    Get all users for admin dashboard (alternative endpoint)
+// @desc    Get all users for admin dashboard with pagination
 // @access  Private (Admin only)
-router.get('/all-users', auth, requireRole(['admin']), async (req, res) => {
+router.get('/all-users', auth, requireRole(['admin']), validatePagination, async (req, res) => {
   try {
-    // Get all users without pagination for admin dashboard
-    const result = await AdminService.getUsers(1, 10000); // Large limit to get all
+    const { page = 1, limit = 50 } = req.query;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    
+    // Enforce maximum limit for performance
+    const finalLimit = Math.min(limitNum, 100);
+    
+    const result = await AdminService.getUsers(pageNum, finalLimit);
     
     res.json({
       status: 'success',
       data: {
-        users: result.users
+        users: result.users,
+        pagination: result.pagination
       }
     });
   } catch (error) {
@@ -402,17 +409,24 @@ router.get('/all-users', auth, requireRole(['admin']), async (req, res) => {
 });
 
 // @route   GET /api/admin/all-providers
-// @desc    Get all providers for admin dashboard (alternative endpoint)
+// @desc    Get all providers for admin dashboard with pagination
 // @access  Private (Admin only)
-router.get('/all-providers', auth, requireRole(['admin']), async (req, res) => {
+router.get('/all-providers', auth, requireRole(['admin']), validatePagination, async (req, res) => {
   try {
-    // Get all providers without pagination for admin dashboard
-    const result = await AdminService.getProviders(1, 10000); // Large limit to get all
+    const { page = 1, limit = 50 } = req.query;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    
+    // Enforce maximum limit for performance
+    const finalLimit = Math.min(limitNum, 100);
+    
+    const result = await AdminService.getProviders(pageNum, finalLimit);
     
     res.json({
       status: 'success',
       data: {
-        providers: result.providers
+        providers: result.providers,
+        pagination: result.pagination
       }
     });
   } catch (error) {

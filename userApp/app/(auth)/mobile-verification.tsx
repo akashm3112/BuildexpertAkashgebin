@@ -234,9 +234,21 @@ export default function MobileVerificationScreen() {
 
     try {
       await acceptTerms();
+      
+      // Store tokens using TokenManager
+      const { tokenManager } = await import('@/utils/tokenManager');
+      if (verificationData.accessToken && verificationData.refreshToken) {
+        await tokenManager.storeTokenPair(
+          verificationData.accessToken,
+          verificationData.refreshToken,
+          verificationData.accessTokenExpiresAt,
+          verificationData.refreshTokenExpiresAt
+        );
+      }
+
       await login({
         ...verificationData.user,
-        token: verificationData.token,
+        token: verificationData.accessToken || verificationData.token, // Keep for backward compatibility
       });
 
       Toast.show({

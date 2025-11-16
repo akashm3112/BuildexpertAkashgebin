@@ -137,7 +137,8 @@ export default function ReportCustomerScreen() {
 
     try {
       // Get authentication token
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         throw new Error('No authentication token found');
       }

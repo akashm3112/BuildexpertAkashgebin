@@ -220,7 +220,18 @@ export default function OTPVerification() {
       console.log('🖼️ Profile picture URL from backend:', data.data.user.profilePicUrl || data.data.user.profile_pic_url || 'No profile picture');
       console.log('👤 User data:', data.data.user);
     
-      // Success: log in and navigate
+      // Store tokens using TokenManager
+      const { tokenManager } = await import('@/utils/tokenManager');
+      if (data.data.accessToken && data.data.refreshToken) {
+        await tokenManager.storeTokenPair(
+          data.data.accessToken,
+          data.data.refreshToken,
+          data.data.accessTokenExpiresAt,
+          data.data.refreshTokenExpiresAt
+        );
+      }
+
+      // Success: log in and navigate (keep token for backward compatibility)
       await login({
         id: data.data.user.id,
         phone: data.data.user.phone,
@@ -229,7 +240,7 @@ export default function OTPVerification() {
         aadharNumber: data.data.user.aadharNumber || '',
         role: data.data.user.role || 'provider',
         registeredServices: data.data.user.registeredServices || [],
-        token: data.data.token,
+        token: data.data.accessToken, // Keep for backward compatibility
         profile_pic_url: data.data.user.profilePicUrl || data.data.user.profile_pic_url || ''
       });
         router.replace('/(tabs)');

@@ -78,7 +78,7 @@ interface Booking {
 }
 
 export default function BookingsScreen() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { t } = useLanguage();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filter, setFilter] = useState<'pending' | 'accepted' | 'completed'| 'all' >('all');
@@ -145,27 +145,34 @@ export default function BookingsScreen() {
 
 
   useEffect(() => {
-    // Only show spinner on first load
-    loadBookings(true);
-    if (!user?.id) return; // Only connect if user id is available
-    const socket = socketIOClient(`${API_BASE_URL}`);
-    socket.on('connect', () => console.log('Socket connected:', socket.id));
-    socket.emit('join', user.id);
-    socket.on('booking_created', (data) => {
-      if (data && data.booking) {
-        setBookings(prev => [data.booking, ...prev]); // Prepend new booking for instant UI
-      }
-      // Refresh from backend in background (no spinner)
-      loadBookings(false);
-    });
-    socket.on('booking_updated', () => {
-      loadBookings(false);
-    });
-    socket.on('disconnect', () => console.log('Socket disconnected'));
-    return () => {
-      socket.disconnect();
-    };
-  }, [user?.id]);
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      // Only show spinner on first load
+      loadBookings(true);
+      
+      // Setup socket connection
+      const socket = socketIOClient(`${API_BASE_URL}`);
+      socket.on('connect', () => console.log('Socket connected:', socket.id));
+      socket.emit('join', user.id);
+      socket.on('booking_created', (data) => {
+        if (data && data.booking) {
+          setBookings(prev => [data.booking, ...prev]); // Prepend new booking for instant UI
+        }
+        // Refresh from backend in background (no spinner)
+        loadBookings(false);
+      });
+      socket.on('booking_updated', () => {
+        loadBookings(false);
+      });
+      socket.on('disconnect', () => console.log('Socket disconnected'));
+      return () => {
+        socket.disconnect();
+      };
+    } else if (!authLoading && !user?.id) {
+      // Auth finished loading but no user, set loading to false
+      setIsLoading(false);
+    }
+  }, [user?.id, authLoading]);
 
   // Handle orientation changes for responsive design
   useEffect(() => {

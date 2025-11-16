@@ -37,19 +37,57 @@ const categoryToServiceMap = {
 };
 
 // @route   GET /api/services
-// @desc    Get all services
+// @desc    Get all services with pagination
 // @access  Public
 router.get('/', async (req, res, next) => {
   try {
+    const { page = 1, limit = 50 } = req.query;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const offset = (pageNum - 1) * limitNum;
+
+    // Validate pagination
+    if (isNaN(pageNum) || pageNum < 1) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'page must be a positive integer'
+      });
+    }
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'limit must be a positive integer between 1 and 100'
+      });
+    }
+
+    // Get total count
+    const countResult = await getRow(`
+      SELECT COUNT(*) as total
+      FROM services_master
+    `);
+    const total = parseInt(countResult?.total || 0, 10);
+    const totalPages = Math.ceil(total / limitNum);
+
+    // Get paginated services
     const services = await getRows(`
       SELECT id, name, is_paid, created_at
       FROM services_master 
       ORDER BY name
-    `);
+      LIMIT $1 OFFSET $2
+    `, [limitNum, offset]);
 
     res.json({
       status: 'success',
-      data: { services }
+      data: { 
+        services,
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          total,
+          limit: limitNum,
+          hasMore: pageNum < totalPages
+        }
+      }
     });
 
   } catch (error) {

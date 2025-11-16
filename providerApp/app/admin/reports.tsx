@@ -101,7 +101,7 @@ const getResponsivePadding = () => {
 
 export default function ReportsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -137,8 +137,13 @@ export default function ReportsScreen() {
   }, [router]);
 
   useEffect(() => {
-    loadReports();
-    loadStats();
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      loadReports();
+      loadStats();
+    } else if (!authLoading && !user?.id) {
+      setIsLoading(false);
+    }
     
     // Entrance animations
     Animated.parallel([
@@ -153,7 +158,7 @@ export default function ReportsScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [filter]);
+  }, [filter, user?.id, authLoading]);
 
   useEffect(() => {
     // Filter animation
@@ -167,7 +172,8 @@ export default function ReportsScreen() {
 
   const loadReports = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         console.error('No authentication token found');
         setIsLoading(false);
@@ -211,7 +217,8 @@ export default function ReportsScreen() {
 
   const loadStats = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) return;
 
       const response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
@@ -257,7 +264,8 @@ export default function ReportsScreen() {
 
   const updateReportStatus = async (reportId: string, status: 'open' | 'resolved' | 'closed') => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) return;
 
       const response = await fetch(`${API_BASE_URL}/api/admin/reports/${reportId}/status`, {
@@ -291,7 +299,8 @@ export default function ReportsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('token');
+              const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
               if (!token) return;
 
               const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
@@ -364,7 +373,8 @@ export default function ReportsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('token');
+              const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
               if (!token) return;
 
               const response = await fetch(`${API_BASE_URL}/api/admin/providers/${providerId}`, {

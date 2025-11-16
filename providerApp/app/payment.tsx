@@ -44,11 +44,8 @@ export default function PaymentScreen() {
     try {
       setIsProcessing(true);
 
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
 
       if (!token) {
         showAlert('Error', 'Authentication token not found. Please login again.', 'error');
@@ -161,11 +158,8 @@ export default function PaymentScreen() {
       setShowWebView(false);
       setIsProcessing(true);
       
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       
       if (token && orderId) {
         await verifyPayment(orderId, token);

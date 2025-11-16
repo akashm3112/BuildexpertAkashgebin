@@ -43,7 +43,8 @@ export const useWebRTCCall = () => {
     const init = async () => {
       if (user?.id) {
         try {
-          const token = await AsyncStorage.getItem('token');
+          const { tokenManager } = await import('@/utils/tokenManager');
+          const token = await tokenManager.getValidToken();
           if (token) {
             await webRTCService.initialize(user.id, token);
             
@@ -136,7 +137,8 @@ export const useWebRTCCall = () => {
       setError(null);
       setCallStatus('calling');
       
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         throw new Error('No authentication token');
       }
@@ -208,7 +210,8 @@ export const useWebRTCCall = () => {
       
       // Log call if it was connected
       if (callStatus === 'connected' && currentCall) {
-        const token = await AsyncStorage.getItem('token');
+        const { tokenManager } = await import('@/utils/tokenManager');
+        const token = await tokenManager.getValidToken();
         if (token) {
           await fetch(`${API_BASE_URL}/api/calls/log`, {
             method: 'POST',

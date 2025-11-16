@@ -49,18 +49,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           parsed.registeredServices = [];
         }
         
-        console.log('📱 AuthContext: Loading user from storage:', { 
-          id: parsed.id, 
-          phone: parsed.phone, 
-          role: parsed.role,
-          fullName: parsed.fullName || parsed.full_name 
-        });
+        // Verify that tokens exist in TokenManager
+        const { tokenManager } = await import('@/utils/tokenManager');
+        const hasValidToken = await tokenManager.isTokenValid();
         
-        setUser(parsed);
+        if (!hasValidToken) {
+          // Tokens don't exist or are invalid, clear user data
+          console.log('📱 AuthContext: No valid tokens found, clearing user data');
+          await AsyncStorage.removeItem('user');
+          setUser(null);
+        } else {
+          console.log('📱 AuthContext: Loading user from storage:', { 
+            id: parsed.id, 
+            phone: parsed.phone, 
+            role: parsed.role,
+            fullName: parsed.fullName || parsed.full_name 
+          });
+          
+          setUser(parsed);
+        }
       } else {
+        // No user data, ensure tokens are also cleared
+        const { tokenManager } = await import('@/utils/tokenManager');
+        const hasValidToken = await tokenManager.isTokenValid();
+        if (!hasValidToken) {
+          // Already cleared, nothing to do
+        }
       }
     } catch (error) {
       console.error('Error loading user:', error);
+      // On error, clear user to force re-login
+      setUser(null);
     } finally {
       setIsLoading(false);
     }

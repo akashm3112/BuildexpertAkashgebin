@@ -48,7 +48,7 @@ interface Provider {
 
 export default function ProviderReportsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,7 +72,12 @@ export default function ProviderReportsScreen() {
       return true;
     });
 
-    loadProviders();
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      loadProviders();
+    } else if (!authLoading && !user?.id) {
+      setIsLoading(false);
+    }
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -100,7 +105,8 @@ export default function ProviderReportsScreen() {
 
   const loadProviders = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         console.error('No authentication token found');
         setIsLoading(false);
@@ -170,7 +176,8 @@ export default function ProviderReportsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('token');
+              const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
               const response = await fetch(`${API_BASE_URL}/api/admin/providers/${providerId}`, {
                 method: 'DELETE',
                 headers: {

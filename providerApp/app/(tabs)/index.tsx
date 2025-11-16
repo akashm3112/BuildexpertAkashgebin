@@ -230,11 +230,13 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (user?.token) {
-      fetchRegisteredServices();
-      
-      // Initial earnings fetch (only once on mount)
-      fetchEarnings();
+    if (user?.id) {
+      // Wait a bit to ensure tokens are loaded
+      const timer = setTimeout(() => {
+        fetchRegisteredServices();
+        // Initial earnings fetch (only once on mount)
+        fetchEarnings();
+      }, 100);
       
       // Setup socket connection for real-time updates
       if (!socketRef.current) {
@@ -301,9 +303,19 @@ export default function HomeScreen() {
           // Earnings will be updated via earnings_updated event
         });
       }
+      
+      // Cleanup function
+      return () => {
+        clearTimeout(timer);
+        if (socketRef.current) {
+          socketRef.current.removeAllListeners();
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+      };
     }
-
-    // Cleanup socket on unmount
+    
+    // Cleanup when user is not available
     return () => {
       if (socketRef.current) {
         socketRef.current.removeAllListeners();
@@ -315,7 +327,7 @@ export default function HomeScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      if (user?.token) {
+      if (user?.id) {
         // Only fetch registered services on focus, earnings are handled by sockets
         fetchRegisteredServices();
       }
@@ -458,13 +470,11 @@ export default function HomeScreen() {
   const fetchRegisteredServices = async () => {
     try {
       setIsLoadingServices(true);
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       
       if (!token) {
+        setIsLoadingServices(false);
         return;
       }
 
@@ -516,11 +526,8 @@ export default function HomeScreen() {
   const fetchEarnings = async () => {
     try {
       setIsLoadingEarnings(true);
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       
       if (!token) {
         return;

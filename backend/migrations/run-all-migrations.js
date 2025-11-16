@@ -28,6 +28,7 @@ const notificationQueueAndCascade = require('./014-notification-queue-and-cascad
 const createPendingPushNotificationsTable = require('./015-pending-push-notifications');
 const createBlockedIdentifiersTable = require('./016-add-blocked-identifiers-table');
 const optimizeReportStatusIndexes = require('./017-optimize-report-status-indexes');
+const addRefreshTokensTable = require('./018-add-refresh-tokens-table');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -149,6 +150,13 @@ const migrations = [
     description: 'Adds functional indexes for case-insensitive status queries to improve admin dashboard performance',
     function: optimizeReportStatusIndexes,
     required: false // Optional optimization
+  },
+  {
+    id: '018',
+    name: 'Add Refresh Tokens Table',
+    description: 'Creates refresh_tokens table for secure token rotation and refresh token mechanism',
+    function: addRefreshTokensTable,
+    required: true // Required for refresh token functionality
   }
 ];
 

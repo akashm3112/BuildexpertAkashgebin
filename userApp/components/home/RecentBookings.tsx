@@ -28,7 +28,7 @@ const getResponsiveValue = (width: number, small: number, medium: number, large:
 };
 
 export default function RecentBookings() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,13 +43,19 @@ export default function RecentBookings() {
   const captionFontSize = getResponsiveValue(screenWidth, 11, 12, 13);
 
   useEffect(() => {
+    // Wait for auth to finish loading before fetching data
+    if (authLoading || !user?.id) {
+      if (!authLoading && !user?.id) {
+        setBookings([]);
+        setLoading(false);
+      }
+      return;
+    }
+
     const fetchBookings = async () => {
       setLoading(true);
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken === null ? undefined : storedToken;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         setBookings([]);
         setLoading(false);
@@ -138,7 +144,7 @@ export default function RecentBookings() {
       }
     };
     fetchBookings();
-  }, [user]);
+  }, [user, authLoading]);
 
   if (loading) {
     return (

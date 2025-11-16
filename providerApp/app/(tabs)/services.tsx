@@ -50,7 +50,7 @@ interface ServiceStatus {
 
 export default function ServicesScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { t } = useLanguage();
   const [registeredServices, setRegisteredServices] = useState<RegisteredService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,13 +72,22 @@ export default function ServicesScreen() {
   };
 
   useEffect(() => {
-    fetchRegisteredServices();
-  }, [user]);
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      fetchRegisteredServices();
+    } else if (!authLoading && !user?.id) {
+      // Auth finished loading but no user, set loading to false
+      setIsLoading(false);
+    }
+  }, [user, authLoading]);
 
   useFocusEffect(
     React.useCallback(() => {
-      fetchRegisteredServices();
-    }, [user])
+      // Wait for auth to finish loading before fetching data
+      if (!authLoading && user?.id) {
+        fetchRegisteredServices();
+      }
+    }, [user, authLoading])
   );
 
   // Handle orientation changes for responsive design
@@ -240,11 +249,7 @@ export default function ServicesScreen() {
           onPress: async () => {
             try {
               setShowAlertModal(false);
-              let token = user?.token;
-              if (!token) {
-                const storedToken = await AsyncStorage.getItem('token');
-                token = storedToken || undefined;
-              }
+              const token = await tokenManager.getValidToken();
 
               if (!token) {
                 showAlert(t('alerts.error'), t('alerts.noAuthTokenAvailable'), 'error', [

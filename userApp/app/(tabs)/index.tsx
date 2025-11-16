@@ -53,7 +53,7 @@ const SAVED_LOCATIONS = [
 
 export default function HomeScreen() {
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { labourAccessStatus } = useLabourAccess();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = Dimensions.get('window');

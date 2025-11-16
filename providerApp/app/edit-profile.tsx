@@ -365,11 +365,7 @@ export default function EditProfileScreen() {
             try {
               setShowAlertModal(false);
               setDeleteLoading(true);
-              let token = user?.token;
-              if (!token) {
-                const storedToken = await AsyncStorage.getItem('token');
-                token = storedToken || undefined;
-              }
+              const token = await tokenManager.getValidToken();
               if (!token) {
                 setDeleteLoading(false);
                 showAlert(t('alerts.error'), t('alerts.noAuthToken'), 'error');

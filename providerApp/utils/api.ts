@@ -27,8 +27,25 @@ export const apiRequest = async (
       headers,
     });
 
-    // Handle 401 errors globally
+    // Handle 401 errors globally - try to refresh token first
     if (response.status === 401) {
+      // Try to refresh the token
+      const refreshedToken = await tokenManager.forceRefreshToken();
+      if (refreshedToken) {
+        // Retry the request with the new token
+        const retryHeaders = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${refreshedToken}`,
+          ...options.headers,
+        };
+        const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+          ...options,
+          headers: retryHeaders,
+        });
+        return retryResponse;
+      }
+      
+      // If refresh failed, logout
       if (globalLogout) {
         await globalLogout();
       }

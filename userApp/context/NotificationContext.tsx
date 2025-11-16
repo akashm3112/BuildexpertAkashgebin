@@ -46,7 +46,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading: authLoading } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [pagination, setPagination] = useState({
@@ -62,7 +62,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!user?.id) return;
     
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) return;
 
       const response = await fetch(`${API_BASE_URL}/api/notifications/unread-count`, {
@@ -90,7 +91,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!user?.id) return;
     
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) return;
 
       const response = await fetch(`${API_BASE_URL}/api/notifications?page=${page}&limit=${limit}`, {
@@ -131,7 +133,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!user?.id) return { notifications: [], pagination: {}, statistics: {} };
     
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) return { notifications: [], pagination: {}, statistics: {} };
 
       const queryParams = new URLSearchParams();
@@ -171,7 +174,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Mark individual notification as read
   const markAsRead = async (id: string) => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) return;
 
       // Update local state immediately for better UX
@@ -202,7 +206,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Mark all notifications as read
   const markAllAsRead = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) return;
 
       // Update local state immediately
@@ -256,9 +261,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     appState.current = nextAppState;
   };
 
-  // Set up real-time notifications via socket.io
+  // Set up real-time notifications via socket.io - wait for auth to finish loading
   useEffect(() => {
-    if (!user?.id) return;
+    if (authLoading || !user?.id) return;
 
     const socket = socketIOClient(`${API_BASE_URL}`);
     
@@ -298,7 +303,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return () => {
       socket.disconnect();
     };
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   // Set up app state listener
   useEffect(() => {
@@ -308,16 +313,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
 
 
-  // Initial fetch when user changes
+  // Initial fetch when user changes - wait for auth to finish loading
   useEffect(() => {
-    if (user?.id) {
+    if (!authLoading && user?.id) {
       fetchUnreadCount();
       fetchNotifications();
-    } else {
+    } else if (!authLoading && !user?.id) {
       setUnreadCount(0);
       setNotifications([]);
     }
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
   return (
     <NotificationContext.Provider value={{

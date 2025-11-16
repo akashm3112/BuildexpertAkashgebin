@@ -56,7 +56,7 @@ const getResponsiveFontSize = (small: number, medium: number, large: number) => 
 
 export default function BookingsScreen() {
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { unreadCount } = useNotifications();
   const { width, height } = useWindowDimensions();
   const [selectedStatus, setSelectedStatus] = useState(t('bookings.all'));
@@ -135,33 +135,36 @@ export default function BookingsScreen() {
   }, [width]);
 
   useEffect(() => {
-    fetchBookings(true);
-    if (!user?.id) return; // Only connect if user id is available
-    const socket = socketIOClient(`${API_BASE_URL}`);
-    socket.on('connect', () => console.log('Socket connected:', socket.id));
-    socket.emit('join', user.id);
-    socket.on('booking_created', () => {
-      fetchBookings(false);
-    });
-    socket.on('booking_updated', () => {
-      fetchBookings(false);
-    });
-    socket.on('disconnect', () => console.log('Socket disconnected'));
-    return () => {
-      socket.disconnect();
-    };
-  }, [user?.id]);
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      fetchBookings(true);
+      
+      // Setup socket connection
+      const socket = socketIOClient(`${API_BASE_URL}`);
+      socket.on('connect', () => console.log('Socket connected:', socket.id));
+      socket.emit('join', user.id);
+      socket.on('booking_created', () => {
+        fetchBookings(false);
+      });
+      socket.on('booking_updated', () => {
+        fetchBookings(false);
+      });
+      socket.on('disconnect', () => console.log('Socket disconnected'));
+      return () => {
+        socket.disconnect();
+      };
+    } else if (!authLoading && !user?.id) {
+      // Auth finished loading but no user, set loading to false
+      setLoading(false);
+    }
+  }, [user?.id, authLoading]);
 
   const fetchBookings = async (showSpinner = false) => {
     if (showSpinner) setLoading(true);
     setError(null);
     try {
-      let token = user?.token;
-      if (!token) {
-        // Try to get token from AsyncStorage if not present in user
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         setError('No authentication token available. Please log in again.');
         if (showSpinner) setLoading(false);

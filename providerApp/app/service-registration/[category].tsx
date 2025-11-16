@@ -111,14 +111,12 @@ export default function ServiceRegistration() {
     
     try {
       setIsLoadingData(true);
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
 
       if (!token) {
         showAlert(t('alerts.error'), t('alerts.noAuthTokenAvailable'), 'error');
+        setIsLoadingData(false);
         return;
       }
 
@@ -422,11 +420,14 @@ export default function ServiceRegistration() {
     }
     setIsLoading(true);
     try {
-      // Get token from user or AsyncStorage
-      let token = user?.token;
+      // Get token from tokenManager
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
+      
       if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
+        setIsLoading(false);
+        showAlert(t('alerts.error'), t('alerts.noAuthTokenAvailable'), 'error');
+        return;
       }
       
       // Convert working proof images to base64

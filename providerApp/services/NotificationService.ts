@@ -171,7 +171,8 @@ class NotificationService {
    */
   private async registerTokenWithBackend(token: string): Promise<boolean> {
     try {
-      const authToken = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('../utils/tokenManager');
+      const authToken = await tokenManager.getValidToken();
       if (!authToken) {
         return false;
       }
@@ -296,7 +297,8 @@ class NotificationService {
    */
   async updateSettings(settings: any): Promise<boolean> {
     try {
-      const authToken = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('../utils/tokenManager');
+      const authToken = await tokenManager.getValidToken();
       if (!authToken) {
         return false;
       }
@@ -322,7 +324,8 @@ class NotificationService {
    */
   async sendTestNotification(): Promise<boolean> {
     try {
-      const authToken = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('../utils/tokenManager');
+      const authToken = await tokenManager.getValidToken();
       if (!authToken) {
         return false;
       }
@@ -356,7 +359,8 @@ class NotificationService {
       
       if (this.pushToken) {
         // Deactivate token on backend
-        const authToken = await AsyncStorage.getItem('token');
+        const { tokenManager } = await import('../utils/tokenManager');
+        const authToken = await tokenManager.getValidToken();
         if (authToken) {
           await fetch(`${API_BASE_URL}/api/push-notifications/token`, {
             method: 'DELETE',

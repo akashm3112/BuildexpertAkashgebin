@@ -43,7 +43,7 @@ interface User {
 
 export default function UserReportsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,7 +67,12 @@ export default function UserReportsScreen() {
       return true;
     });
 
-    loadUsers();
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      loadUsers();
+    } else if (!authLoading && !user?.id) {
+      setIsLoading(false);
+    }
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -95,7 +100,8 @@ export default function UserReportsScreen() {
 
   const loadUsers = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         console.error('No authentication token found');
         return;
@@ -139,7 +145,8 @@ export default function UserReportsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('token');
+              const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
               const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
                 method: 'DELETE',
                 headers: {

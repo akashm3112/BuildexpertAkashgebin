@@ -27,7 +27,7 @@ const getResponsiveFontSize = (small: number, medium: number, large: number) => 
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading: authLoading } = useAuth();
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalProviders: 0,
@@ -39,8 +39,13 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchDashboardStats();
-  }, []);
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      fetchDashboardStats();
+    } else if (!authLoading && !user?.id) {
+      setLoading(false);
+    }
+  }, [user?.id, authLoading]);
 
   useEffect(() => {
     if (user && user.role !== 'admin') {
@@ -68,7 +73,14 @@ export default function AdminDashboard() {
         setLoading(true);
       }
 
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
+      if (!token) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,

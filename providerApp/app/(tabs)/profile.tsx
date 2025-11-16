@@ -167,12 +167,8 @@ export default function ProfileScreen() {
   // Fetch stats function
   const fetchStats = async () => {
     try {
-      
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         return;
       }
@@ -383,11 +379,7 @@ export default function ProfileScreen() {
           onPress: async () => {
             try {
               setShowAlertModal(false);
-              let token = user?.token;
-              if (!token) {
-                const storedToken = await AsyncStorage.getItem('token');
-                token = storedToken || undefined;
-              }
+              const token = await tokenManager.getValidToken();
               if (!token) {
                 showAlert(t('alerts.error'), t('alerts.noAuthToken'), 'error');
                 return;
@@ -463,7 +455,7 @@ export default function ProfileScreen() {
       if (pendingUpload) {
         
         // Try to upload the pending image
-        const token = await AsyncStorage.getItem('token');
+        const token = await tokenManager.getValidToken();
         if (token) {
           // Test network connectivity first
           try {
@@ -775,7 +767,7 @@ export default function ProfileScreen() {
   const handleDeleteProfilePicture = async () => {
     try {
       
-      const token = await AsyncStorage.getItem('token');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         showAlert('Error', 'Authentication required. Please login again.', 'error');
         return;

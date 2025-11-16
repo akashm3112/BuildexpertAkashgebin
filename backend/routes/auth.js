@@ -28,6 +28,7 @@ const rateLimit = require('express-rate-limit');
 const { blacklistToken, blacklistAllUserTokens } = require('../utils/tokenBlacklist');
 const { createSession, invalidateSession, invalidateAllUserSessions, invalidateSessionById, getUserSessions } = require('../utils/sessionManager');
 const { logSecurityEvent, logLoginAttempt, getRecentFailedAttempts, shouldBlockIP } = require('../utils/securityAudit');
+const { generateTokenPair, refreshAccessToken, revokeRefreshToken, revokeAllUserRefreshTokens } = require('../utils/refreshToken');
 
 const ADMIN_BYPASS_PHONE = process.env.DEFAULT_ADMIN_PHONE || '9999999999';
 const ADMIN_BYPASS_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
@@ -665,17 +666,22 @@ router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], async (req, res) 
       // Don't fail the signup process if notification creation fails
     }
 
-    // Generate JWT token with JTI for session tracking
-    const tokenData = generateToken(user.id);
-    
-    // Create session in database
+    // Generate access token and refresh token pair
     const ipAddress = req.ip || req.headers['x-forwarded-for']?.split(',')[0].trim() || 'unknown';
     const userAgent = req.headers['user-agent'] || '';
     
+    const tokenPair = await generateTokenPair(
+      user.id,
+      user.role,
+      ipAddress,
+      userAgent
+    );
+    
+    // Create session in database (for backward compatibility)
     await createSession(
       user.id,
-      tokenData.jti,
-      tokenData.expiresAt,
+      tokenPair.accessTokenJti,
+      tokenPair.accessTokenExpiresAt,
       ipAddress,
       userAgent
     );
@@ -694,7 +700,10 @@ router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], async (req, res) 
       status: 'success',
       message: 'OTP verified and signup completed successfully',
       data: {
-        token: tokenData.token,
+        accessToken: tokenPair.accessToken,
+        refreshToken: tokenPair.refreshToken,
+        accessTokenExpiresAt: tokenPair.accessTokenExpiresAt,
+        refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt,
         user: {
           id: user.id,
           fullName: user.full_name,
@@ -912,8 +921,9 @@ router.post('/forgot-password/reset', [passwordResetLimiter,
     await query('UPDATE users SET password = $1 WHERE id = $2', [hashed, user.id]);
     consumePasswordResetSession(phone);
     
-    // Revoke all existing sessions for security (user must login again with new password)
+    // Revoke all existing sessions and refresh tokens for security (user must login again with new password)
     await blacklistAllUserTokens(user.id, 'password_change');
+    await revokeAllUserRefreshTokens(user.id, 'password_change');
     await invalidateAllUserSessions(user.id);
     
     // Log security event
@@ -934,41 +944,41 @@ router.post('/forgot-password/reset', [passwordResetLimiter,
 });
 
 // @route   POST /api/auth/refresh
-// @desc    Refresh JWT token (invalidates old token and creates new session)
-// @access  Private
-router.post('/refresh', [tokenRefreshLimiter, auth], async (req, res) => {
+// @desc    Refresh access token using refresh token (implements token rotation)
+// @access  Public (requires refresh token in body)
+router.post('/refresh', [tokenRefreshLimiter,
+  body('refreshToken').notEmpty().withMessage('Refresh token is required')
+], async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
   
   try {
-    // Invalidate current session
-    await invalidateSession(req.tokenJti, req.user.id);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { refreshToken } = req.body;
     
-    // Blacklist old token
-    await blacklistToken(
-      req.tokenJti,
-      req.user.id,
-      'token_refresh',
-      req.session.expires_at,
-      ipAddress,
-      userAgent
-    );
+    // Refresh access token (implements token rotation)
+    const tokenPair = await refreshAccessToken(refreshToken, ipAddress, userAgent);
     
-    // Generate new token with new JTI
-    const tokenData = generateToken(req.user.id);
-    
-    // Create new session
-    await createSession(
-      req.user.id,
-      tokenData.jti,
-      tokenData.expiresAt,
-      ipAddress,
-      userAgent
-    );
+    // Get user data
+    const user = await getRow('SELECT * FROM users WHERE id = $1', [tokenPair.userId]);
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
     
     // Log token refresh
     await logSecurityEvent(
-      req.user.id,
+      user.id,
       'token_refresh',
       `Token refreshed from ${ipAddress}`,
       ipAddress,
@@ -980,20 +990,35 @@ router.post('/refresh', [tokenRefreshLimiter, auth], async (req, res) => {
       status: 'success',
       message: 'Token refreshed successfully',
       data: {
-        token: tokenData.token,
+        accessToken: tokenPair.accessToken,
+        refreshToken: tokenPair.refreshToken,
+        accessTokenExpiresAt: tokenPair.accessTokenExpiresAt,
+        refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt,
         user: {
-          id: req.user.id,
-          phone: req.user.phone,
-          full_name: req.user.full_name,
-          email: req.user.email,
-          role: req.user.role,
-          is_verified: req.user.is_verified,
-          profile_pic_url: req.user.profile_pic_url
+          id: user.id,
+          phone: user.phone,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          is_verified: user.is_verified,
+          profile_pic_url: user.profile_pic_url
         }
       }
     });
   } catch (error) {
     logger.error('Token refresh error', { error: error.message });
+    
+    // Handle specific refresh token errors
+    if (error.message.includes('not found') || 
+        error.message.includes('expired') || 
+        error.message.includes('revoked') ||
+        error.message.includes('Invalid')) {
+      return res.status(401).json({
+        status: 'error',
+        message: error.message || 'Invalid or expired refresh token'
+      });
+    }
+    
     res.status(500).json({
       status: 'error',
       message: 'Internal server error'
@@ -1134,14 +1159,19 @@ router.post('/login', [loginLimiter, ...validateLogin], async (req, res) => {
       });
     }
 
-    // Generate JWT token with JTI for session tracking
-    const tokenData = generateToken(user.id);
+    // Generate access token and refresh token pair
+    const tokenPair = await generateTokenPair(
+      user.id,
+      user.role,
+      ipAddress,
+      userAgent
+    );
 
-    // Create session in database
+    // Create session in database (for backward compatibility)
     await createSession(
       user.id,
-      tokenData.jti,
-      tokenData.expiresAt,
+      tokenPair.accessTokenJti,
+      tokenPair.accessTokenExpiresAt,
       ipAddress,
       userAgent
     );
@@ -1161,7 +1191,10 @@ router.post('/login', [loginLimiter, ...validateLogin], async (req, res) => {
       status: 'success',
       message: 'Login successful',
       data: {
-        token: tokenData.token,
+        accessToken: tokenPair.accessToken,
+        refreshToken: tokenPair.refreshToken,
+        accessTokenExpiresAt: tokenPair.accessTokenExpiresAt,
+        refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt,
         user: {
           id: user.id,
           fullName: user.full_name,
@@ -1229,14 +1262,17 @@ router.get('/me', auth, async (req, res) => {
 // ============================================================================
 
 // @route   POST /api/auth/logout
-// @desc    Logout user (revoke current token and invalidate session)
+// @desc    Logout user (revoke current token, refresh token, and invalidate session)
 // @access  Private
 router.post('/logout', auth, async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
   
   try {
-    // Blacklist the current token
+    // Get refresh token from body if provided (for refresh token revocation)
+    const { refreshToken } = req.body;
+    
+    // Blacklist the current access token
     await blacklistToken(
       req.tokenJti,
       req.user.id,
@@ -1245,6 +1281,16 @@ router.post('/logout', auth, async (req, res) => {
       ipAddress,
       userAgent
     );
+    
+    // Revoke refresh token if provided (now uses random token, not JWT)
+    if (refreshToken) {
+      try {
+        await revokeRefreshToken(refreshToken, req.user.id, 'logout');
+      } catch (error) {
+        // Ignore errors if refresh token is invalid/expired
+        logger.warn('Failed to revoke refresh token on logout', { error: error.message });
+      }
+    }
     
     // Invalidate the current session
     await invalidateSession(req.tokenJti, req.user.id);
@@ -1273,15 +1319,18 @@ router.post('/logout', auth, async (req, res) => {
 });
 
 // @route   POST /api/auth/logout-all
-// @desc    Logout from all devices (revoke all tokens and sessions)
+// @desc    Logout from all devices (revoke all tokens, refresh tokens, and sessions)
 // @access  Private
 router.post('/logout-all', auth, async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
   
   try {
-    // Blacklist all user tokens
-    const count = await blacklistAllUserTokens(req.user.id, 'logout_all');
+    // Blacklist all user access tokens
+    const tokenCount = await blacklistAllUserTokens(req.user.id, 'logout_all');
+    
+    // Revoke all user refresh tokens
+    const refreshTokenCount = await revokeAllUserRefreshTokens(req.user.id, 'logout_all');
     
     // Invalidate all user sessions
     await invalidateAllUserSessions(req.user.id);
@@ -1290,7 +1339,7 @@ router.post('/logout-all', auth, async (req, res) => {
     await logSecurityEvent(
       req.user.id,
       'logout_all',
-      `User logged out from all devices (${count} sessions). Initiated from ${ipAddress}`,
+      `User logged out from all devices (${tokenCount} sessions, ${refreshTokenCount} refresh tokens). Initiated from ${ipAddress}`,
       ipAddress,
       userAgent,
       'warning'
@@ -1298,7 +1347,7 @@ router.post('/logout-all', auth, async (req, res) => {
     
     res.json({
       status: 'success',
-      message: `Successfully logged out from all devices (${count} sessions)`
+      message: `Successfully logged out from all devices (${tokenCount} sessions, ${refreshTokenCount} refresh tokens)`
     });
   } catch (error) {
     logger.error('Logout all error', { error: error.message });
