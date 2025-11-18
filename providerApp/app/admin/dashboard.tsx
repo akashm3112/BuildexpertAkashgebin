@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Platform, BackHandler, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, RefreshControl, Platform, BackHandler, Dimensions, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { ArrowLeft, Users, FileText, BarChart3, Settings, LogOut, RefreshCw, TrendingUp, DollarSign, AlertCircle, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, Users, FileText, BarChart3, Settings, LogOut, RefreshCw, TrendingUp, DollarSign, AlertCircle, ChevronRight, Activity } from 'lucide-react-native';
 import { SafeView } from '@/components/SafeView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/constants/api';
@@ -37,24 +37,35 @@ export default function AdminDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  
+  // Rate limiting: Minimum 20 seconds between refreshes
+  const REFRESH_COOLDOWN_MS = 20000;
 
   useEffect(() => {
-    // Wait for auth to finish loading before fetching data
-    if (!authLoading && user?.id) {
+    // First check: Redirect non-admin users immediately
+    if (!authLoading && user && user.role !== 'admin') {
+      router.replace('/(tabs)');
+      return;
+    }
+    
+    // Second check: Only fetch data if user is admin
+    if (!authLoading && user?.id && user?.role === 'admin') {
       fetchDashboardStats();
     } else if (!authLoading && !user?.id) {
       setLoading(false);
     }
-  }, [user?.id, authLoading]);
+  }, [user?.id, user?.role, authLoading]);
 
   useEffect(() => {
-    if (user && user.role !== 'admin') {
-      router.replace('/(tabs)');
-    }
-  }, [user?.role]);
-
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
+    // Prevent back navigation from admin dashboard
+    // This ensures users can't navigate back to provider screens
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Exit app instead of navigating back to prevent accessing provider screens
+      BackHandler.exitApp();
+      return true;
+    });
     return () => backHandler.remove();
   }, []);
 
@@ -66,6 +77,11 @@ export default function AdminDashboard() {
   }, []);
 
   const fetchDashboardStats = async (isRefresh = false) => {
+    // Prevent fetching if user is not admin
+    if (!user || user.role !== 'admin') {
+      return;
+    }
+    
     try {
       if (isRefresh) {
         setRefreshing(true);
@@ -122,6 +138,33 @@ export default function AdminDashboard() {
   };
 
   const onRefresh = () => {
+    const now = Date.now();
+    const timeSinceLastRefresh = now - lastRefreshTime;
+    
+    // Check if rate limit is active
+    if (timeSinceLastRefresh < REFRESH_COOLDOWN_MS) {
+      const remainingSeconds = Math.ceil((REFRESH_COOLDOWN_MS - timeSinceLastRefresh) / 1000);
+      setIsRateLimited(true);
+      
+      // Show rate limit message and reset after cooldown
+      setTimeout(() => {
+        setIsRateLimited(false);
+      }, REFRESH_COOLDOWN_MS - timeSinceLastRefresh);
+      
+      // Show user-friendly alert
+      Alert.alert(
+        'Rate Limit',
+        `Please wait ${remainingSeconds} second(s) before refreshing again. This helps protect the database from excessive requests.`,
+        [{ text: 'OK' }]
+      );
+      
+      console.warn(`Rate limit: Please wait ${remainingSeconds} second(s) before refreshing again`);
+      return;
+    }
+    
+    // Reset rate limit state
+    setIsRateLimited(false);
+    setLastRefreshTime(now);
     fetchDashboardStats(true);
   };
 
@@ -193,10 +236,17 @@ export default function AdminDashboard() {
             <View style={styles.headerRight}>
               <TouchableOpacity 
                 onPress={onRefresh} 
-                style={styles.headerButton}
+                style={[
+                  styles.headerButton,
+                  (refreshing || isRateLimited) && styles.headerButtonDisabled
+                ]}
                 activeOpacity={0.7}
+                disabled={refreshing || isRateLimited}
               >
-                <RefreshCw size={getResponsiveFontSize(18, 20, 20)} color="#FFFFFF" />
+                <RefreshCw 
+                  size={getResponsiveFontSize(18, 20, 20)} 
+                  color={isRateLimited ? 'rgba(255, 255, 255, 0.5)' : '#FFFFFF'}
+                />
               </TouchableOpacity>
               <TouchableOpacity 
                 onPress={handleLogout} 
@@ -218,6 +268,7 @@ export default function AdminDashboard() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
+            enabled={!isRateLimited}
             colors={Platform.OS === 'android' ? ['#667EEA'] : undefined}
             tintColor={Platform.OS === 'ios' ? '#667EEA' : undefined}
           />
@@ -300,6 +351,13 @@ export default function AdminDashboard() {
               color="#10B981"
               onPress={() => router.push('/admin/provider-reports')}
             />
+            <MenuCard
+              title="System Monitoring"
+              description="Real-time system health and metrics"
+              icon={Activity}
+              color="#8B5CF6"
+              onPress={() => router.push('/admin/monitoring')}
+            />
           </View>
         </View>
       </ScrollView>
@@ -354,6 +412,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerButtonDisabled: {
+    opacity: 0.5,
   },
   title: {
     fontSize: getResponsiveFontSize(24, 26, 28),

@@ -6,8 +6,12 @@ import { AuthProvider } from '@/context/AuthContext';
 import { NotificationProvider } from '@/context/NotificationContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { CallScreen } from '@/components/calls/CallScreen';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
+import { globalErrorHandler } from '@/utils/globalErrorHandler';
+import { requestQueue } from '@/utils/requestQueue';
+import { frontendMonitor } from '@/utils/monitoring';
 
 /**
  * ROOT LAYOUT - Navigation Structure
@@ -31,6 +35,13 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   useFrameworkReady();
 
+  // Initialize global error handler, request queue, and monitoring on mount
+  useEffect(() => {
+    globalErrorHandler.initialize();
+    frontendMonitor.initialize();
+    // Request queue initializes automatically on import
+  }, []);
+
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Regular': Inter_400Regular,
     'Inter-Medium': Inter_500Medium,
@@ -49,25 +60,35 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <LanguageProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="auth" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="admin/dashboard" />
-            <Stack.Screen name="admin/user-reports" />
-            <Stack.Screen name="admin/provider-reports" />
-            <Stack.Screen name="service-registration/[category]" />
-            <Stack.Screen name="edit-profile" />
-            <Stack.Screen name="payment" />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-          <StatusBar style="auto" />
-          <CallScreen />
-        </LanguageProvider>
-      </NotificationProvider>
-    </AuthProvider>
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        // Log to error reporting service in production
+        console.error('Root ErrorBoundary caught error:', error, errorInfo);
+        // Record error in monitoring
+        frontendMonitor.recordError(error, 'ErrorBoundary', errorInfo);
+      }}
+    >
+      <AuthProvider>
+        <NotificationProvider>
+          <LanguageProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="auth" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="admin/dashboard" />
+              <Stack.Screen name="admin/user-reports" />
+              <Stack.Screen name="admin/provider-reports" />
+              <Stack.Screen name="admin/monitoring" />
+              <Stack.Screen name="service-registration/[category]" />
+              <Stack.Screen name="edit-profile" />
+              <Stack.Screen name="payment" />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="auto" />
+            <CallScreen />
+          </LanguageProvider>
+        </NotificationProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

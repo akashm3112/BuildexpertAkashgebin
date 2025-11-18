@@ -129,8 +129,14 @@ export default function ReportsScreen() {
   }, [user?.role]);
 
   useEffect(() => {
+    // Prevent back navigation to provider screens
+    // Navigate to admin dashboard instead
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      router.replace('/admin/dashboard');
+      // Only navigate to dashboard if we're not already there
+      // This prevents navigation back to provider screens
+      if (router.canGoBack()) {
+        router.replace('/admin/dashboard');
+      }
       return true;
     });
     return () => backHandler.remove();

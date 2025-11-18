@@ -1,4 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { storage } from '@/utils/storage';
+import { fetchWithRetry, getNetworkErrorMessage } from '@/utils/networkRetry';
 import { API_BASE_URL } from '@/constants/api';
 
 // -------------------- TYPES --------------------
@@ -157,11 +158,13 @@ export class TokenManager {
         return this.memoryCache;
       }
 
-      // Try new format first (accessToken + refreshToken)
-      const accessToken = await AsyncStorage.getItem('accessToken');
-      const refreshToken = await AsyncStorage.getItem('refreshToken');
-      const accessTokenExpiresAtStr = await AsyncStorage.getItem('accessTokenExpiresAt');
-      const refreshTokenExpiresAtStr = await AsyncStorage.getItem('refreshTokenExpiresAt');
+      // Try new format first (accessToken + refreshToken) with retry
+      const [accessToken, refreshToken, accessTokenExpiresAtStr, refreshTokenExpiresAtStr] = await Promise.all([
+        storage.getItem('accessToken', { maxRetries: 2 }),
+        storage.getItem('refreshToken', { maxRetries: 2 }),
+        storage.getItem('accessTokenExpiresAt', { maxRetries: 2 }),
+        storage.getItem('refreshTokenExpiresAt', { maxRetries: 2 }),
+      ]);
 
       if (accessToken && refreshToken && accessTokenExpiresAtStr && refreshTokenExpiresAtStr) {
         const accessTokenExpiresAt = parseInt(accessTokenExpiresAtStr, 10);
@@ -181,8 +184,8 @@ export class TokenManager {
         return tokenData;
       }
 
-      // Fallback to old format (backward compatibility)
-      const oldToken = await AsyncStorage.getItem('token');
+      // Fallback to old format (backward compatibility) with retry
+      const oldToken = await storage.getItem('token', { maxRetries: 2 });
       if (oldToken) {
         // Decode JWT to get expiration (React Native compatible)
         const payload = decodeJWTPayload(oldToken);
@@ -220,14 +223,19 @@ export class TokenManager {
   }
 
   private async storeTokens(tokenData: TokenData): Promise<void> {
-    await AsyncStorage.multiSet([
+    await storage.multiSet([
       ['accessToken', tokenData.accessToken],
       ['refreshToken', tokenData.refreshToken],
       ['accessTokenExpiresAt', tokenData.accessTokenExpiresAt.toString()],
       ['refreshTokenExpiresAt', tokenData.refreshTokenExpiresAt.toString()],
       // Keep 'token' for backward compatibility
       ['token', tokenData.accessToken]
-    ]);
+    ], {
+      maxRetries: 3,
+      onRetry: (attempt, error) => {
+        console.log(`Storage retry attempt ${attempt}/3 for storing tokens:`, error.message);
+      },
+    });
   }
 
   private async refreshToken(): Promise<string | null> {
@@ -260,15 +268,28 @@ export class TokenManager {
         return null;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Use fetchWithRetry for token refresh with network failure handling
+      const response = await fetchWithRetry(
+        `${API_BASE_URL}/api/auth/refresh`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            refreshToken: tokenData.refreshToken
+          }),
         },
-        body: JSON.stringify({
-          refreshToken: tokenData.refreshToken
-        }),
-      });
+        {
+          maxRetries: 2,
+          retryDelay: 1000,
+          exponentialBackoff: true,
+          timeout: 15000,
+          onRetry: (attempt) => {
+            console.log(`Token refresh retry attempt ${attempt}/2`);
+          },
+        }
+      );
 
       if (!response.ok) {
         // Refresh failed, clear stored data
@@ -302,13 +323,17 @@ export class TokenManager {
       this.memoryCache = newTokenData;
       this.cacheTimestamp = Date.now();
       
-      // Update user context if needed (backward compatibility)
+      // Update user context if needed (backward compatibility) with retry
       try {
-        const userData = await AsyncStorage.getItem('user');
+        const userData = await storage.getJSON<any>('user', { maxRetries: 2 });
         if (userData) {
-          const user = JSON.parse(userData);
-          user.token = newTokenData.accessToken; // Keep for backward compatibility
-          await AsyncStorage.setItem('user', JSON.stringify(user));
+          userData.token = newTokenData.accessToken; // Keep for backward compatibility
+          await storage.setJSON('user', userData, {
+            maxRetries: 2,
+            onRetry: (attempt, error) => {
+              console.log(`Storage retry attempt ${attempt}/2 for updating user token:`, error.message);
+            },
+          });
         }
       } catch (error) {
         console.warn('Failed to update user context:', error);
@@ -326,14 +351,19 @@ export class TokenManager {
 
   private async clearStoredData(): Promise<void> {
     try {
-      await AsyncStorage.multiRemove([
+      await storage.multiRemove([
         'accessToken',
         'refreshToken',
         'accessTokenExpiresAt',
         'refreshTokenExpiresAt',
         'token', // Remove old format too
         'user'
-      ]);
+      ], {
+        maxRetries: 3,
+        onRetry: (attempt, error) => {
+          console.log(`Storage retry attempt ${attempt}/3 for clearing tokens:`, error.message);
+        },
+      });
       this.invalidateCache();
     } catch (error) {
       console.error('Error clearing stored data:', error);

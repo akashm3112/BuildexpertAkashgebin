@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL } from '@/constants/api';
+import { webrtcErrorHandler, WebRTCErrorType, RecoveryAction, ErrorContext } from '@/utils/webrtcErrorHandler';
 
 // Conditionally import WebRTC only on native platforms
 let RTCPeerConnection: any;
@@ -20,13 +21,26 @@ if (Platform.OS !== 'web') {
   }
 }
 
-// WebRTC Configuration with free STUN servers
+// WebRTC Configuration with free STUN servers and TURN fallback
 const RTC_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
   ],
+  iceCandidatePoolSize: 10,
+};
+
+// TURN server configuration (fallback for NAT traversal issues)
+const RTC_CONFIG_WITH_TURN = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    // Note: Add TURN servers here if available
+    // { urls: 'turn:your-turn-server.com:3478', username: 'user', credential: 'pass' },
+  ],
+  iceCandidatePoolSize: 10,
 };
 
 export interface CallData {
@@ -56,6 +70,12 @@ class WebRTCService {
   private callStartTime: number | null = null;
   private events: Partial<CallEvents> = {};
   private isWebRTCAvailable: boolean = false;
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private iceRestartTimeout: ReturnType<typeof setTimeout> | null = null;
+  private qualityMonitorInterval: ReturnType<typeof setInterval> | null = null;
+  private useTurnServer: boolean = false;
+  private connectionRetryCount: number = 0;
+  private readonly MAX_CONNECTION_RETRIES = 3;
 
   constructor() {
     this.isWebRTCAvailable = Platform.OS !== 'web' && !!RTCPeerConnection;
@@ -95,7 +115,22 @@ class WebRTCService {
     });
 
     this.socket.on('disconnect', () => {
-      this.cleanup();
+      this.handleSocketDisconnect();
+    });
+
+    this.socket.on('error', (error) => {
+      this.handleSocketError(error);
+    });
+
+    this.socket.on('reconnect', () => {
+      console.log('📞 Socket reconnected');
+      if (this.userId) {
+        this.socket?.emit('join', this.userId);
+      }
+    });
+
+    this.socket.on('reconnect_error', (error) => {
+      console.error('📞 Socket reconnection error:', error);
     });
 
     this.setupSocketListeners();
@@ -149,6 +184,14 @@ class WebRTCService {
       console.log('📞 Call ended by:', endedBy, 'Duration:', duration);
       this.events.onCallEnded?.(duration || 0, endedBy);
       this.cleanup();
+    });
+
+    // Call error from server
+    this.socket.on('call:error', ({ bookingId, message, errorCode }) => {
+      console.error('📞 Call error from server:', { bookingId, message, errorCode });
+      const error = new Error(message || 'Call error occurred');
+      (error as any).code = errorCode;
+      this.handleError(error, 'server_error');
     });
   }
 
@@ -210,57 +253,75 @@ class WebRTCService {
         }
       };
 
-      // Handle connection state changes
+      // Handle connection state changes with comprehensive recovery
       this.peerConnection!.onconnectionstatechange = () => {
-        if (this.peerConnection) {
-          switch (this.peerConnection.connectionState) {
-            case 'connected':
-              this.callStartTime = Date.now();
-              this.events.onCallConnected?.();
-              this.startCallQualityMonitoring();
-              break;
-            case 'disconnected':
-              console.warn('📞 Connection lost, attempting to reconnect...');
-              // Attempt to reconnect by creating a new offer
-              setTimeout(() => {
-                if (this.peerConnection?.connectionState === 'disconnected') {
-                  this.createOffer();
-                }
-              }, 2000);
-              break;
-            case 'failed':
-              console.error('📞 Connection failed');
-              this.events.onError?.('Call connection failed. Please try again.');
-              this.cleanup();
-              break;
-            case 'closed':
-              this.cleanup();
-              break;
-          }
+        if (!this.peerConnection) return;
+        
+        const state = this.peerConnection.connectionState;
+        console.log('📞 Connection state changed:', state);
+        
+        switch (state) {
+          case 'connected':
+            this.callStartTime = Date.now();
+            this.connectionRetryCount = 0;
+            webrtcErrorHandler.resetRetryCount('connection');
+            this.events.onCallConnected?.();
+            this.startCallQualityMonitoring();
+            break;
+            
+          case 'disconnected':
+            this.handleDisconnection();
+            break;
+            
+          case 'failed':
+            this.handleConnectionFailure();
+            break;
+            
+          case 'connecting':
+            // Connection attempt in progress
+            break;
+            
+          case 'closed':
+            this.cleanup();
+            break;
         }
       };
 
-      // Handle ICE connection state changes
+      // Handle ICE connection state changes with recovery
       this.peerConnection!.oniceconnectionstatechange = () => {
+        if (!this.peerConnection) return;
+        
+        const iceState = this.peerConnection.iceConnectionState;
+        console.log('📞 ICE connection state changed:', iceState);
+        
+        switch (iceState) {
+          case 'failed':
+            this.handleICEFailure();
+            break;
+            
+          case 'disconnected':
+            // ICE disconnected but may recover
+            console.warn('📞 ICE disconnected, monitoring for recovery...');
+            break;
+            
+          case 'connected':
+          case 'completed':
+            // ICE connection successful
+            webrtcErrorHandler.resetRetryCount('ice');
+            break;
+        }
+      };
+
+      // Handle ICE gathering state
+      this.peerConnection!.onicegatheringstatechange = () => {
         if (this.peerConnection) {
-          if (this.peerConnection.iceConnectionState === 'failed') {
-            console.error('📞 ICE connection failed');
-            this.events.onError?.('Network connection failed. Please check your internet connection.');
-            this.cleanup();
-          }
+          console.log('📞 ICE gathering state:', this.peerConnection.iceGatheringState);
         }
       };
 
     } catch (error: any) {
       console.error('❌ Error starting call:', error);
-      this.events.onError?.(error.message || 'Failed to start call');
-      if (serverCallInitiated) {
-        this.socket?.emit('call:end', {
-          bookingId: callData.bookingId,
-          userId: this.userId,
-        });
-      }
-      this.cleanup();
+      this.handleError(error, 'start_call', { serverCallInitiated });
     }
   }
 
@@ -319,8 +380,7 @@ class WebRTCService {
 
     } catch (error) {
       console.error('❌ Error accepting call:', error);
-      this.events.onError?.('Failed to accept call');
-      this.cleanup();
+      this.handleError(error, 'accept_call');
     }
   }
 
@@ -355,7 +415,7 @@ class WebRTCService {
       });
     } catch (error) {
       console.error('❌ Error creating offer:', error);
-      this.events.onError?.('Failed to create offer');
+      this.handleError(error, 'create_offer');
     }
   }
 
@@ -376,7 +436,7 @@ class WebRTCService {
       });
     } catch (error) {
       console.error('❌ Error handling offer:', error);
-      this.events.onError?.('Failed to handle offer');
+      this.handleError(error, 'handle_offer');
     }
   }
 
@@ -388,7 +448,7 @@ class WebRTCService {
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
     } catch (error) {
       console.error('❌ Error handling answer:', error);
-      this.events.onError?.('Failed to handle answer');
+      this.handleError(error, 'handle_answer');
     }
   }
 
@@ -408,57 +468,469 @@ class WebRTCService {
   }
 
   // Cleanup resources
-  // Monitor call quality
+  // Monitor call quality with enhanced metrics
   private startCallQualityMonitoring() {
     if (!this.peerConnection || !this.currentCall) return;
     
-    const monitorInterval = setInterval(() => {
+    this.qualityMonitorInterval = setInterval(async () => {
       if (!this.peerConnection || !this.currentCall) {
-        clearInterval(monitorInterval);
+        if (this.qualityMonitorInterval) {
+          clearInterval(this.qualityMonitorInterval);
+          this.qualityMonitorInterval = null;
+        }
         return;
       }
       
       // Check connection state
       if (this.peerConnection.connectionState === 'failed') {
         console.warn('📞 Call quality: Connection failed');
-        this.events.onError?.('Call connection lost. Attempting to reconnect...');
-        clearInterval(monitorInterval);
+        this.handleConnectionFailure();
+        if (this.qualityMonitorInterval) {
+          clearInterval(this.qualityMonitorInterval);
+          this.qualityMonitorInterval = null;
+        }
         return;
       }
       
       // Check ICE connection state
       if (this.peerConnection.iceConnectionState === 'failed') {
         console.warn('📞 Call quality: ICE connection failed');
-        this.events.onError?.('Network connection lost. Please check your internet connection.');
-        clearInterval(monitorInterval);
+        this.handleICEFailure();
+        if (this.qualityMonitorInterval) {
+          clearInterval(this.qualityMonitorInterval);
+          this.qualityMonitorInterval = null;
+        }
         return;
       }
       
-      // Log connection quality
-      console.log('📞 Call quality:', {
-        connectionState: this.peerConnection.connectionState,
-        iceConnectionState: this.peerConnection.iceConnectionState,
-        iceGatheringState: this.peerConnection.iceGatheringState,
-        signalingState: this.peerConnection.signalingState
-      });
+      // Get connection statistics
+      try {
+        const stats = await this.peerConnection.getStats();
+        const qualityMetrics = this.analyzeConnectionQuality(stats);
+        
+        // Log quality metrics
+        console.log('📞 Call quality metrics:', {
+          connectionState: this.peerConnection.connectionState,
+          iceConnectionState: this.peerConnection.iceConnectionState,
+          ...qualityMetrics
+        });
+        
+        // If quality is poor, attempt recovery
+        if (qualityMetrics.isPoor) {
+          console.warn('📞 Call quality is poor, attempting recovery...');
+          if (this.peerConnection.iceConnectionState === 'connected' || 
+              this.peerConnection.iceConnectionState === 'completed') {
+            // Try ICE restart to improve connection
+            this.restartICE();
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error getting connection stats:', error);
+      }
       
     }, 10000); // Check every 10 seconds
   }
 
-  private cleanup() {
+  /**
+   * Analyze connection quality from stats
+   */
+  private analyzeConnectionQuality(stats: any): {
+    isPoor: boolean;
+    packetLoss?: number;
+    jitter?: number;
+    rtt?: number;
+  } {
+    // Basic quality analysis
+    // In production, you would parse RTCStatsReport for detailed metrics
+    return {
+      isPoor: false, // Placeholder - implement detailed analysis
+    };
+  }
 
+  /**
+   * Handle errors with recovery strategies
+   */
+  private handleError(error: Error | any, context: string, options?: { serverCallInitiated?: boolean }) {
+    const errorContext: ErrorContext = {
+      error,
+      context,
+      peerConnectionState: this.peerConnection?.connectionState,
+      iceConnectionState: this.peerConnection?.iceConnectionState,
+      signalingState: this.peerConnection?.signalingState,
+      retryCount: webrtcErrorHandler.getRetryCount(context)
+    };
+
+    const errorType = webrtcErrorHandler.categorizeError(error, errorContext);
+    const recoveryAction = webrtcErrorHandler.getRecoveryAction(errorType, errorContext);
+    const userMessage = webrtcErrorHandler.getUserFriendlyMessage(errorType, error);
+
+    console.error(`📞 WebRTC Error [${context}]:`, {
+      errorType,
+      recoveryAction: recoveryAction.action,
+      error: error.message || error
+    });
+
+    // Execute recovery action
+    this.executeRecoveryAction(recoveryAction, context, errorContext, options);
+  }
+
+  /**
+   * Execute recovery action
+   */
+  private async executeRecoveryAction(
+    recoveryAction: RecoveryAction,
+    context: string,
+    errorContext: ErrorContext,
+    options?: { serverCallInitiated?: boolean }
+  ) {
+    switch (recoveryAction.action) {
+      case 'RETRY':
+        if (recoveryAction.backoffMs && recoveryAction.retryCount !== undefined) {
+          webrtcErrorHandler.incrementRetryCount(context);
+          console.log(`📞 Retrying ${context} in ${recoveryAction.backoffMs}ms (attempt ${recoveryAction.retryCount}/${recoveryAction.maxRetries})`);
+          
+          setTimeout(() => {
+            if (context === 'start_call' && this.currentCall) {
+              this.startCall(this.currentCall).catch(err => {
+                if (recoveryAction.fallback) {
+                  this.executeRecoveryAction(recoveryAction.fallback, context, errorContext, options);
+                } else {
+                  this.showError(webrtcErrorHandler.getUserFriendlyMessage(
+                    webrtcErrorHandler.categorizeError(err, errorContext),
+                    err
+                  ));
+                  this.cleanup();
+                }
+              });
+            } else if (context === 'create_offer') {
+              this.createOffer();
+            }
+          }, recoveryAction.backoffMs);
+        }
+        break;
+
+      case 'ICE_RESTART':
+        if (recoveryAction.backoffMs && recoveryAction.retryCount !== undefined) {
+          webrtcErrorHandler.incrementRetryCount('ice');
+          console.log(`📞 Restarting ICE in ${recoveryAction.backoffMs}ms (attempt ${recoveryAction.retryCount}/${recoveryAction.maxRetries})`);
+          
+          this.iceRestartTimeout = setTimeout(() => {
+            this.restartICE();
+          }, recoveryAction.backoffMs);
+        }
+        break;
+
+      case 'RECONNECT':
+        if (recoveryAction.backoffMs && recoveryAction.retryCount !== undefined) {
+          webrtcErrorHandler.incrementRetryCount('connection');
+          console.log(`📞 Reconnecting in ${recoveryAction.backoffMs}ms (attempt ${recoveryAction.retryCount}/${recoveryAction.maxRetries})`);
+          
+          this.reconnectTimeout = setTimeout(() => {
+            this.reconnectCall();
+          }, recoveryAction.backoffMs);
+        }
+        break;
+
+      case 'FALLBACK_TURN':
+        console.log('📞 Switching to TURN server configuration');
+        this.useTurnServer = true;
+        if (this.currentCall) {
+          // Recreate peer connection with TURN
+          this.cleanup();
+          setTimeout(() => {
+            if (this.currentCall) {
+              this.startCall(this.currentCall).catch(err => {
+                if (recoveryAction.fallback) {
+                  this.executeRecoveryAction(recoveryAction.fallback, context, errorContext, options);
+                } else {
+                  this.showError(webrtcErrorHandler.getUserFriendlyMessage(
+                    webrtcErrorHandler.categorizeError(err, errorContext),
+                    err
+                  ));
+                  this.cleanup();
+                }
+              });
+            }
+          }, recoveryAction.backoffMs || 1000);
+        }
+        break;
+
+      case 'SHOW_ERROR':
+        const errorType = webrtcErrorHandler.categorizeError(errorContext.error, errorContext);
+        const message = webrtcErrorHandler.getUserFriendlyMessage(errorType, errorContext.error);
+        this.showError(message);
+        if (recoveryAction.fallback) {
+          this.executeRecoveryAction(recoveryAction.fallback, context, errorContext, options);
+        } else {
+          this.cleanup();
+        }
+        break;
+
+      case 'CLEANUP':
+        if (options?.serverCallInitiated && this.currentCall) {
+          this.socket?.emit('call:end', {
+            bookingId: this.currentCall.bookingId,
+            userId: this.userId,
+          });
+        }
+        this.cleanup();
+        break;
+    }
+  }
+
+  /**
+   * Handle disconnection with recovery
+   */
+  private handleDisconnection() {
+    console.warn('📞 Connection lost, attempting to reconnect...');
+    
+    if (this.connectionRetryCount < this.MAX_CONNECTION_RETRIES) {
+      this.connectionRetryCount++;
+      const backoff = Math.min(1000 * Math.pow(2, this.connectionRetryCount - 1), 5000);
+      
+      this.reconnectTimeout = setTimeout(() => {
+        if (this.peerConnection?.connectionState === 'disconnected' && this.currentCall) {
+          console.log(`📞 Reconnection attempt ${this.connectionRetryCount}/${this.MAX_CONNECTION_RETRIES}`);
+          this.createOffer();
+        }
+      }, backoff);
+    } else {
+      console.error('📞 Max reconnection attempts reached');
+      this.events.onError?.('Connection lost. Please try calling again.');
+      this.cleanup();
+    }
+  }
+
+  /**
+   * Handle connection failure with recovery
+   */
+  private handleConnectionFailure() {
+    console.error('📞 Connection failed');
+    
+    const error = new Error('Connection failed');
+    (error as any).code = 'CONNECTION_FAILED';
+    this.handleError(error, 'connection_failure');
+  }
+
+  /**
+   * Handle ICE failure with recovery
+   */
+  private handleICEFailure() {
+    console.error('📞 ICE connection failed');
+    
+    const error = new Error('ICE connection failed');
+    (error as any).code = 'ICE_FAILED';
+    this.handleError(error, 'ice_failure');
+  }
+
+  /**
+   * Restart ICE connection
+   */
+  private async restartICE() {
+    if (!this.peerConnection || !this.currentCall) return;
+
+    try {
+      console.log('📞 Restarting ICE connection...');
+      
+      // Create new offer with iceRestart flag
+      const offer = await this.peerConnection.createOffer({ iceRestart: true });
+      await this.peerConnection.setLocalDescription(offer);
+
+      this.socket?.emit('call:offer', {
+        bookingId: this.currentCall.bookingId,
+        offer: this.peerConnection.localDescription,
+        to: this.currentCall.receiverId,
+      });
+    } catch (error) {
+      console.error('❌ Error restarting ICE:', error);
+      this.handleError(error, 'ice_restart');
+    }
+  }
+
+  /**
+   * Reconnect call
+   */
+  private async reconnectCall() {
+    if (!this.currentCall) return;
+
+    try {
+      console.log('📞 Reconnecting call...');
+      
+      // Cleanup existing connection
+      if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
+      }
+
+      // Recreate connection
+      const config = this.useTurnServer ? RTC_CONFIG_WITH_TURN : RTC_CONFIG;
+      this.peerConnection = new RTCPeerConnection(config);
+
+      // Re-add local stream if available
+      if (this.localStream) {
+        this.localStream.getTracks().forEach((track: any) => {
+          this.peerConnection?.addTrack(track, this.localStream);
+        });
+      }
+
+      // Re-setup event handlers
+      this.setupPeerConnectionHandlers();
+
+      // Create new offer
+      await this.createOffer();
+    } catch (error) {
+      console.error('❌ Error reconnecting call:', error);
+      this.handleError(error, 'reconnect');
+    }
+  }
+
+  /**
+   * Setup peer connection event handlers
+   */
+  private setupPeerConnectionHandlers() {
+    if (!this.peerConnection || !this.currentCall) return;
+
+    // Handle ICE candidates
+    this.peerConnection.onicecandidate = (event) => {
+      if (event.candidate && this.peerConnection) {
+        this.socket?.emit('call:ice-candidate', {
+          bookingId: this.currentCall?.bookingId,
+          candidate: event.candidate,
+          to: this.currentCall?.receiverId,
+        });
+      }
+    };
+
+    // Handle connection state changes
+    this.peerConnection.onconnectionstatechange = () => {
+      if (!this.peerConnection) return;
+      
+      const state = this.peerConnection.connectionState;
+      console.log('📞 Connection state changed:', state);
+      
+      switch (state) {
+        case 'connected':
+          this.callStartTime = Date.now();
+          this.connectionRetryCount = 0;
+          webrtcErrorHandler.resetRetryCount('connection');
+          this.events.onCallConnected?.();
+          this.startCallQualityMonitoring();
+          break;
+          
+        case 'disconnected':
+          this.handleDisconnection();
+          break;
+          
+        case 'failed':
+          this.handleConnectionFailure();
+          break;
+          
+        case 'closed':
+          this.cleanup();
+          break;
+      }
+    };
+
+    // Handle ICE connection state changes
+    this.peerConnection.oniceconnectionstatechange = () => {
+      if (!this.peerConnection) return;
+      
+      const iceState = this.peerConnection.iceConnectionState;
+      console.log('📞 ICE connection state changed:', iceState);
+      
+      switch (iceState) {
+        case 'failed':
+          this.handleICEFailure();
+          break;
+          
+        case 'connected':
+        case 'completed':
+          webrtcErrorHandler.resetRetryCount('ice');
+          break;
+      }
+    };
+  }
+
+  /**
+   * Handle socket disconnect
+   */
+  private handleSocketDisconnect() {
+    console.warn('📞 Socket disconnected');
+    
+    // If call is active, attempt to reconnect socket
+    if (this.currentCall && this.userId) {
+      // Socket.io will auto-reconnect, but we can handle it explicitly
+      setTimeout(() => {
+        if (!this.socket?.connected && this.userId) {
+          console.log('📞 Attempting to reconnect socket...');
+          // Socket will auto-reconnect, just wait
+        }
+      }, 2000);
+    } else {
+      this.cleanup();
+    }
+  }
+
+  /**
+   * Handle socket error
+   */
+  private handleSocketError(error: any) {
+    console.error('📞 Socket error:', error);
+    
+    const socketError = new Error('Socket connection error');
+    (socketError as any).code = 'SOCKET_ERROR';
+    this.handleError(socketError, 'socket_error');
+  }
+
+  /**
+   * Show error to user
+   */
+  private showError(message: string) {
+    this.events.onError?.(message);
+  }
+
+  private cleanup() {
+    // Clear timeouts
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    
+    if (this.iceRestartTimeout) {
+      clearTimeout(this.iceRestartTimeout);
+      this.iceRestartTimeout = null;
+    }
+    
+    if (this.qualityMonitorInterval) {
+      clearInterval(this.qualityMonitorInterval);
+      this.qualityMonitorInterval = null;
+    }
+
+    // Stop all media tracks
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track: any) => track.stop());
+      this.localStream.getTracks().forEach((track: any) => {
+        track.stop();
+        track.enabled = false;
+      });
       this.localStream = null;
     }
 
+    // Close peer connection
     if (this.peerConnection) {
       this.peerConnection.close();
       this.peerConnection = null;
     }
 
+    // Reset state
     this.currentCall = null;
     this.callStartTime = null;
+    this.connectionRetryCount = 0;
+    this.useTurnServer = false;
+    
+    // Reset retry counts
+    webrtcErrorHandler.resetRetryCount('connection');
+    webrtcErrorHandler.resetRetryCount('ice');
+    webrtcErrorHandler.resetRetryCount('start_call');
   }
 
   // Disconnect socket

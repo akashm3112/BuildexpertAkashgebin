@@ -66,9 +66,17 @@ export default function RecentBookings() {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         
+        if (!response.ok) {
+          // Handle non-OK responses
+          const errorData = await response.json().catch(() => ({ message: 'Failed to fetch bookings' }));
+          console.error('❌ RecentBookings: API error:', response.status, errorData.message);
+          setBookings([]);
+          return;
+        }
+        
         const data = await response.json();
         
-        if (response.ok && data.status === 'success') {
+        if (data.status === 'success') {
           const rawBookings = data.data.bookings || [];
           
           setBookings(rawBookings.slice(0, 3).map((b: any) => {
@@ -136,8 +144,19 @@ export default function RecentBookings() {
         } else {
           setBookings([]);
         }
-      } catch (err) {
-        console.error('❌ RecentBookings: Fetch error:', err);
+      } catch (err: any) {
+        // Check if it's a network error
+        const isNetworkError = err instanceof TypeError && 
+          (err.message?.includes('Network request failed') || 
+           err.message?.includes('Failed to fetch') ||
+           err.message?.includes('NetworkError'));
+        
+        if (isNetworkError) {
+          console.error('❌ RecentBookings: Network error - Cannot reach server at', API_BASE_URL);
+          console.error('   Make sure the backend server is running and accessible');
+        } else {
+          console.error('❌ RecentBookings: Fetch error:', err);
+        }
         setBookings([]);
       } finally {
         setLoading(false);

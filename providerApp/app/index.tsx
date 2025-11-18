@@ -11,19 +11,24 @@ export default function Index() {
   useEffect(() => {
     if (!isLoading) {
       if (user) {
-       
-        
         // Navigate based on user role
+        // Using router.replace() ensures the navigation stack is properly reset
+        // This prevents back navigation to previous role's screens
         if (user.role === 'admin') {
           setTimeout(() => {
+            // Replace current route with admin dashboard
+            // This clears any provider screens from the navigation stack
             router.replace('/admin/dashboard');
           }, 100);
         } else {
           setTimeout(() => {
+            // Replace current route with provider tabs
+            // This clears any admin screens from the navigation stack
             router.replace('/(tabs)');
           }, 100);
         }
       } else {
+        // No user, navigate to auth screen
         router.replace('/auth');
       }
     }

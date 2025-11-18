@@ -233,10 +233,15 @@ const errorHandler = (err, req, res, next) => {
 /**
  * Async error wrapper for route handlers
  * Catches async errors and passes them to error handler
+ * NEVER swallows errors - always passes to error handler middleware
  */
 const asyncHandler = (fn) => {
   return (req, res, next) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
+    Promise.resolve(fn(req, res, next)).catch((error) => {
+      // Always pass error to error handler - never swallow
+      // Error handler will log and format the response
+      next(error);
+    });
   };
 };
 

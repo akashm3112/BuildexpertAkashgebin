@@ -243,7 +243,8 @@ export default function OTPVerification() {
         token: data.data.accessToken, // Keep for backward compatibility
         profile_pic_url: data.data.user.profilePicUrl || data.data.user.profile_pic_url || ''
       });
-        router.replace('/(tabs)');
+        // Always navigate through index to properly reset navigation stack
+        router.replace('/');
     } catch (error) {
       setIsLoading(false);
       showModal('Network Error', 'Could not connect to server.', 'error');

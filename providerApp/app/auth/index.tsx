@@ -208,90 +208,140 @@ function AuthScreen() {
     setLoading(true);
     
     try {
+      // Import network retry utility
+      const { fetchWithRetry, getNetworkErrorMessage, checkNetworkConnectivity } = await import('@/utils/networkRetry');
+      
+      // Check network connectivity first
+      const hasNetwork = await checkNetworkConnectivity();
+      if (!hasNetwork) {
+        showModal('No Internet Connection', 'Please check your network and try again', 'error');
+        setLoading(false);
+        return;
+      }
+
       // Check if this is admin credentials first
       const isAdminCredentials = formData.phone === '9999999999';
       
       let response;
       if (isAdminCredentials) {
-        // Try admin login first for admin phone number
-        response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'admin' })
-        });
-        
-        // If admin login fails, try provider login as fallback
-        if (!response.ok) {
-          response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'provider' })
-          });
-        }
-      } else {
-        // Try provider login first for non-admin phone numbers
-        response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'provider' })
-        });
-        
-        // If provider login fails, try admin login as fallback
-        if (!response.ok) {
-          response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        // Try admin login first for admin phone number with retry
+        response = await fetchWithRetry(
+          `${API_BASE_URL}/api/auth/login`,
+          {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'admin' })
-          });
+          },
+          {
+            maxRetries: 3,
+            retryDelay: 1000,
+            exponentialBackoff: true,
+            timeout: 30000,
+            onRetry: (attempt) => {
+              console.log(`Admin login retry attempt ${attempt}/${3}`);
+            },
+          }
+        );
+        
+        // If admin login fails, try provider login as fallback
+        if (!response.ok) {
+          response = await fetchWithRetry(
+            `${API_BASE_URL}/api/auth/login`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'provider' })
+            },
+            {
+              maxRetries: 2,
+              retryDelay: 1000,
+              exponentialBackoff: true,
+              timeout: 30000,
+            }
+          );
+        }
+      } else {
+        // Try provider login first for non-admin phone numbers with retry
+        response = await fetchWithRetry(
+          `${API_BASE_URL}/api/auth/login`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'provider' })
+          },
+          {
+            maxRetries: 3,
+            retryDelay: 1000,
+            exponentialBackoff: true,
+            timeout: 30000,
+            onRetry: (attempt) => {
+              console.log(`Provider login retry attempt ${attempt}/${3}`);
+            },
+          }
+        );
+        
+        // If provider login fails, try admin login as fallback
+        if (!response.ok) {
+          response = await fetchWithRetry(
+            `${API_BASE_URL}/api/auth/login`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: formData.phone, password: formData.password, role: 'admin' })
+            },
+            {
+              maxRetries: 2,
+              retryDelay: 1000,
+              exponentialBackoff: true,
+              timeout: 30000,
+            }
+          );
         }
       }
       
       const data = await response.json();
       
       if (response.ok) {
-        // Store tokens using TokenManager if available
-        const { tokenManager } = await import('@/utils/tokenManager');
-        if (data.data.accessToken && data.data.refreshToken) {
-          await tokenManager.storeTokenPair(
-            data.data.accessToken,
-            data.data.refreshToken,
-            data.data.accessTokenExpiresAt,
-            data.data.refreshTokenExpiresAt
-          );
-        }
-        
-        // Save user data to context
-        const userData = {
-          ...data.data.user,
-          token: data.data.token || data.data.accessToken
-        };
-        
-        
-        
-        // Save to context and wait for completion
-        await login(userData);
-        
-        // Small delay to ensure AsyncStorage write completes
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        showModal('Welcome Back!', 'Successfully logged in', 'success');
-        
-        // Redirect based on user role with explicit logging
-        if (userData.role === 'admin') {
+        try {
+          // Store tokens using TokenManager if available
+          const { tokenManager } = await import('@/utils/tokenManager');
+          if (data.data.accessToken && data.data.refreshToken) {
+            await tokenManager.storeTokenPair(
+              data.data.accessToken,
+              data.data.refreshToken,
+              data.data.accessTokenExpiresAt,
+              data.data.refreshTokenExpiresAt
+            );
+          }
+          
+          // Save user data to context
+          const userData = {
+            ...data.data.user,
+            token: data.data.token || data.data.accessToken
+          };
+          
+          // Save to context and wait for completion
+          await login(userData);
+          
+          showModal('Welcome Back!', 'Successfully logged in', 'success');
+          
+          // Always navigate through index to properly reset navigation stack
+          // The index screen will route based on user role
           setTimeout(() => {
-            router.replace('/admin/dashboard');
+            router.replace('/');
           }, 300);
-        } else {
-          setTimeout(() => {
-            router.replace('/(tabs)');
-          }, 300);
+        } catch (storageError) {
+          console.error('Storage error during login:', storageError);
+          showModal('Storage Error', 'Failed to save login data. Please try again.', 'error');
         }
       } else {
         showModal('Login Failed', data.message || 'Invalid phone number or password', 'error');
       }
     } catch (error) {
       console.error('Login error:', error);
-      showModal('Network Error', 'Please check your connection and try again', 'error');
+      const { getNetworkErrorMessage } = await import('@/utils/networkRetry');
+      const errorMessage = getNetworkErrorMessage(error);
+      showModal('Login Failed', errorMessage, 'error');
     } finally {
       setLoading(false);
     }

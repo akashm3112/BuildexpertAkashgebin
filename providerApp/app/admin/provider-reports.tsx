@@ -67,7 +67,11 @@ export default function ProviderReportsScreen() {
       return;
     }
 
+    // Prevent back navigation to provider screens
+    // Navigate to admin dashboard instead
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Only navigate to dashboard if we're not already there
+      // This prevents navigation back to provider screens
       router.replace('/admin/dashboard');
       return true;
     });

@@ -78,10 +78,24 @@ const query = async (text, params) => {
   const maxRetries = config.isProduction() ? 2 : 2;
   let lastError;
   
+  // Get metrics collector if available
+  let metricsCollector;
+  try {
+    metricsCollector = require('../utils/monitoring').metricsCollector;
+  } catch (e) {
+    // Monitoring not available, continue without it
+  }
+  
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const res = await pool.query(text, params);
       const duration = Date.now() - start;
+      
+      // Record database query metrics
+      if (metricsCollector) {
+        const isSlow = duration > 1000; // Queries > 1 second are slow
+        metricsCollector.recordDatabaseQuery(duration, isSlow, null);
+      }
       
       if (config.isDevelopment() && config.get('security.enableQueryLogging')) {
         console.log('Executed query', {
@@ -105,6 +119,12 @@ const query = async (text, params) => {
       lastError = error;
       const retryable = isRetryableDatabaseError(error);
       const isLastAttempt = attempt === maxRetries;
+      const duration = Date.now() - start;
+      
+      // Record database error metrics
+      if (metricsCollector) {
+        metricsCollector.recordDatabaseQuery(duration, false, error);
+      }
       
       if (!retryable || isLastAttempt) {
         logger.error('Database query error', {
@@ -113,6 +133,7 @@ const query = async (text, params) => {
           queryPreview: typeof text === 'string' ? text.substring(0, 120) : 'dynamic query',
           paramsCount: Array.isArray(params) ? params.length : 0,
           attempts: attempt + 1,
+          duration,
           failureCategory: retryable ? 'resilience' : 'logic',
           error: error // Pass full error for stack trace enhancement
         });

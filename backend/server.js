@@ -101,6 +101,10 @@ app.use(cors(corsOptions));
 // Compression middleware
 app.use(compression());
 
+// Monitoring middleware (must be before routes)
+const { monitoringMiddleware, errorMonitoringMiddleware } = require('./utils/monitoring');
+app.use(monitoringMiddleware);
+
 // Logging middleware
 app.use(morgan('combined'));
 
@@ -143,6 +147,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const healthRoutes = require('./routes/health');
 app.use('/health', healthRoutes);
 
+// Monitoring endpoints
+const monitoringRoutes = require('./routes/monitoring');
+app.use('/api/monitoring', monitoringRoutes);
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -164,6 +172,9 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 // 404 handler - must be after all routes
 app.use('*', notFoundHandler);
+
+// Error monitoring middleware (before error handler, must be 4-parameter)
+app.use(errorMonitoringMiddleware);
 
 // Global error handler - must be last middleware
 app.use(errorHandler);

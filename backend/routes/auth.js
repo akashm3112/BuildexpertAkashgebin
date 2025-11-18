@@ -11,6 +11,19 @@ const { uploadImage } = require('../utils/cloudinary');
 const config = require('../utils/config');
 const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
+const { asyncHandler } = require('../middleware/errorHandler');
+const {
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  NotFoundError
+} = require('../utils/errorTypes');
+const {
+  validateOrThrow,
+  throwIf,
+  throwIfMissing,
+  handleDatabaseError
+} = require('../utils/errorHelpers');
 const {
   generateOTP,
   sendOTP,
@@ -241,141 +254,103 @@ const getClientIP = (req) => {
 // @route   POST /api/auth/signup
 // @desc    Register a new user
 // @access  Public
-router.post('/signup', [signupLimiter, ...validateSignup], async (req, res) => {
+router.post('/signup', [signupLimiter, ...validateSignup], asyncHandler(async (req, res) => {
+  // Validate input - throws ValidationError if invalid
+  validateOrThrow(req);
+
+  const { fullName, email, password, role, profilePicUrl } = req.body;
+
+  // Clean and normalize identifiers
+  const phone = normalizePhoneNumber(req.body.phone);
+  let normalizedEmail = null;
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+    normalizedEmail = normalizeEmail(email);
+  } catch (emailError) {
+    logger.error('Email normalization error', { error: emailError.message, email });
+    throw new ValidationError('Invalid email format provided.');
+  }
 
-    const { fullName, email, password, role, profilePicUrl } = req.body;
+  if (!phone) {
+    throw new ValidationError('Invalid phone number provided.');
+  }
 
-    // Clean and normalize identifiers
-    const phone = normalizePhoneNumber(req.body.phone);
-    let normalizedEmail = null;
-    try {
-      normalizedEmail = normalizeEmail(email);
-    } catch (emailError) {
-      logger.error('Email normalization error', { error: emailError.message, email });
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid email format provided.'
-      });
-    }
+  // Default profile picture URL (the generic user icon you provided)
+  const DEFAULT_PROFILE_PIC = 'https://res.cloudinary.com/dqoizs0fu/raw/upload/v1756189484/profile-pictures/m3szbez4bzvwh76j1fle';
+  
+  // Use provided profile picture URL or default
+  const finalProfilePicUrl = profilePicUrl || DEFAULT_PROFILE_PIC;
 
-    if (!phone) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid phone number provided.'
-      });
-    }
+  // Validate role
+  if (role !== 'provider' && role !== 'user') {
+    throw new ValidationError('Invalid role. Must be either provider or user.');
+  }
 
-    // Default profile picture URL (the generic user icon you provided)
-    const DEFAULT_PROFILE_PIC = 'https://res.cloudinary.com/dqoizs0fu/raw/upload/v1756189484/profile-pictures/m3szbez4bzvwh76j1fle';
-    
-    // Use provided profile picture URL or default
-    const finalProfilePicUrl = profilePicUrl || DEFAULT_PROFILE_PIC;
+  // Check if identifiers are blocked for this role
+  const blockedPhone = await isIdentifierBlocked({
+    identifierType: 'phone',
+    identifierValue: phone,
+    role
+  });
 
-    // Validate role
-    if (role !== 'provider' && role !== 'user') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid role. Must be either provider or user.'
-      });
-    }
+  if (blockedPhone) {
+    throw new AuthorizationError('This phone number has been blocked by the BuildXpert admin. Please contact support for assistance.');
+  }
 
-    // Check if identifiers are blocked for this role
-    const blockedPhone = await isIdentifierBlocked({
-      identifierType: 'phone',
-      identifierValue: phone,
+  if (normalizedEmail) {
+    const blockedEmail = await isIdentifierBlocked({
+      identifierType: 'email',
+      identifierValue: normalizedEmail,
       role
     });
 
-    if (blockedPhone) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'This phone number has been blocked by the BuildXpert admin. Please contact support for assistance.'
-      });
+    if (blockedEmail) {
+      throw new AuthorizationError('This email address has been blocked by the BuildXpert admin. Please contact support for assistance.');
     }
-
-    if (normalizedEmail) {
-      const blockedEmail = await isIdentifierBlocked({
-        identifierType: 'email',
-        identifierValue: normalizedEmail,
-        role
-      });
-
-      if (blockedEmail) {
-        return res.status(403).json({
-          status: 'error',
-          message: 'This email address has been blocked by the BuildXpert admin. Please contact support for assistance.'
-        });
-      }
-    }
-
-    // Check if user already exists with the same phone and role
-    const existingUser = await getRow(
-      'SELECT * FROM users WHERE (phone = $1 AND role = $2) OR lower(email) = $3',
-      [phone, role, normalizedEmail]
-    );
-    if (existingUser) {
-      return res.status(400).json({
-        status: 'error',
-        message: (existingUser.phone === phone && existingUser.role === role)
-          ? `Phone number already registered as a ${role}`
-          : 'Email already registered'
-      });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Generate and send OTP
-    const otp = generateOTP();
-    const otpResult = await sendOTP(phone, otp);
-    if (otpResult.success) {
-      storeOTP(phone, otp);
-      // Store pending signup data (do not insert into DB yet)
-      logger.auth('Storing pending signup data', {
-        phone,
-        role,
-        hasProfilePic: !!finalProfilePicUrl
-      });
-      storePendingSignup(phone, {
-        fullName,
-        email: normalizedEmail,
-        phone,
-        password: hashedPassword,
-        role,
-        profilePicUrl: finalProfilePicUrl
-      });
-      return res.json({
-        status: 'success',
-        message: 'OTP sent successfully to your mobile number. Please verify to complete signup.'
-      });
-    } else {
-      return res.status(500).json({
-        status: 'error',
-        message: 'Failed to send OTP. Please try again.'
-      });
-    }
-  } catch (error) {
-    logger.error('Signup error', { 
-      error: error, // Pass full error object for stack trace enhancement
-      req: req // Pass req for automatic context capture and sensitive data masking
-    });
-    res.status(500).json({
-      status: 'error',
-      message: process.env.NODE_ENV === 'production' 
-        ? 'Internal server error' 
-        : `Internal server error: ${error.message}`
-    });
   }
-});
+
+  // Check if user already exists with the same phone and role
+  const existingUser = await getRow(
+    'SELECT * FROM users WHERE (phone = $1 AND role = $2) OR lower(email) = $3',
+    [phone, role, normalizedEmail]
+  );
+  
+  if (existingUser) {
+    const message = (existingUser.phone === phone && existingUser.role === role)
+      ? `Phone number already registered as a ${role}`
+      : 'Email already registered';
+    throw new ValidationError(message);
+  }
+
+  // Hash password
+  const hashedPassword = await bcrypt.hash(password, 12);
+
+  // Generate and send OTP
+  const otp = generateOTP();
+  const otpResult = await sendOTP(phone, otp);
+  if (otpResult.success) {
+    storeOTP(phone, otp);
+    // Store pending signup data (do not insert into DB yet)
+    logger.auth('Storing pending signup data', {
+      phone,
+      role,
+      hasProfilePic: !!finalProfilePicUrl
+    });
+    storePendingSignup(phone, {
+      fullName,
+      email: normalizedEmail,
+      phone,
+      password: hashedPassword,
+      role,
+      profilePicUrl: finalProfilePicUrl
+    });
+    return res.json({
+      status: 'success',
+      message: 'OTP sent successfully to your mobile number. Please verify to complete signup.'
+    });
+  } else {
+    throw new Error('Failed to send OTP. Please try again.');
+  }
+}));
 
 // @route   POST /api/auth/send-otp
 // @desc    Send OTP to phone number
