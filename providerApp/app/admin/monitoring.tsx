@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { ArrowLeft, Activity, AlertTriangle, Database, Server, TrendingUp, Clock, AlertCircle } from 'lucide-react-native';
@@ -62,6 +62,16 @@ export default function MonitoringScreen() {
       fetchMonitoringData();
     }
   }, [user?.role]);
+
+  // Handle hardware back button to navigate to admin dashboard
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.back();
+      return true; // Prevent default behavior (exiting app)
+    });
+
+    return () => backHandler.remove();
+  }, [router]);
 
   const fetchMonitoringData = async () => {
     try {
