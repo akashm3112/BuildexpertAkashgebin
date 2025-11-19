@@ -18,12 +18,7 @@ const {
   AuthorizationError,
   NotFoundError
 } = require('../utils/errorTypes');
-const {
-  validateOrThrow,
-  throwIf,
-  throwIfMissing,
-  handleDatabaseError
-} = require('../utils/errorHelpers');
+const { validateOrThrow, throwIf, throwIfMissing, handleDatabaseError } = require('../utils/errorHelpers');
 const {
   generateOTP,
   sendOTP,
@@ -43,8 +38,19 @@ const { createSession, invalidateSession, invalidateAllUserSessions, invalidateS
 const { logSecurityEvent, logLoginAttempt, getRecentFailedAttempts, shouldBlockIP } = require('../utils/securityAudit');
 const { generateTokenPair, refreshAccessToken, revokeRefreshToken, revokeAllUserRefreshTokens } = require('../utils/refreshToken');
 
+// Admin bypass only allowed in development mode for testing
+// In production, admins must follow normal security checks
+// To enable in development: Set ENABLE_ADMIN_BYPASS=true in config.env
+// SECURITY: Never enable this in production - it bypasses critical security checks
+const ADMIN_BYPASS_ENABLED = config.isDevelopment() && process.env.ENABLE_ADMIN_BYPASS === 'true';
 const ADMIN_BYPASS_PHONE = process.env.DEFAULT_ADMIN_PHONE || '9999999999';
 const ADMIN_BYPASS_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+
+// SECURITY WARNING: Default credentials are weak - change in production!
+// In production, ensure:
+// 1. Strong admin passwords (minimum 12 characters, mixed case, numbers, symbols)
+// 2. ENABLE_ADMIN_BYPASS is NOT set (or set to false)
+// 3. Admin accounts are created manually, not auto-created
 const {
   normalizePhoneNumber,
   normalizeEmail,
@@ -111,10 +117,11 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
+  // Remove admin bypass from rate limiting - admins should follow same security rules
+  // This prevents abuse if admin phone number is known
   skip: (req) => {
-    const phone = normalizePhoneNumber(req.body?.phone || '');
-    const role = req.body?.role;
-    return phone === ADMIN_BYPASS_PHONE && role === 'admin';
+    // No bypass - all users including admins must follow rate limits
+    return false;
   },
   keyGenerator: (req) => {
     const normalizedPhone = normalizePhoneNumber(req.body?.phone || '');
@@ -171,13 +178,42 @@ const passwordResetLimiter = rateLimit({
   }
 });
 
-// Token refresh limiter - prevent token refresh abuse (20 per 15 minutes per user)
+// Token refresh limiter - prevent token refresh abuse
+// Stricter limits: 10 attempts per 15 minutes per refresh token/user
+// This prevents brute force attacks on refresh tokens
 const tokenRefreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: 10, // Reduced from 20 to 10 for better security
   message: { status: 'error', message: 'Too many token refresh requests. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful refreshes against limit
+  // Use refresh token hash as key to track per-token attempts
+  // This prevents abuse even if multiple users share same IP
+  keyGenerator: (req) => {
+    const refreshToken = req.body?.refreshToken;
+    if (refreshToken) {
+      // Create a hash of the refresh token for rate limiting
+      // This allows tracking per-token without storing the actual token
+      // Using crypto module already imported at top of file
+      const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+      return `refresh:${tokenHash}`;
+    }
+    // Fallback to IP if no token provided
+    return req.ip || req.connection.remoteAddress || 'unknown';
+  },
+  // Custom handler to log rate limit violations
+  handler: (req, res) => {
+    logger.warn('Token refresh rate limit exceeded', {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      hasToken: !!req.body?.refreshToken
+    });
+    res.status(429).json({
+      status: 'error',
+      message: 'Too many token refresh requests. Please try again in 15 minutes.'
+    });
+  }
 });
 
 // ============================================================================
@@ -357,230 +393,177 @@ router.post('/signup', [signupLimiter, ...validateSignup], asyncHandler(async (r
 // @access  Public
 router.post('/send-otp', [otpRequestLimiter,
   body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
 
-    // Clean phone number by removing any country code prefix
-    const phone = normalizePhoneNumber(req.body.phone);
+  // Clean phone number by removing any country code prefix
+  const phone = normalizePhoneNumber(req.body.phone);
 
-    if (!phone) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid phone number provided.'
-      });
-    }
-
-    // Check if user exists
-    const user = await getRow('SELECT * FROM users WHERE phone = $1', [phone]);
-    if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'User not found. Please register first.'
-      });
-    }
-
-    const blockedAccount = await isAnyIdentifierBlocked({
-      phone,
-      email: user.email,
-      role: user.role
-    });
-
-    if (blockedAccount) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'This account has been blocked by the BuildXpert admin. Please contact support for assistance.'
-      });
-    }
-
-    // Generate and send OTP
-    const otp = generateOTP();
-    const otpResult = await sendOTP(phone, otp);
-    
-    if (otpResult.success) {
-      storeOTP(phone, otp);
-      
-      res.json({
-        status: 'success',
-        message: 'OTP sent successfully to your mobile number.'
-      });
-    } else {
-      res.status(400).json({
-        status: 'error',
-        message: otpResult.error || 'Failed to send OTP. Please try again.'
-      });
-    }
-
-  } catch (error) {
-    logger.error('Send OTP error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  if (!phone) {
+    throw new ValidationError('Invalid phone number provided.');
   }
-});
+
+  // Check if user exists
+  const user = await getRow('SELECT * FROM users WHERE phone = $1', [phone]);
+  if (!user) {
+    throw new NotFoundError('User not found. Please register first.');
+  }
+
+  const blockedAccount = await isAnyIdentifierBlocked({
+    phone,
+    email: user.email,
+    role: user.role
+  });
+
+  if (blockedAccount) {
+    throw new AuthorizationError('This account has been blocked by the BuildXpert admin. Please contact support for assistance.');
+  }
+
+  // Generate and send OTP
+  const otp = generateOTP();
+  const otpResult = await sendOTP(phone, otp);
+  
+  if (otpResult.success) {
+    storeOTP(phone, otp);
+    
+    res.json({
+      status: 'success',
+      message: 'OTP sent successfully to your mobile number.'
+    });
+  } else {
+    throw new ValidationError(otpResult.error || 'Failed to send OTP. Please try again.');
+  }
+}));
 
 // @route   POST /api/auth/verify-otp
 // @desc    Verify OTP and complete signup
 // @access  Public
-router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
+router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
+
+  const { otp } = req.body;
+  // Clean phone number by removing any country code prefix
+  const phone = normalizePhoneNumber(req.body.phone);
+
+  if (!phone) {
+    throw new ValidationError('Invalid phone number provided.');
+  }
+
+  // Verify OTP
+  const otpResult = verifyOTP(phone, otp);
+  if (!otpResult.valid) {
+    const error = new ValidationError(otpResult.message);
+    // Add additional info for frontend
+    if (otpResult.locked) {
+      error.locked = true;
+      error.lockoutTimeRemaining = otpResult.lockoutTimeRemaining;
+    } else if (otpResult.remainingAttempts !== undefined) {
+      error.remainingAttempts = otpResult.remainingAttempts;
     }
+    throw error;
+  }
 
-    const { otp } = req.body;
-    // Clean phone number by removing any country code prefix
-    const phone = normalizePhoneNumber(req.body.phone);
+  // Get pending signup data
+  const userPendingSignup = getPendingSignup(phone, 'user'); // Try user role first
+  const providerPendingSignup = getPendingSignup(phone, 'provider'); // Try provider role
+  
+  const pendingSignup = userPendingSignup || providerPendingSignup;
+  if (!pendingSignup) {
+    throw new ValidationError('No pending signup found for this phone number.');
+  }
 
-    if (!phone) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid phone number provided.'
-      });
-    }
+  // Ensure identifiers are still allowed before proceeding (admin might have blocked after OTP request)
+  const pendingEmail = normalizeEmail(pendingSignup.email);
 
-    // Verify OTP
-    const otpResult = verifyOTP(phone, otp);
-    if (!otpResult.valid) {
-      const response = {
-        status: 'error',
-        message: otpResult.message
-      };
-
-      // Add additional info for frontend
-      if (otpResult.locked) {
-        response.locked = true;
-        response.lockoutTimeRemaining = otpResult.lockoutTimeRemaining;
-      } else if (otpResult.remainingAttempts !== undefined) {
-        response.remainingAttempts = otpResult.remainingAttempts;
-      }
-
-      return res.status(400).json(response);
-    }
-
-    // Get pending signup data
-    const userPendingSignup = getPendingSignup(phone, 'user'); // Try user role first
-    const providerPendingSignup = getPendingSignup(phone, 'provider'); // Try provider role
-    
-    const pendingSignup = userPendingSignup || providerPendingSignup;
-    if (!pendingSignup) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'No pending signup found for this phone number.'
-      });
-    }
-
-    // Ensure identifiers are still allowed before proceeding (admin might have blocked after OTP request)
-    const pendingEmail = normalizeEmail(pendingSignup.email);
-
-    const blockedPhone = await isIdentifierBlocked({
+  const blockedPhone = await isIdentifierBlocked({
       identifierType: 'phone',
       identifierValue: phone,
       role: pendingSignup.role
     });
 
-    if (blockedPhone) {
-      deletePendingSignup(phone, pendingSignup.role);
-      return res.status(403).json({
-        status: 'error',
-        message: 'This phone number has been blocked by the BuildXpert admin. Please contact support.'
-      });
-    }
-
-    if (pendingEmail) {
-      const blockedEmail = await isIdentifierBlocked({
-        identifierType: 'email',
-        identifierValue: pendingEmail,
-        role: pendingSignup.role
-      });
-
-      if (blockedEmail) {
-        deletePendingSignup(phone, pendingSignup.role);
-        return res.status(403).json({
-          status: 'error',
-          message: 'This email address has been blocked by the BuildXpert admin. Please contact support.'
-        });
-      }
-    }
-
-    // Handle profile picture upload to Cloudinary if it's not the default
-    let finalProfilePicUrl = pendingSignup.profilePicUrl;
-    
-    // Profile picture debug logging removed for production
-    
-    if (pendingSignup.profilePicUrl && 
-        !pendingSignup.profilePicUrl.includes('dqoizs0fu') && 
-        (pendingSignup.profilePicUrl.startsWith('data:image') || pendingSignup.profilePicUrl.startsWith('file://'))) {
-              try {
-          logger.info('Uploading profile picture to Cloudinary');
-          const uploadResult = await uploadImage(pendingSignup.profilePicUrl, 'profile-pictures');
-          
-          if (uploadResult.success) {
-            finalProfilePicUrl = uploadResult.url;
-            logger.info('Successfully uploaded profile picture to Cloudinary');
-          } else {
-            logger.error('Failed to upload profile picture to Cloudinary', {
-              error: uploadResult.error
-            });
-            // Use default profile picture if upload fails
-            finalProfilePicUrl = 'https://res.cloudinary.com/dqoizs0fu/raw/upload/v1756189484/profile-pictures/m3szbez4bzvwh76j1fle';
-          }
-        } catch (uploadError) {
-          logger.error('Profile picture upload error', {
-            error: uploadError.message
-          });
-          // Use default profile picture if upload fails
-          finalProfilePicUrl = 'https://res.cloudinary.com/dqoizs0fu/raw/upload/v1756189484/profile-pictures/m3szbez4bzvwh76j1fle';
-        }
-    }
-
-    // Insert user into DB
-    logger.auth('Inserting user into database', {
-      phone,
-      role: pendingSignup.role,
-      hasProfilePic: !!finalProfilePicUrl
-    });
-    
-    const result = await query(`
-      INSERT INTO users (full_name, email, phone, password, role, profile_pic_url)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, full_name, email, phone, role, is_verified, profile_pic_url
-    `, [
-      pendingSignup.fullName,
-      pendingEmail,
-      pendingSignup.phone,
-      pendingSignup.password,
-      pendingSignup.role,
-      finalProfilePicUrl
-    ]);
-    const user = result.rows[0];
-    
-    logger.auth('User created successfully', {
-      userId: user.id,
-      role: user.role
-    });
-
-    // Mark user as verified
-    await query('UPDATE users SET is_verified = true WHERE id = $1', [user.id]);
-
-    // Clean up pending signup
+  if (blockedPhone) {
     deletePendingSignup(phone, pendingSignup.role);
+    throw new AuthorizationError('This phone number has been blocked by the BuildXpert admin. Please contact support.');
+  }
 
-    // Add welcome notification for new users and providers
+  if (pendingEmail) {
+    const blockedEmail = await isIdentifierBlocked({
+      identifierType: 'email',
+      identifierValue: pendingEmail,
+      role: pendingSignup.role
+    });
+
+    if (blockedEmail) {
+      deletePendingSignup(phone, pendingSignup.role);
+      throw new AuthorizationError('This email address has been blocked by the BuildXpert admin. Please contact support.');
+    }
+  }
+
+  // Handle profile picture upload to Cloudinary if it's not the default
+  let finalProfilePicUrl = pendingSignup.profilePicUrl;
+  
+  // Profile picture debug logging removed for production
+  
+  if (pendingSignup.profilePicUrl && 
+      !pendingSignup.profilePicUrl.includes('dqoizs0fu') && 
+      (pendingSignup.profilePicUrl.startsWith('data:image') || pendingSignup.profilePicUrl.startsWith('file://'))) {
     try {
+      logger.info('Uploading profile picture to Cloudinary');
+      const uploadResult = await uploadImage(pendingSignup.profilePicUrl, 'profile-pictures');
+      
+      if (uploadResult.success) {
+        finalProfilePicUrl = uploadResult.url;
+        logger.info('Successfully uploaded profile picture to Cloudinary');
+      } else {
+        logger.error('Failed to upload profile picture to Cloudinary', {
+          error: uploadResult.error
+        });
+        // Use default profile picture if upload fails
+        finalProfilePicUrl = 'https://res.cloudinary.com/dqoizs0fu/raw/upload/v1756189484/profile-pictures/m3szbez4bzvwh76j1fle';
+      }
+    } catch (uploadError) {
+      logger.error('Profile picture upload error', {
+        error: uploadError.message
+      });
+      // Use default profile picture if upload fails
+      finalProfilePicUrl = 'https://res.cloudinary.com/dqoizs0fu/raw/upload/v1756189484/profile-pictures/m3szbez4bzvwh76j1fle';
+    }
+  }
+
+  // Insert user into DB
+  logger.auth('Inserting user into database', {
+    phone,
+    role: pendingSignup.role,
+    hasProfilePic: !!finalProfilePicUrl
+  });
+  
+  const result = await query(`
+    INSERT INTO users (full_name, email, phone, password, role, profile_pic_url)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id, full_name, email, phone, role, is_verified, profile_pic_url
+  `, [
+    pendingSignup.fullName,
+    pendingEmail,
+    pendingSignup.phone,
+    pendingSignup.password,
+    pendingSignup.role,
+    finalProfilePicUrl
+  ]);
+  const user = result.rows[0];
+  
+  logger.auth('User created successfully', {
+    userId: user.id,
+    role: user.role
+  });
+
+  // Mark user as verified
+  await query('UPDATE users SET is_verified = true WHERE id = $1', [user.id]);
+
+  // Clean up pending signup
+  deletePendingSignup(phone, pendingSignup.role);
+
+  // Add welcome notification for new users and providers
+  try {
       if (user.role === 'user') {
         const userNotification = await query(`
           INSERT INTO notifications (user_id, title, message, role)
@@ -634,118 +617,89 @@ router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], async (req, res) 
           }
         });
       }
-    } catch (notificationError) {
-      logger.error('Failed to create welcome notification', {
-        error: notificationError.message
-      });
-      // Don't fail the signup process if notification creation fails
-    }
-
-    // Generate access token and refresh token pair
-    const ipAddress = req.ip || req.headers['x-forwarded-for']?.split(',')[0].trim() || 'unknown';
-    const userAgent = req.headers['user-agent'] || '';
-    
-    const tokenPair = await generateTokenPair(
-      user.id,
-      user.role,
-      ipAddress,
-      userAgent
-    );
-    
-    // Create session in database (for backward compatibility)
-    await createSession(
-      user.id,
-      tokenPair.accessTokenJti,
-      tokenPair.accessTokenExpiresAt,
-      ipAddress,
-      userAgent
-    );
-    
-    // Log security event
-    await logSecurityEvent(
-      user.id,
-      'signup',
-      `New user registered from ${ipAddress}`,
-      ipAddress,
-      userAgent,
-      'info'
-    );
-
-    res.json({
-      status: 'success',
-      message: 'OTP verified and signup completed successfully',
-      data: {
-        accessToken: tokenPair.accessToken,
-        refreshToken: tokenPair.refreshToken,
-        accessTokenExpiresAt: tokenPair.accessTokenExpiresAt,
-        refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt,
-        user: {
-          id: user.id,
-          fullName: user.full_name,
-          email: user.email,
-          phone: user.phone,
-          role: user.role,
-          profilePicUrl: user.profile_pic_url,
-          isVerified: true
-        }
-      }
+  } catch (notificationError) {
+    logger.error('Failed to create welcome notification', {
+      error: notificationError.message
     });
-  } catch (error) {
-    logger.error('Verify OTP error', { error: error.message, stack: error.stack });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+    // Don't fail the signup process if notification creation fails
   }
-});
+
+  // Generate access token and refresh token pair
+  const ipAddress = req.ip || req.headers['x-forwarded-for']?.split(',')[0].trim() || 'unknown';
+  const userAgent = req.headers['user-agent'] || '';
+  
+  const tokenPair = await generateTokenPair(
+    user.id,
+    user.role,
+    ipAddress,
+    userAgent
+  );
+  
+  // Create session in database (for backward compatibility)
+  await createSession(
+    user.id,
+    tokenPair.accessTokenJti,
+    tokenPair.accessTokenExpiresAt,
+    ipAddress,
+    userAgent
+  );
+  
+  // Log security event
+  await logSecurityEvent(
+    user.id,
+    'signup',
+    `New user registered from ${ipAddress}`,
+    ipAddress,
+    userAgent,
+    'info'
+  );
+
+  res.json({
+    status: 'success',
+    message: 'OTP verified and signup completed successfully',
+    data: {
+      accessToken: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
+      accessTokenExpiresAt: tokenPair.accessTokenExpiresAt,
+      refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt,
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        profilePicUrl: user.profile_pic_url,
+        isVerified: true
+      }
+    }
+  });
+}));
 
 // @route   POST /api/auth/resend-otp
 // @desc    Resend OTP to phone number
 // @access  Public
 router.post('/resend-otp', [otpRequestLimiter,
   body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
 
-    const phone = normalizePhoneNumber(req.body.phone);
+  const phone = normalizePhoneNumber(req.body.phone);
 
-    if (!phone) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid phone number provided.'
-      });
-    }
-
-    const result = await resendOTP(phone);
-    
-    if (result.success) {
-      res.json({
-        status: 'success',
-        message: result.message
-      });
-    } else {
-      res.status(400).json({
-        status: 'error',
-        message: result.message
-      });
-    }
-
-  } catch (error) {
-    logger.error('Resend OTP error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  if (!phone) {
+    throw new ValidationError('Invalid phone number provided.');
   }
-});
+
+  const result = await resendOTP(phone);
+  
+  if (result.success) {
+    res.json({
+      status: 'success',
+      message: result.message
+    });
+  } else {
+    throw new ValidationError(result.message);
+  }
+}));
 
 // @route   POST /api/auth/forgot-password
 // @desc    Start forgot password - send OTP to phone
@@ -753,99 +707,84 @@ router.post('/resend-otp', [otpRequestLimiter,
 router.post('/forgot-password', [passwordResetLimiter, otpRequestLimiter,
   body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number'),
   body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ status: 'error', message: 'Validation failed', errors: errors.array() });
-    }
-    // Clean phone number by removing any country code prefix
-    const phone = normalizePhoneNumber(req.body.phone);
-    // Default to 'user' role if not provided (for backward compatibility)
-    const role = req.body.role || 'user';
-    
-    if (!phone) {
-      return res.status(400).json({ status: 'error', message: 'Invalid phone number provided' });
-    }
-    
-    // Check if user exists with the specified role
-    const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
-    if (!user) {
-      return res.status(404).json({ status: 'error', message: `${role === 'user' ? 'User' : role === 'provider' ? 'Provider' : 'Admin'} not found` });
-    }
-
-    const blockedAccount = await isAnyIdentifierBlocked({
-      phone,
-      email: user.email,
-      role: user.role
-    });
-
-    if (blockedAccount) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'This account has been blocked by the BuildXpert admin. Please contact support for assistance.'
-      });
-    }
-    const otp = generateOTP();
-    const result = await sendOTP(phone, otp);
-    if (!result.success) return res.status(500).json({ status: 'error', message: 'Failed to send OTP' });
-    storeOTP(phone, otp);
-    return res.json({ status: 'success', message: 'OTP sent to your mobile number' });
-  } catch (error) {
-    logger.error('Forgot password error', { error: error.message });
-    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
+  
+  // Clean phone number by removing any country code prefix
+  const phone = normalizePhoneNumber(req.body.phone);
+  // Default to 'user' role if not provided (for backward compatibility)
+  const role = req.body.role || 'user';
+  
+  if (!phone) {
+    throw new ValidationError('Invalid phone number provided');
   }
-});
+  
+  // Check if user exists with the specified role
+  const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
+  if (!user) {
+    throw new NotFoundError(`${role === 'user' ? 'User' : role === 'provider' ? 'Provider' : 'Admin'}`);
+  }
+
+  const blockedAccount = await isAnyIdentifierBlocked({
+    phone,
+    email: user.email,
+    role: user.role
+  });
+
+  if (blockedAccount) {
+    throw new AuthorizationError('This account has been blocked by the BuildXpert admin. Please contact support for assistance.');
+  }
+  
+  const otp = generateOTP();
+  const result = await sendOTP(phone, otp);
+  if (!result.success) {
+    throw new Error('Failed to send OTP');
+  }
+  storeOTP(phone, otp);
+  res.json({ status: 'success', message: 'OTP sent to your mobile number' });
+}));
 
 // @route   POST /api/auth/forgot-password/verify
 // @desc    Verify OTP and create password reset session token
 // @access  Public
 router.post('/forgot-password/verify', [otpVerifyLimiter, ...validateOTP,
   body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ status: 'error', message: 'Validation failed', errors: errors.array() });
-    }
-    const { otp } = req.body;
-    // Clean phone number by removing any country code prefix
-    const phone = normalizePhoneNumber(req.body.phone);
-    // Default to 'user' role if not provided (for backward compatibility)
-    const role = req.body.role || 'user';
+], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
+  
+  const { otp } = req.body;
+  // Clean phone number by removing any country code prefix
+  const phone = normalizePhoneNumber(req.body.phone);
+  // Default to 'user' role if not provided (for backward compatibility)
+  const role = req.body.role || 'user';
 
-    if (!phone) {
-      return res.status(400).json({ status: 'error', message: 'Invalid phone number provided' });
-    }
-    
-    const otpResult = verifyOTP(phone, otp);
-    if (!otpResult.valid) {
-      return res.status(400).json({ status: 'error', message: otpResult.message });
-    }
-    const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
-    if (!user) {
-      return res.status(404).json({ status: 'error', message: `${role === 'user' ? 'User' : role === 'provider' ? 'Provider' : 'Admin'} not found` });
-    }
-
-    const blockedAccount = await isAnyIdentifierBlocked({
-      phone,
-      email: user.email,
-      role: user.role
-    });
-
-    if (blockedAccount) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'This account has been blocked by the BuildXpert admin. Please contact support for assistance.'
-      });
-    }
-    const session = createPasswordResetSession(phone);
-    return res.json({ status: 'success', message: 'OTP verified', data: { resetToken: session.token, expiresAt: session.expiryTime } });
-  } catch (error) {
-    logger.error('Forgot password verify error', { error: error.message });
-    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  if (!phone) {
+    throw new ValidationError('Invalid phone number provided');
   }
-});
+  
+  const otpResult = verifyOTP(phone, otp);
+  if (!otpResult.valid) {
+    throw new ValidationError(otpResult.message);
+  }
+  
+  const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
+  if (!user) {
+    throw new NotFoundError(`${role === 'user' ? 'User' : role === 'provider' ? 'Provider' : 'Admin'}`);
+  }
+
+  const blockedAccount = await isAnyIdentifierBlocked({
+    phone,
+    email: user.email,
+    role: user.role
+  });
+
+  if (blockedAccount) {
+    throw new AuthorizationError('This account has been blocked by the BuildXpert admin. Please contact support for assistance.');
+  }
+  
+  const session = createPasswordResetSession(phone);
+  res.json({ status: 'success', message: 'OTP verified', data: { resetToken: session.token, expiresAt: session.expiryTime } });
+}));
 
 // @route   POST /api/auth/forgot-password/reset
 // @desc    Reset password using reset token (revokes all existing sessions)
@@ -855,246 +794,188 @@ router.post('/forgot-password/reset', [passwordResetLimiter,
   body('resetToken').notEmpty().withMessage('Reset token is required'),
   body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ status: 'error', message: 'Validation failed', errors: errors.array() });
-    }
-    const { resetToken, newPassword } = req.body;
-    // Clean phone number by removing any country code prefix
-    const phone = normalizePhoneNumber(req.body.phone);
-    // Default to 'user' role if not provided (for backward compatibility)
-    const role = req.body.role || 'user';
+], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
+  
+  const { resetToken, newPassword } = req.body;
+  // Clean phone number by removing any country code prefix
+  const phone = normalizePhoneNumber(req.body.phone);
+  // Default to 'user' role if not provided (for backward compatibility)
+  const role = req.body.role || 'user';
 
-    if (!phone) {
-      return res.status(400).json({ status: 'error', message: 'Invalid phone number provided' });
-    }
-    
-    const sessionValid = validatePasswordResetSession(phone, resetToken);
-    if (!sessionValid.valid) {
-      return res.status(400).json({ status: 'error', message: sessionValid.message });
-    }
-    const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
-    if (!user) {
-      return res.status(404).json({ status: 'error', message: `${role === 'user' ? 'User' : role === 'provider' ? 'Provider' : 'Admin'} not found` });
-    }
-
-    const blockedAccount = await isAnyIdentifierBlocked({
-      phone,
-      email: user.email,
-      role: user.role
-    });
-
-    if (blockedAccount) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'This account has been blocked by the BuildXpert admin. Please contact support for assistance.'
-      });
-    }
-    const hashed = await bcrypt.hash(newPassword, 12);
-    await query('UPDATE users SET password = $1 WHERE id = $2', [hashed, user.id]);
-    consumePasswordResetSession(phone);
-    
-    // Revoke all existing sessions and refresh tokens for security (user must login again with new password)
-    await blacklistAllUserTokens(user.id, 'password_change');
-    await revokeAllUserRefreshTokens(user.id, 'password_change');
-    await invalidateAllUserSessions(user.id);
-    
-    // Log security event
-    await logSecurityEvent(
-      user.id,
-      'password_change',
-      'Password reset via forgot password flow. All sessions invalidated.',
-      req.ip || 'unknown',
-      req.headers['user-agent'] || '',
-      'warning'
-    );
-    
-    return res.json({ status: 'success', message: 'Password has been reset successfully. Please login again with your new password.' });
-  } catch (error) {
-    logger.error('Forgot password reset error', { error: error.message });
-    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  if (!phone) {
+    throw new ValidationError('Invalid phone number provided');
   }
-});
+  
+  const sessionValid = validatePasswordResetSession(phone, resetToken);
+  if (!sessionValid.valid) {
+    throw new ValidationError(sessionValid.message);
+  }
+  
+  const user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
+  if (!user) {
+    throw new NotFoundError(`${role === 'user' ? 'User' : role === 'provider' ? 'Provider' : 'Admin'}`);
+  }
+
+  const blockedAccount = await isAnyIdentifierBlocked({
+    phone,
+    email: user.email,
+    role: user.role
+  });
+
+  if (blockedAccount) {
+    throw new AuthorizationError('This account has been blocked by the BuildXpert admin. Please contact support for assistance.');
+  }
+  
+  const hashed = await bcrypt.hash(newPassword, 12);
+  await query('UPDATE users SET password = $1 WHERE id = $2', [hashed, user.id]);
+  consumePasswordResetSession(phone);
+  
+  // Revoke all existing sessions and refresh tokens for security (user must login again with new password)
+  await blacklistAllUserTokens(user.id, 'password_change');
+  await revokeAllUserRefreshTokens(user.id, 'password_change');
+  await invalidateAllUserSessions(user.id);
+  
+  // Log security event
+  await logSecurityEvent(
+    user.id,
+    'password_change',
+    'Password reset via forgot password flow. All sessions invalidated.',
+    req.ip || 'unknown',
+    req.headers['user-agent'] || '',
+    'warning'
+  );
+  
+  res.json({ status: 'success', message: 'Password has been reset successfully. Please login again with your new password.' });
+}));
 
 // @route   POST /api/auth/refresh
 // @desc    Refresh access token using refresh token (implements token rotation)
 // @access  Public (requires refresh token in body)
 router.post('/refresh', [tokenRefreshLimiter,
   body('refreshToken').notEmpty().withMessage('Refresh token is required')
-], async (req, res) => {
+], asyncHandler(async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
   
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+  validateOrThrow(req);
 
-    const { refreshToken } = req.body;
-    
-    // Refresh access token (implements token rotation)
-    const tokenPair = await refreshAccessToken(refreshToken, ipAddress, userAgent);
-    
-    // Get user data
-    const user = await getRow('SELECT * FROM users WHERE id = $1', [tokenPair.userId]);
-    if (!user) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'User not found'
-      });
-    }
-    
-    // Log token refresh
-    await logSecurityEvent(
-      user.id,
-      'token_refresh',
-      `Token refreshed from ${ipAddress}`,
-      ipAddress,
-      userAgent,
-      'info'
-    );
-    
-    res.json({
-      status: 'success',
-      message: 'Token refreshed successfully',
-      data: {
-        accessToken: tokenPair.accessToken,
-        refreshToken: tokenPair.refreshToken,
-        accessTokenExpiresAt: tokenPair.accessTokenExpiresAt,
-        refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt,
-        user: {
-          id: user.id,
-          phone: user.phone,
-          full_name: user.full_name,
-          email: user.email,
-          role: user.role,
-          is_verified: user.is_verified,
-          profile_pic_url: user.profile_pic_url
-        }
-      }
-    });
-  } catch (error) {
-    logger.error('Token refresh error', { error: error.message });
-    
-    // Handle specific refresh token errors
-    if (error.message.includes('not found') || 
-        error.message.includes('expired') || 
-        error.message.includes('revoked') ||
-        error.message.includes('Invalid')) {
-      return res.status(401).json({
-        status: 'error',
-        message: error.message || 'Invalid or expired refresh token'
-      });
-    }
-    
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  const { refreshToken } = req.body;
+  
+  // Refresh access token (implements token rotation)
+  const tokenPair = await refreshAccessToken(refreshToken, ipAddress, userAgent);
+  
+  // Get user data
+  const user = await getRow('SELECT * FROM users WHERE id = $1', [tokenPair.userId]);
+  if (!user) {
+    throw new NotFoundError('User');
   }
-});
+  
+  // Log token refresh
+  await logSecurityEvent(
+    user.id,
+    'token_refresh',
+    `Token refreshed from ${ipAddress}`,
+    ipAddress,
+    userAgent,
+    'info'
+  );
+  
+  res.json({
+    status: 'success',
+    message: 'Token refreshed successfully',
+    data: {
+      accessToken: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
+      accessTokenExpiresAt: tokenPair.accessTokenExpiresAt,
+      refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role,
+        is_verified: user.is_verified,
+        profile_pic_url: user.profile_pic_url
+      }
+    }
+  });
+}));
 
 // @route   POST /api/auth/login
 // @desc    Login user with phone and password
 // @access  Public
-router.post('/login', [loginLimiter, ...validateLogin], async (req, res) => {
+router.post('/login', [loginLimiter, ...validateLogin], asyncHandler(async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
   let phone, role;
   
+  validateOrThrow(req);
+
+  const { password } = req.body;
+  role = req.body.role;
+  // Clean phone number by removing any country code prefix
+  phone = normalizePhoneNumber(req.body.phone);
+
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
 
-    const { password } = req.body;
-    role = req.body.role;
-    // Clean phone number by removing any country code prefix
-    phone = normalizePhoneNumber(req.body.phone);
-
-    const isAdminBypass = phone === ADMIN_BYPASS_PHONE && role === 'admin';
-
-    if (!phone) {
-      await logLoginAttempt(req.body.phone, ipAddress, 'failed', 'invalid_phone', userAgent);
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid phone number provided.'
-      });
-    }
-
-    // Check if IP should be blocked due to too many failed attempts
-    if (!isAdminBypass) {
-      const ipBlocked = await shouldBlockIP(ipAddress, 15, 30);
-      if (ipBlocked) {
-        await logLoginAttempt(phone, ipAddress, 'blocked', 'ip_blocked', userAgent);
-        return res.status(429).json({
-          status: 'error',
-          message: 'Too many failed login attempts from this IP. Please try again in 30 minutes.'
-        });
-      }
-
-      // Check for too many failed attempts from this phone number
-      const phoneFailedAttempts = await getRecentFailedAttempts(phone, 30);
-      if (phoneFailedAttempts >= 10) {
-        await logLoginAttempt(phone, ipAddress, 'blocked', 'phone_blocked', userAgent);
-        return res.status(429).json({
-          status: 'error',
-          message: 'Too many failed login attempts for this account. Please try again in 30 minutes or use forgot password.'
-        });
-      }
-    }
-
-    // Get user with matching phone and role
-    let user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
-
-    if (!user && isAdminBypass) {
-      const hashedPassword = await bcrypt.hash(ADMIN_BYPASS_PASSWORD, 12);
-      const insertResult = await query(
-        `
-          INSERT INTO users (full_name, email, phone, password, role, is_verified)
-          VALUES ($1, $2, $3, $4, $5, true)
-          RETURNING *
-        `,
-        ['BuildXpert Admin', 'admin@buildxpert.local', phone, hashedPassword, 'admin']
-      );
-      user = insertResult.rows[0];
-    }
-
-    if (!user) {
-      await logLoginAttempt(phone, ipAddress, 'failed', 'user_not_found', userAgent);
-      return res.status(401).json({
-        status: 'error',
-        message: 'Invalid phone number, password, or role'
-      });
-    }
-
-    if (!isAdminBypass) {
-      const blockedAccount = await isAnyIdentifierBlocked({
+  // Check if this is an admin bypass attempt (only allowed in development)
+  // Must verify user exists and is actually an admin before allowing bypass
+  let isAdminBypass = false;
+  if (ADMIN_BYPASS_ENABLED && phone === ADMIN_BYPASS_PHONE && role === 'admin') {
+    // Verify user actually exists and is an admin before allowing bypass
+    const existingUser = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
+    if (existingUser && existingUser.role === 'admin') {
+      isAdminBypass = true;
+      logger.warn('Admin bypass used in development mode', {
         phone,
-        email: user.email,
-        role: user.role
+        userId: existingUser.id,
+        ip: ipAddress
       });
-
-      if (blockedAccount) {
-        await logLoginAttempt(phone, ipAddress, 'blocked', 'identifier_blocked', userAgent, user.id);
-        return res.status(403).json({
-          status: 'error',
-          message: 'This account has been blocked by the BuildXpert admin. Please contact support for assistance.'
-        });
-      }
     }
+  }
+
+  if (!phone) {
+    await logLoginAttempt(req.body.phone, ipAddress, 'failed', 'invalid_phone', userAgent);
+    throw new ValidationError('Invalid phone number provided.');
+  }
+
+  // Check if IP should be blocked due to too many failed attempts
+  // Admins must follow same security rules (no bypass in production)
+  const ipBlocked = await shouldBlockIP(ipAddress, 15, 30);
+  if (ipBlocked) {
+    await logLoginAttempt(phone, ipAddress, 'blocked', 'ip_blocked', userAgent);
+    throw new ValidationError('Too many failed login attempts from this IP. Please try again in 30 minutes.');
+  }
+
+  // Check for too many failed attempts from this phone number
+  const phoneFailedAttempts = await getRecentFailedAttempts(phone, 30);
+  if (phoneFailedAttempts >= 10) {
+    await logLoginAttempt(phone, ipAddress, 'blocked', 'phone_blocked', userAgent);
+    throw new ValidationError('Too many failed login attempts for this account. Please try again in 30 minutes or use forgot password.');
+  }
+
+  // Get user with matching phone and role
+  let user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
+
+  // Remove auto-creation of admin account - admins must be created manually
+  // This prevents unauthorized admin account creation
+  if (!user) {
+    await logLoginAttempt(phone, ipAddress, 'failed', 'user_not_found', userAgent);
+    throw new AuthenticationError('Invalid phone number, password, or role');
+  }
+
+  // Check if account is blocked (admins must follow same rules)
+  const blockedAccount = await isAnyIdentifierBlocked({
+    phone,
+    email: user.email,
+    role: user.role
+  });
+
+  if (blockedAccount) {
+    await logLoginAttempt(phone, ipAddress, 'blocked', 'identifier_blocked', userAgent, user.id);
+    throw new AuthorizationError('This account has been blocked by the BuildXpert admin. Please contact support for assistance.');
+  }
 
     // Check password using bcrypt (all passwords should be hashed)
     let isPasswordValid = false;
@@ -1108,19 +989,32 @@ router.post('/login', [loginLimiter, ...validateLogin], async (req, res) => {
       isPasswordValid = false;
     }
     
+    // Admin bypass only works in development mode and only if explicitly enabled
+    // In production, admins must use proper passwords
     if (isAdminBypass && password === ADMIN_BYPASS_PASSWORD) {
       isPasswordValid = true;
 
-      // Ensure stored password matches the bypass password hash
-      try {
-        const matches = await bcrypt.compare(ADMIN_BYPASS_PASSWORD, user.password);
-        if (!matches) {
-          const hashedPassword = await bcrypt.hash(ADMIN_BYPASS_PASSWORD, 12);
-          await query('UPDATE users SET password = $1, is_verified = true WHERE id = $2', [hashedPassword, user.id]);
-          user.password = hashedPassword;
+      // Log admin bypass usage for security auditing
+      logger.warn('Admin bypass password used', {
+        userId: user.id,
+        phone: user.phone,
+        ip: ipAddress,
+        userAgent
+      });
+
+      // Ensure stored password matches the bypass password hash (development only)
+      // In production, this should never happen
+      if (config.isDevelopment()) {
+        try {
+          const matches = await bcrypt.compare(ADMIN_BYPASS_PASSWORD, user.password);
+          if (!matches) {
+            const hashedPassword = await bcrypt.hash(ADMIN_BYPASS_PASSWORD, 12);
+            await query('UPDATE users SET password = $1, is_verified = true WHERE id = $2', [hashedPassword, user.id]);
+            user.password = hashedPassword;
+          }
+        } catch (error) {
+          logger.warn('Admin bypass password synchronization failed', { error: error.message });
         }
-      } catch (error) {
-        logger.warn('Admin bypass password synchronization failed', { error: error.message });
       }
     }
 
@@ -1128,10 +1022,7 @@ router.post('/login', [loginLimiter, ...validateLogin], async (req, res) => {
       // Log failed attempt - invalid password
       await logLoginAttempt(phone, ipAddress, 'failed', 'invalid_password', userAgent, user.id);
       
-      return res.status(401).json({
-        status: 'error',
-        message: 'Invalid phone number or password'
-      });
+      throw new AuthenticationError('Invalid phone number or password');
     }
 
     // Generate access token and refresh token pair
@@ -1193,44 +1084,33 @@ router.post('/login', [loginLimiter, ...validateLogin], async (req, res) => {
       await logLoginAttempt(phone, ipAddress, 'failed', 'server_error', userAgent).catch(() => {});
     }
     
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+    // Re-throw error to be handled by error middleware
+    throw error;
   }
-});
+}));
 
 // @route   GET /api/auth/me
 // @desc    Get current user profile
 // @access  Private
-router.get('/me', auth, async (req, res) => {
-  try {
-    const user = await getRow('SELECT * FROM users WHERE id = $1', [req.user.id]);
-    
-    res.json({
-      status: 'success',
-      data: {
-        user: {
-          id: user.id,
-          fullName: user.full_name,
-          email: user.email,
-          phone: user.phone,
-          role: user.role,
-          isVerified: user.is_verified,
-          profilePicUrl: user.profile_pic_url,
-          createdAt: user.created_at
-        }
+router.get('/me', auth, asyncHandler(async (req, res) => {
+  const user = await getRow('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  
+  res.json({
+    status: 'success',
+    data: {
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isVerified: user.is_verified,
+        profilePicUrl: user.profile_pic_url,
+        createdAt: user.created_at
       }
-    });
-
-  } catch (error) {
-    logger.error('Get profile error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+    }
+  });
+}));
 
 // ============================================================================
 // LOGOUT & SESSION MANAGEMENT ENDPOINTS
@@ -1239,209 +1119,171 @@ router.get('/me', auth, async (req, res) => {
 // @route   POST /api/auth/logout
 // @desc    Logout user (revoke current token, refresh token, and invalidate session)
 // @access  Private
-router.post('/logout', auth, async (req, res) => {
+router.post('/logout', auth, asyncHandler(async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
   
-  try {
-    // Get refresh token from body if provided (for refresh token revocation)
-    const { refreshToken } = req.body;
-    
-    // Blacklist the current access token
-    await blacklistToken(
-      req.tokenJti,
-      req.user.id,
-      'logout',
-      req.session.expires_at,
-      ipAddress,
-      userAgent
-    );
-    
-    // Revoke refresh token if provided (now uses random token, not JWT)
-    if (refreshToken) {
-      try {
-        await revokeRefreshToken(refreshToken, req.user.id, 'logout');
-      } catch (error) {
-        // Ignore errors if refresh token is invalid/expired
-        logger.warn('Failed to revoke refresh token on logout', { error: error.message });
-      }
+  // Get refresh token from body if provided (for refresh token revocation)
+  const { refreshToken } = req.body;
+  
+  // Blacklist the current access token
+  await blacklistToken(
+    req.tokenJti,
+    req.user.id,
+    'logout',
+    req.session.expires_at,
+    ipAddress,
+    userAgent
+  );
+  
+  // Revoke refresh token if provided (now uses random token, not JWT)
+  if (refreshToken) {
+    try {
+      await revokeRefreshToken(refreshToken, req.user.id, 'logout');
+    } catch (error) {
+      // Ignore errors if refresh token is invalid/expired
+      logger.warn('Failed to revoke refresh token on logout', { error: error.message });
     }
-    
-    // Invalidate the current session
-    await invalidateSession(req.tokenJti, req.user.id);
-    
-    // Log security event
-    await logSecurityEvent(
-      req.user.id,
-      'logout',
-      `User logged out from ${ipAddress}`,
-      ipAddress,
-      userAgent,
-      'info'
-    );
-    
-    res.json({
-      status: 'success',
-      message: 'Logged out successfully'
-    });
-  } catch (error) {
-    logger.error('Logout error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
   }
-});
+  
+  // Invalidate the current session
+  await invalidateSession(req.tokenJti, req.user.id);
+  
+  // Log security event
+  await logSecurityEvent(
+    req.user.id,
+    'logout',
+    `User logged out from ${ipAddress}`,
+    ipAddress,
+    userAgent,
+    'info'
+  );
+  
+  res.json({
+    status: 'success',
+    message: 'Logged out successfully'
+  });
+}));
 
 // @route   POST /api/auth/logout-all
 // @desc    Logout from all devices (revoke all tokens, refresh tokens, and sessions)
 // @access  Private
-router.post('/logout-all', auth, async (req, res) => {
+router.post('/logout-all', auth, asyncHandler(async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
   
-  try {
-    // Blacklist all user access tokens
-    const tokenCount = await blacklistAllUserTokens(req.user.id, 'logout_all');
-    
-    // Revoke all user refresh tokens
-    const refreshTokenCount = await revokeAllUserRefreshTokens(req.user.id, 'logout_all');
-    
-    // Invalidate all user sessions
-    await invalidateAllUserSessions(req.user.id);
-    
-    // Log security event
-    await logSecurityEvent(
-      req.user.id,
-      'logout_all',
-      `User logged out from all devices (${tokenCount} sessions, ${refreshTokenCount} refresh tokens). Initiated from ${ipAddress}`,
-      ipAddress,
-      userAgent,
-      'warning'
-    );
-    
-    res.json({
-      status: 'success',
-      message: `Successfully logged out from all devices (${tokenCount} sessions, ${refreshTokenCount} refresh tokens)`
-    });
-  } catch (error) {
-    logger.error('Logout all error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+  // Blacklist all user access tokens
+  const tokenCount = await blacklistAllUserTokens(req.user.id, 'logout_all');
+  
+  // Revoke all user refresh tokens
+  const refreshTokenCount = await revokeAllUserRefreshTokens(req.user.id, 'logout_all');
+  
+  // Invalidate all user sessions
+  await invalidateAllUserSessions(req.user.id);
+  
+  // Log security event
+  await logSecurityEvent(
+    req.user.id,
+    'logout_all',
+    `User logged out from all devices (${tokenCount} sessions, ${refreshTokenCount} refresh tokens). Initiated from ${ipAddress}`,
+    ipAddress,
+    userAgent,
+    'warning'
+  );
+  
+  res.json({
+    status: 'success',
+    message: `Successfully logged out from all devices (${tokenCount} sessions, ${refreshTokenCount} refresh tokens)`
+  });
+}));
 
 // @route   GET /api/auth/sessions
 // @desc    Get all active sessions for current user
 // @access  Private
-router.get('/sessions', auth, async (req, res) => {
-  try {
-    const sessions = await getUserSessions(req.user.id);
-    
-    // Format sessions for frontend
-    const formattedSessions = sessions.map(session => ({
-      id: session.id,
-      deviceName: session.device_name,
-      deviceType: session.device_type,
-      ipAddress: session.ip_address,
-      location: {
-        city: session.location_city,
-        country: session.location_country
-      },
-      createdAt: session.created_at,
-      lastActivity: session.last_activity,
-      isCurrent: session.token_jti === req.tokenJti
-    }));
-    
-    res.json({
-      status: 'success',
-      data: {
-        sessions: formattedSessions,
-        total: formattedSessions.length
-      }
-    });
-  } catch (error) {
-    logger.error('Get sessions error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+router.get('/sessions', auth, asyncHandler(async (req, res) => {
+  const sessions = await getUserSessions(req.user.id);
+  
+  // Format sessions for frontend
+  const formattedSessions = sessions.map(session => ({
+    id: session.id,
+    deviceName: session.device_name,
+    deviceType: session.device_type,
+    ipAddress: session.ip_address,
+    location: {
+      city: session.location_city,
+      country: session.location_country
+    },
+    createdAt: session.created_at,
+    lastActivity: session.last_activity,
+    isCurrent: session.token_jti === req.tokenJti
+  }));
+  
+  res.json({
+    status: 'success',
+    data: {
+      sessions: formattedSessions,
+      total: formattedSessions.length
+    }
+  });
+}));
 
 // @route   DELETE /api/auth/sessions/:sessionId
 // @desc    Revoke a specific session by ID
 // @access  Private
-router.delete('/sessions/:sessionId', auth, async (req, res) => {
+router.delete('/sessions/:sessionId', auth, asyncHandler(async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
   
-  try {
-    const sessionId = parseInt(req.params.sessionId, 10);
-    
-    if (isNaN(sessionId)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid session ID'
-      });
-    }
-    
-    // Get session details before invalidating
-    const session = await getRow(
-      'SELECT * FROM user_sessions WHERE id = $1 AND user_id = $2',
-      [sessionId, req.user.id]
-    );
-    
-    if (!session) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Session not found'
-      });
-    }
-    
-    // Blacklist the token for this session
-    await blacklistToken(
-      session.token_jti,
-      req.user.id,
-      'session_revoked',
-      session.expires_at,
-      ipAddress,
-      userAgent
-    );
-    
-    // Invalidate the session
-    const success = await invalidateSessionById(sessionId, req.user.id);
-    
-    if (!success) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Session not found or already invalidated'
-      });
-    }
-    
-    // Log security event
-    await logSecurityEvent(
-      req.user.id,
-      'session_revoked',
-      `Session revoked for device: ${session.device_name}. Initiated from ${ipAddress}`,
-      ipAddress,
-      userAgent,
-      'warning'
-    );
-    
-    res.json({
-      status: 'success',
-      message: 'Session revoked successfully'
-    });
-  } catch (error) {
-    logger.error('Session revocation error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  const sessionId = parseInt(req.params.sessionId, 10);
+  
+  if (isNaN(sessionId)) {
+    const { ValidationError } = require('../utils/errorTypes');
+    throw new ValidationError('Invalid session ID');
   }
-});
+  
+  // Get session details before invalidating
+  const session = await getRow(
+    'SELECT * FROM user_sessions WHERE id = $1 AND user_id = $2',
+    [sessionId, req.user.id]
+  );
+  
+  if (!session) {
+    const { NotFoundError } = require('../utils/errorTypes');
+    throw new NotFoundError('Session', sessionId);
+  }
+  
+  // Blacklist the token for this session
+  await blacklistToken(
+    session.token_jti,
+    req.user.id,
+    'session_revoked',
+    session.expires_at,
+    ipAddress,
+    userAgent
+  );
+  
+  // Invalidate the session
+  const success = await invalidateSessionById(sessionId, req.user.id);
+  
+  if (!success) {
+    const { NotFoundError } = require('../utils/errorTypes');
+    throw new NotFoundError('Session', sessionId);
+  }
+  
+  // Log security event
+  await logSecurityEvent(
+    req.user.id,
+    'session_revoked',
+    `Session revoked for device: ${session.device_name}. Initiated from ${ipAddress}`,
+    ipAddress,
+    userAgent,
+    'warning'
+  );
+  
+  res.json({
+    status: 'success',
+    message: 'Session revoked successfully'
+  });
+}));
 
 module.exports = router; 

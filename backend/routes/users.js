@@ -9,6 +9,9 @@ const { sanitizeBody } = require('../middleware/inputSanitization');
 const { blacklistAllUserTokens } = require('../utils/tokenBlacklist');
 const { invalidateAllUserSessions } = require('../utils/sessionManager');
 const { logSecurityEvent } = require('../utils/securityAudit');
+const { asyncHandler } = require('../middleware/errorHandler');
+const { NotFoundError, ValidationError } = require('../utils/errorTypes');
+const { validateOrThrow, throwIfMissing } = require('../utils/errorHelpers');
 
 const router = express.Router();
 
@@ -21,12 +24,11 @@ router.use(sanitizeBody());
 // @route   DELETE /api/users/delete-account
 // @desc    Delete the current user's account and all related data (revokes all sessions)
 // @access  Private
-router.delete('/delete-account', accountDeletionLimiter, async (req, res) => {
+router.delete('/delete-account', accountDeletionLimiter, asyncHandler(async (req, res) => {
   const ipAddress = req.ip || 'unknown';
   const userAgent = req.headers['user-agent'] || '';
   
-  try {
-    const userId = req.user.id;
+  const userId = req.user.id;
     
     // Get all images that need to be deleted from Cloudinary
     const imagesToDelete = [];
@@ -126,50 +128,34 @@ router.delete('/delete-account', accountDeletionLimiter, async (req, res) => {
     // Delete user (CASCADE will handle related auth security tables)
     await query('DELETE FROM users WHERE id = $1', [userId]);
     
-    res.json({
-      status: 'success',
-      message: 'Account and all related data deleted successfully.'
-    });
-  } catch (error) {
-    logger.error('Delete account error', { error: error.message, userId: req.user.id });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to delete account.'
-    });
-  }
-});
+  res.json({
+    status: 'success',
+    message: 'Account and all related data deleted successfully.'
+  });
+}));
 
 // @route   GET /api/users/profile
 // @desc    Get user profile
 // @access  Private
-router.get('/profile', async (req, res) => {
-  try {
-    const user = await getRow('SELECT * FROM users WHERE id = $1', [req.user.id]);
-    
-    res.json({
-      status: 'success',
-      data: {
-        user: {
-          id: user.id,
-          fullName: user.full_name,
-          email: user.email,
-          phone: user.phone,
-          role: user.role,
-          isVerified: user.is_verified,
-          profilePicUrl: user.profile_pic_url,
-          createdAt: user.created_at
-        }
+router.get('/profile', asyncHandler(async (req, res) => {
+  const user = await getRow('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  
+  res.json({
+    status: 'success',
+    data: {
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isVerified: user.is_verified,
+        profilePicUrl: user.profile_pic_url,
+        createdAt: user.created_at
       }
-    });
-
-  } catch (error) {
-    logger.error('Get profile error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+    }
+  });
+}));
 
 // @route   PUT /api/users/profile
 // @desc    Update user profile
@@ -179,41 +165,30 @@ router.put('/profile', [
   body('fullName').optional().trim().isLength({ min: 2 }).withMessage('Full name must be at least 2 characters'),
   body('email').optional().isEmail().withMessage('Please enter a valid email'),
   body('profilePicUrl').optional().isString().withMessage('Profile picture URL must be a string')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
 
-    const { fullName, email, profilePicUrl } = req.body;
-    const updateFields = [];
-    const updateValues = [];
-    let paramCount = 1;
+  const { fullName, email, profilePicUrl } = req.body;
+  const updateFields = [];
+  const updateValues = [];
+  let paramCount = 1;
 
-    if (fullName) {
-      updateFields.push(`full_name = $${paramCount}`);
-      updateValues.push(fullName);
-      paramCount++;
-    }
+  if (fullName) {
+    updateFields.push(`full_name = $${paramCount}`);
+    updateValues.push(fullName);
+    paramCount++;
+  }
 
-    if (email) {
-      // Check if email is already taken by another user
-      const existingUser = await getRow('SELECT id FROM users WHERE email = $1 AND id != $2', [email, req.user.id]);
-      if (existingUser) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Email already taken by another user'
-        });
-      }
-      updateFields.push(`email = $${paramCount}`);
-      updateValues.push(email);
-      paramCount++;
+  if (email) {
+    // Check if email is already taken by another user
+    const existingUser = await getRow('SELECT id FROM users WHERE email = $1 AND id != $2', [email, req.user.id]);
+    if (existingUser) {
+      throw new ValidationError('Email already taken by another user');
     }
+    updateFields.push(`email = $${paramCount}`);
+    updateValues.push(email);
+    paramCount++;
+  }
 
     // Handle profile picture upload to Cloudinary
     if (profilePicUrl !== undefined) {
@@ -289,10 +264,7 @@ router.put('/profile', [
             logger.error('Failed to upload profile picture to Cloudinary', {
               error: uploadResult.error
             });
-            return res.status(500).json({
-              status: 'error',
-              message: 'Failed to upload profile picture'
-            });
+            throw new Error('Failed to upload profile picture');
           }
         }
         
@@ -300,118 +272,92 @@ router.put('/profile', [
         updateValues.push(cloudinaryUrl);
         paramCount++;
       }
-    }
-
-    if (updateFields.length === 0) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'No fields to update'
-      });
-    }
-
-    updateValues.push(req.user.id);
-    // Debug query logging removed for production
-    
-    const result = await query(`
-      UPDATE users 
-      SET ${updateFields.join(', ')}
-      WHERE id = $${paramCount}
-      RETURNING id, full_name, email, phone, role, is_verified, profile_pic_url, created_at
-    `, updateValues);
-
-    const updatedUser = result.rows[0];
-    // Profile picture update logging removed for production
-
-    res.json({
-      status: 'success',
-      message: 'Profile updated successfully',
-      data: {
-        user: {
-          id: updatedUser.id,
-          fullName: updatedUser.full_name,
-          email: updatedUser.email,
-          phone: updatedUser.phone,
-          role: updatedUser.role,
-          isVerified: updatedUser.is_verified,
-          profilePicUrl: updatedUser.profile_pic_url,
-          createdAt: updatedUser.created_at
-        }
-      }
-    });
-
-  } catch (error) {
-    logger.error('Update profile error', { error: error.message, stack: error.stack });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
   }
-});
+
+  if (updateFields.length === 0) {
+    throw new ValidationError('No fields to update');
+  }
+
+  updateValues.push(req.user.id);
+  // Debug query logging removed for production
+  
+  const result = await query(`
+    UPDATE users 
+    SET ${updateFields.join(', ')}
+    WHERE id = $${paramCount}
+    RETURNING id, full_name, email, phone, role, is_verified, profile_pic_url, created_at
+  `, updateValues);
+
+  const updatedUser = result.rows[0];
+  // Profile picture update logging removed for production
+
+  res.json({
+    status: 'success',
+    message: 'Profile updated successfully',
+    data: {
+      user: {
+        id: updatedUser.id,
+        fullName: updatedUser.full_name,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        role: updatedUser.role,
+        isVerified: updatedUser.is_verified,
+        profilePicUrl: updatedUser.profile_pic_url,
+        createdAt: updatedUser.created_at
+      }
+    }
+  });
+}));
 
 // @route   GET /api/users/addresses
 // @desc    Get user addresses with pagination
 // @access  Private
-router.get('/addresses', async (req, res) => {
-  try {
-    const { page = 1, limit = 10 } = req.query;
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    const offset = (pageNum - 1) * limitNum;
+router.get('/addresses', asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10 } = req.query;
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  const offset = (pageNum - 1) * limitNum;
 
-    // Validate pagination
-    if (isNaN(pageNum) || pageNum < 1) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'page must be a positive integer'
-      });
-    }
-    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'limit must be a positive integer between 1 and 100'
-      });
-    }
-
-    // Get total count
-    const countResult = await getRow(`
-      SELECT COUNT(*) as total
-      FROM addresses 
-      WHERE user_id = $1
-    `, [req.user.id]);
-    const total = parseInt(countResult?.total || 0, 10);
-    const totalPages = Math.ceil(total / limitNum);
-
-    // Get paginated addresses
-    const addresses = await getRows(`
-      SELECT id, type, state, full_address, created_at
-      FROM addresses 
-      WHERE user_id = $1 
-      ORDER BY created_at DESC
-      LIMIT $2 OFFSET $3
-    `, [req.user.id, limitNum, offset]);
-
-    res.json({
-      status: 'success',
-      data: { 
-        addresses,
-        pagination: {
-          currentPage: pageNum,
-          totalPages,
-          total,
-          limit: limitNum,
-          hasMore: pageNum < totalPages
-        }
-      }
-    });
-
-  } catch (error) {
-    logger.error('Get addresses error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  // Validate pagination
+  if (isNaN(pageNum) || pageNum < 1) {
+    throw new ValidationError('page must be a positive integer');
   }
-});
+  if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+    throw new ValidationError('limit must be a positive integer between 1 and 100');
+  }
+
+  // Get total count
+  const countResult = await getRow(`
+    SELECT COUNT(*) as total
+    FROM addresses 
+    WHERE user_id = $1
+  `, [req.user.id]);
+  const total = parseInt(countResult?.total || 0, 10);
+  const totalPages = Math.ceil(total / limitNum);
+
+  // Get paginated addresses
+  const addresses = await getRows(`
+    SELECT id, type, state, full_address, created_at
+    FROM addresses 
+    WHERE user_id = $1 
+    ORDER BY created_at DESC
+    LIMIT $2 OFFSET $3
+  `, [req.user.id, limitNum, offset]);
+
+  res.json({
+    status: 'success',
+    data: { 
+      addresses,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        total,
+        limit: limitNum,
+        hasMore: pageNum < totalPages
+      }
+    }
+  });
+}));
 
 // @route   POST /api/users/addresses
 // @desc    Add new address
@@ -420,50 +366,31 @@ router.post('/addresses', [
   body('type').isIn(['home', 'office', 'other']).withMessage('Type must be home, office, or other'),
   body('state').notEmpty().withMessage('State is required'),
   body('fullAddress').notEmpty().withMessage('Full address is required')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
 
-    const { type, state, fullAddress } = req.body;
+  const { type, state, fullAddress } = req.body;
 
-    // Check if user already has 3 addresses
-    const addressCount = await getRow('SELECT COUNT(*) as count FROM addresses WHERE user_id = $1', [req.user.id]);
-    if (parseInt(addressCount.count) >= 3) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Maximum 3 addresses allowed per user'
-      });
-    }
-
-    const result = await query(`
-      INSERT INTO addresses (user_id, type, state, full_address)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, type, state, full_address, created_at
-    `, [req.user.id, type, state, fullAddress]);
-
-    const newAddress = result.rows[0];
-
-    res.status(201).json({
-      status: 'success',
-      message: 'Address added successfully',
-      data: { address: newAddress }
-    });
-
-  } catch (error) {
-    logger.error('Add address error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  // Check if user already has 3 addresses
+  const addressCount = await getRow('SELECT COUNT(*) as count FROM addresses WHERE user_id = $1', [req.user.id]);
+  if (parseInt(addressCount.count) >= 3) {
+    throw new ValidationError('Maximum 3 addresses allowed per user');
   }
-});
+
+  const result = await query(`
+    INSERT INTO addresses (user_id, type, state, full_address)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id, type, state, full_address, created_at
+  `, [req.user.id, type, state, fullAddress]);
+
+  const newAddress = result.rows[0];
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Address added successfully',
+    data: { address: newAddress }
+  });
+}));
 
 // @route   PUT /api/users/addresses/:id
 // @desc    Update address
@@ -472,113 +399,79 @@ router.put('/addresses/:id', [
   body('type').optional().isIn(['home', 'office', 'other']).withMessage('Type must be home, office, or other'),
   body('state').optional().notEmpty().withMessage('State cannot be empty'),
   body('fullAddress').optional().notEmpty().withMessage('Full address cannot be empty')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
 
-    const { id } = req.params;
-    const { type, state, fullAddress } = req.body;
+  const { id } = req.params;
+  const { type, state, fullAddress } = req.body;
 
-    // Check if address belongs to user
-    const existingAddress = await getRow('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [id, req.user.id]);
-    if (!existingAddress) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Address not found'
-      });
-    }
-
-    const updateFields = [];
-    const updateValues = [];
-    let paramCount = 1;
-
-    if (type) {
-      updateFields.push(`type = $${paramCount}`);
-      updateValues.push(type);
-      paramCount++;
-    }
-
-    if (state) {
-      updateFields.push(`state = $${paramCount}`);
-      updateValues.push(state);
-      paramCount++;
-    }
-
-    if (fullAddress) {
-      updateFields.push(`full_address = $${paramCount}`);
-      updateValues.push(fullAddress);
-      paramCount++;
-    }
-
-    if (updateFields.length === 0) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'No fields to update'
-      });
-    }
-
-    updateValues.push(id, req.user.id);
-    const result = await query(`
-      UPDATE addresses 
-      SET ${updateFields.join(', ')}
-      WHERE id = $${paramCount} AND user_id = $${paramCount + 1}
-      RETURNING id, type, state, full_address, created_at
-    `, updateValues);
-
-    const updatedAddress = result.rows[0];
-
-    res.json({
-      status: 'success',
-      message: 'Address updated successfully',
-      data: { address: updatedAddress }
-    });
-
-  } catch (error) {
-    logger.error('Update address error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  // Check if address belongs to user
+  const existingAddress = await getRow('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+  if (!existingAddress) {
+    throw new NotFoundError('Address', id);
   }
-});
+
+  const updateFields = [];
+  const updateValues = [];
+  let paramCount = 1;
+
+  if (type) {
+    updateFields.push(`type = $${paramCount}`);
+    updateValues.push(type);
+    paramCount++;
+  }
+
+  if (state) {
+    updateFields.push(`state = $${paramCount}`);
+    updateValues.push(state);
+    paramCount++;
+  }
+
+  if (fullAddress) {
+    updateFields.push(`full_address = $${paramCount}`);
+    updateValues.push(fullAddress);
+    paramCount++;
+  }
+
+  if (updateFields.length === 0) {
+    throw new ValidationError('No fields to update');
+  }
+
+  updateValues.push(id, req.user.id);
+  const result = await query(`
+    UPDATE addresses 
+    SET ${updateFields.join(', ')}
+    WHERE id = $${paramCount} AND user_id = $${paramCount + 1}
+    RETURNING id, type, state, full_address, created_at
+  `, updateValues);
+
+  const updatedAddress = result.rows[0];
+
+  res.json({
+    status: 'success',
+    message: 'Address updated successfully',
+    data: { address: updatedAddress }
+  });
+}));
 
 // @route   DELETE /api/users/addresses/:id
 // @desc    Delete address
 // @access  Private
-router.delete('/addresses/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
+router.delete('/addresses/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-    // Check if address belongs to user
-    const existingAddress = await getRow('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [id, req.user.id]);
-    if (!existingAddress) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Address not found'
-      });
-    }
-
-    await query('DELETE FROM addresses WHERE id = $1 AND user_id = $2', [id, req.user.id]);
-
-    res.json({
-      status: 'success',
-      message: 'Address deleted successfully'
-    });
-
-  } catch (error) {
-    logger.error('Delete address error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  // Check if address belongs to user
+  const existingAddress = await getRow('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+  if (!existingAddress) {
+    throw new NotFoundError('Address', id);
   }
-});
+
+  await query('DELETE FROM addresses WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+
+  res.json({
+    status: 'success',
+    message: 'Address deleted successfully'
+  });
+}));
 
 module.exports = router; 

@@ -11,6 +11,8 @@ const {
   validateBoolean
 } = require('../middleware/validation');
 const AdminService = require('../services/adminService');
+const { asyncHandler } = require('../middleware/errorHandler');
+const { NotFoundError } = require('../utils/errorTypes');
 
 const router = express.Router();
 
@@ -28,21 +30,13 @@ router.use(sanitizeQuery());
 // @route   GET /api/admin/stats
 // @desc    Get admin dashboard statistics
 // @access  Private (Admin only)
-router.get('/stats', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const stats = await AdminService.getDashboardStats();
-    res.json({
-      status: 'success',
-      data: stats
-    });
-  } catch (error) {
-    logger.error('Admin stats error', { error: error.message, stack: error.stack });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch admin statistics'
-    });
-  }
-});
+router.get('/stats', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
+  const stats = await AdminService.getDashboardStats();
+  res.json({
+    status: 'success',
+    data: stats
+  });
+}));
 
 // @route   GET /api/admin/users
 // @desc    Get all users for admin management
@@ -51,33 +45,25 @@ router.get('/users',
   auth, 
   requireRole(['admin']), 
   validatePagination,
-  async (req, res) => {
-    try {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 20;
-      
-      const result = await AdminService.getUsers(page, limit);
-      
-      res.json({
-        status: 'success',
-        data: {
-          users: result.users,
-          pagination: {
-            currentPage: page,
-            totalPages: Math.ceil(result.totalCount / limit),
-            totalCount: result.totalCount,
-            limit
-          }
+  asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    
+    const result = await AdminService.getUsers(page, limit);
+    
+    res.json({
+      status: 'success',
+      data: {
+        users: result.users,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(result.totalCount / limit),
+          totalCount: result.totalCount,
+          limit
         }
-      });
-    } catch (error) {
-      logger.error('Admin users error', { error: error.message });
-      res.status(500).json({
-        status: 'error',
-        message: 'Failed to fetch users'
-      });
-    }
-  }
+      }
+    });
+  })
 );
 
 // @route   GET /api/admin/providers
@@ -87,33 +73,25 @@ router.get('/providers',
   auth,
   requireRole(['admin']),
   validatePagination,
-  async (req, res) => {
-    try {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 20;
-      
-      const result = await AdminService.getProviders(page, limit);
-      
-      res.json({
-        status: 'success',
-        data: {
-          providers: result.providers,
-          pagination: {
-            currentPage: page,
-            totalPages: Math.ceil(result.totalCount / limit),
-            totalCount: result.totalCount,
-            limit
-          }
+  asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    
+    const result = await AdminService.getProviders(page, limit);
+    
+    res.json({
+      status: 'success',
+      data: {
+        providers: result.providers,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(result.totalCount / limit),
+          totalCount: result.totalCount,
+          limit
         }
-      });
-    } catch (error) {
-      logger.error('Admin providers error', { error: error.message });
-      res.status(500).json({
-        status: 'error',
-        message: 'Failed to fetch providers'
-      });
-    }
-  }
+      }
+    });
+  })
 );
 
 // @route   GET /api/admin/reports
@@ -125,36 +103,27 @@ router.get('/reports',
   validatePagination,
   validateStatus(['open', 'resolved', 'closed', 'all']),
   validateType(['all', 'user', 'provider']),
-  async (req, res) => {
-    try {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 20;
-      const status = req.query.status || 'all';
-      const type = req.query.type || 'all';
-      
-      const result = await AdminService.getReports(page, limit, status, type);
-      
-      res.json({
-        status: 'success',
-        data: {
-          reports: result.reports,
-          pagination: {
-            currentPage: page,
-            totalPages: Math.ceil(result.totalCount / limit),
-            totalCount: result.totalCount,
-            limit
-          }
+  asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const status = req.query.status || 'all';
+    const type = req.query.type || 'all';
+    
+    const result = await AdminService.getReports(page, limit, status, type);
+    
+    res.json({
+      status: 'success',
+      data: {
+        reports: result.reports,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(result.totalCount / limit),
+          totalCount: result.totalCount,
+          limit
         }
-      });
-    } catch (error) {
-      logger.error('Admin reports error', { error: error.message, stack: error.stack });
-      res.status(500).json({
-        status: 'error',
-        message: 'Failed to fetch reports',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
-    }
-  }
+      }
+    });
+  })
 );
 
 // @route   PUT /api/admin/reports/:id/status
@@ -165,60 +134,41 @@ router.put('/reports/:id/status',
   requireRole(['admin']),
   validateUUID('id'),
   validateStatus(['open', 'resolved', 'closed']),
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status } = req.body;
-      
-      const report = await AdminService.updateReportStatus(id, status);
-      
-      res.json({
-        status: 'success',
-        message: 'Report status updated successfully',
-        data: report
-      });
-    } catch (error) {
-      if (error.message === 'Report not found') {
-        return res.status(404).json({
-          status: 'error',
-          message: error.message
-        });
-      }
-      
-      logger.error('Admin update report error', { error: error.message });
-      res.status(500).json({
-        status: 'error',
-        message: 'Failed to update report status'
-      });
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    const report = await AdminService.updateReportStatus(id, status);
+    
+    if (!report) {
+      throw new NotFoundError('Report', id);
     }
-  }
+    
+    res.json({
+      status: 'success',
+      message: 'Report status updated successfully',
+      data: report
+    });
+  })
 );
 
 // @route   DELETE /api/admin/reports/pending
 // @desc    Delete all pending reports across all tables
 // @access  Private (Admin only)
-router.delete('/reports/pending', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const result = await AdminService.deletePendingReports();
-    
-    res.json({
-      status: 'success',
-      message: 'Pending reports cleared successfully',
-      data: {
-        totalDeleted: result.totalDeleted,
-        deletedUserReports: result.deletedUserReports,
-        deletedProviderReports: result.deletedProviderReports,
-        deletedLegacyReports: result.deletedLegacyReports
-      }
-    });
-  } catch (error) {
-    logger.error('Admin delete pending reports error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to delete pending reports'
-    });
-  }
-});
+router.delete('/reports/pending', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
+  const result = await AdminService.deletePendingReports();
+  
+  res.json({
+    status: 'success',
+    message: 'Pending reports cleared successfully',
+    data: {
+      totalDeleted: result.totalDeleted,
+      deletedUserReports: result.deletedUserReports,
+      deletedProviderReports: result.deletedProviderReports,
+      deletedLegacyReports: result.deletedLegacyReports
+    }
+  });
+}));
 
 // @route   DELETE /api/admin/users/:id
 // @desc    Remove a user from the app
@@ -227,39 +177,17 @@ router.delete('/users/:id',
   auth,
   requireRole(['admin']),
   validateUUID('id'),
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const adminId = req.user?.id;
-      
-      await AdminService.deleteUser(id, adminId);
-      
-      res.json({
-        status: 'success',
-        message: 'User removed successfully'
-      });
-    } catch (error) {
-      if (error.message === 'User not found') {
-        return res.status(404).json({
-          status: 'error',
-          message: error.message
-        });
-      }
-      
-      if (error.message.includes('Failed to block')) {
-        return res.status(500).json({
-          status: 'error',
-          message: error.message
-        });
-      }
-      
-      logger.error('Admin delete user error', { error: error.message, userId: req.params.id });
-      res.status(500).json({
-        status: 'error',
-        message: 'Failed to remove user'
-      });
-    }
-  }
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const adminId = req.user?.id;
+    
+    await AdminService.deleteUser(id, adminId);
+    
+    res.json({
+      status: 'success',
+      message: 'User removed successfully'
+    });
+  })
 );
 
 // @route   DELETE /api/admin/providers/:id
@@ -269,39 +197,17 @@ router.delete('/providers/:id',
   auth,
   requireRole(['admin']),
   validateUUID('id'),
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const adminId = req.user?.id;
-      
-      await AdminService.deleteProvider(id, adminId);
-      
-      res.json({
-        status: 'success',
-        message: 'Provider removed successfully'
-      });
-    } catch (error) {
-      if (error.message === 'Provider not found') {
-        return res.status(404).json({
-          status: 'error',
-          message: error.message
-        });
-      }
-      
-      if (error.message.includes('Failed to block')) {
-        return res.status(500).json({
-          status: 'error',
-          message: error.message
-        });
-      }
-      
-      logger.error('Admin delete provider error', { error: error.message, providerId: req.params.id });
-      res.status(500).json({
-        status: 'error',
-        message: 'Failed to remove provider'
-      });
-    }
-  }
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const adminId = req.user?.id;
+    
+    await AdminService.deleteProvider(id, adminId);
+    
+    res.json({
+      status: 'success',
+      message: 'Provider removed successfully'
+    });
+  })
 );
 
 // @route   PUT /api/admin/users/:id/verify
@@ -312,33 +218,22 @@ router.put('/users/:id/verify',
   requireRole(['admin']),
   validateUUID('id'),
   validateBoolean('isVerified', 'body'),
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { isVerified } = req.body;
-      
-      const user = await AdminService.updateUserVerification(id, 'user', isVerified);
-      
-      res.json({
-        status: 'success',
-        message: `User ${isVerified ? 'verified' : 'unverified'} successfully`,
-        data: user
-      });
-    } catch (error) {
-      if (error.message === 'User not found') {
-        return res.status(404).json({
-          status: 'error',
-          message: error.message
-        });
-      }
-      
-      logger.error('Admin verify user error', { error: error.message });
-      res.status(500).json({
-        status: 'error',
-        message: 'Failed to update user verification status'
-      });
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { isVerified } = req.body;
+    
+    const user = await AdminService.updateUserVerification(id, 'user', isVerified);
+    
+    if (!user) {
+      throw new NotFoundError('User', id);
     }
-  }
+    
+    res.json({
+      status: 'success',
+      message: `User ${isVerified ? 'verified' : 'unverified'} successfully`,
+      data: user
+    });
+  })
 );
 
 // @route   PUT /api/admin/providers/:id/verify
@@ -349,93 +244,66 @@ router.put('/providers/:id/verify',
   requireRole(['admin']),
   validateUUID('id'),
   validateBoolean('isVerified', 'body'),
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { isVerified } = req.body;
-      
-      const provider = await AdminService.updateUserVerification(id, 'provider', isVerified);
-      
-      res.json({
-        status: 'success',
-        message: `Provider ${isVerified ? 'verified' : 'unverified'} successfully`,
-        data: provider
-      });
-    } catch (error) {
-      if (error.message === 'Provider not found') {
-        return res.status(404).json({
-          status: 'error',
-          message: error.message
-        });
-      }
-      
-      logger.error('Admin verify provider error', { error: error.message });
-      res.status(500).json({
-        status: 'error',
-        message: 'Failed to update provider verification status'
-      });
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { isVerified } = req.body;
+    
+    const provider = await AdminService.updateUserVerification(id, 'provider', isVerified);
+    
+    if (!provider) {
+      throw new NotFoundError('Provider', id);
     }
-  }
+    
+    res.json({
+      status: 'success',
+      message: `Provider ${isVerified ? 'verified' : 'unverified'} successfully`,
+      data: provider
+    });
+  })
 );
 
 // @route   GET /api/admin/all-users
 // @desc    Get all users for admin dashboard with pagination
 // @access  Private (Admin only)
-router.get('/all-users', auth, requireRole(['admin']), validatePagination, async (req, res) => {
-  try {
-    const { page = 1, limit = 50 } = req.query;
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    
-    // Enforce maximum limit for performance
-    const finalLimit = Math.min(limitNum, 100);
-    
-    const result = await AdminService.getUsers(pageNum, finalLimit);
-    
-    res.json({
-      status: 'success',
-      data: {
-        users: result.users,
-        pagination: result.pagination
-      }
-    });
-  } catch (error) {
-    logger.error('Admin all-users error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch users'
-    });
-  }
-});
+router.get('/all-users', auth, requireRole(['admin']), validatePagination, asyncHandler(async (req, res) => {
+  const { page = 1, limit = 50 } = req.query;
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  
+  // Enforce maximum limit for performance
+  const finalLimit = Math.min(limitNum, 100);
+  
+  const result = await AdminService.getUsers(pageNum, finalLimit);
+  
+  res.json({
+    status: 'success',
+    data: {
+      users: result.users,
+      pagination: result.pagination
+    }
+  });
+}));
 
 // @route   GET /api/admin/all-providers
 // @desc    Get all providers for admin dashboard with pagination
 // @access  Private (Admin only)
-router.get('/all-providers', auth, requireRole(['admin']), validatePagination, async (req, res) => {
-  try {
-    const { page = 1, limit = 50 } = req.query;
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
-    
-    // Enforce maximum limit for performance
-    const finalLimit = Math.min(limitNum, 100);
-    
-    const result = await AdminService.getProviders(pageNum, finalLimit);
-    
-    res.json({
-      status: 'success',
-      data: {
-        providers: result.providers,
-        pagination: result.pagination
-      }
-    });
-  } catch (error) {
-    logger.error('Admin all-providers error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch providers'
-    });
-  }
-});
+router.get('/all-providers', auth, requireRole(['admin']), validatePagination, asyncHandler(async (req, res) => {
+  const { page = 1, limit = 50 } = req.query;
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  
+  // Enforce maximum limit for performance
+  const finalLimit = Math.min(limitNum, 100);
+  
+  const result = await AdminService.getProviders(pageNum, finalLimit);
+  
+  res.json({
+    status: 'success',
+    data: {
+      providers: result.providers,
+      pagination: result.pagination
+    }
+  });
+}));
 
 module.exports = router;

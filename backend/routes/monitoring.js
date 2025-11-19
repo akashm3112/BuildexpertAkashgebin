@@ -12,6 +12,7 @@ const { metricsCollector, alertManager, performHealthCheck } = require('../utils
 const { asyncHandler } = require('../middleware/errorHandler');
 const { auth } = require('../middleware/auth');
 const config = require('../utils/config');
+const { AuthorizationError } = require('../utils/errorTypes');
 
 /**
  * @route   GET /api/monitoring/metrics
@@ -21,10 +22,7 @@ const config = require('../utils/config');
 router.get('/metrics', asyncHandler(async (req, res) => {
   // In production, require admin auth
   if (config.isProduction() && (!req.user || req.user.role !== 'admin')) {
-    return res.status(403).json({
-      status: 'error',
-      message: 'Access denied. Admin role required.'
-    });
+    throw new AuthorizationError('Access denied. Admin role required.');
   }
 
   const metrics = metricsCollector.getMetrics();
@@ -60,10 +58,7 @@ router.get('/health', asyncHandler(async (req, res) => {
 router.get('/alerts', auth, asyncHandler(async (req, res) => {
   // Require admin role
   if (req.user.role !== 'admin') {
-    return res.status(403).json({
-      status: 'error',
-      message: 'Access denied. Admin role required.'
-    });
+    throw new AuthorizationError('Access denied. Admin role required.');
   }
 
   const limit = parseInt(req.query.limit) || 10;
@@ -120,10 +115,7 @@ router.get('/status', asyncHandler(async (req, res) => {
 router.post('/reset', auth, asyncHandler(async (req, res) => {
   // Require admin role
   if (req.user.role !== 'admin') {
-    return res.status(403).json({
-      status: 'error',
-      message: 'Access denied. Admin role required.'
-    });
+    throw new AuthorizationError('Access denied. Admin role required.');
   }
 
   metricsCollector.reset();

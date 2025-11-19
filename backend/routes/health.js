@@ -6,6 +6,8 @@ const { getBlacklistStats } = require('../utils/tokenBlacklist');
 const { getLoginStats } = require('../utils/securityAudit');
 const { auth, requireRole } = require('../middleware/auth');
 const logger = require('../utils/logger');
+const { asyncHandler } = require('../middleware/errorHandler');
+const { NotFoundError, ServiceUnavailableError, ApplicationError } = require('../utils/errorTypes');
 
 const router = express.Router();
 
@@ -14,7 +16,7 @@ const router = express.Router();
  * @desc    Basic health check
  * @access  Public
  */
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const health = {
     status: 'healthy',
     message: 'BuildXpert API is running',
@@ -49,19 +51,21 @@ router.get('/', async (req, res) => {
     };
     
     logger.error('Health check failed - database disconnected', { error: error.message });
-    res.status(503).json(health);
+    // Throw error to be handled by error middleware, but include health data
+    const healthError = new ServiceUnavailableError('Database connection failed');
+    healthError.health = health;
+    throw healthError;
   }
-});
+}));
 
 /**
  * @route   GET /health/detailed
  * @desc    Detailed health check with circuit breaker status
  * @access  Private (Admin only)
  */
-router.get('/detailed', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const health = {
-      status: 'healthy',
+router.get('/detailed', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
+  const health = {
+    status: 'healthy',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
       uptime: Math.floor(process.uptime()),
@@ -133,94 +137,66 @@ router.get('/detailed', auth, requireRole(['admin']), async (req, res) => {
     const statusCode = health.status === 'healthy' ? 200 : 
                        health.status === 'degraded' ? 200 : 503;
 
-    res.status(statusCode).json(health);
-  } catch (error) {
-    logger.error('Detailed health check error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Health check failed',
-      error: error.message
-    });
-  }
-});
+  res.status(statusCode).json(health);
+}));
 
 /**
  * @route   GET /health/services
  * @desc    Get status of external services
  * @access  Private (Admin only)
  */
-router.get('/services', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const services = registry.getAllStatuses();
-    const unhealthy = registry.getUnhealthyServices();
-    
-    res.json({
-      status: 'success',
-      data: {
-        services,
-        unhealthyCount: unhealthy.length,
-        unhealthyServices: unhealthy,
-        overallHealth: unhealthy.length === 0 ? 'healthy' : 'degraded'
-      }
-    });
-  } catch (error) {
-    logger.error('Service status check error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to get service status'
-    });
-  }
-});
+router.get('/services', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
+  const services = registry.getAllStatuses();
+  const unhealthy = registry.getUnhealthyServices();
+  
+  res.json({
+    status: 'success',
+    data: {
+      services,
+      unhealthyCount: unhealthy.length,
+      unhealthyServices: unhealthy,
+      overallHealth: unhealthy.length === 0 ? 'healthy' : 'degraded'
+    }
+  });
+}));
 
 /**
  * @route   POST /health/services/:serviceName/reset
  * @desc    Reset a specific circuit breaker
  * @access  Private (Admin only)
  */
-router.post('/services/:serviceName/reset', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { serviceName } = req.params;
-    const breaker = registry.getBreaker(serviceName);
-    
-    if (!breaker) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Service not found'
-      });
-    }
-    
-    breaker.reset();
-    
-    logger.info(`Circuit breaker reset for ${serviceName}`, {
-      userId: req.user.id
-    });
-    
-    res.json({
-      status: 'success',
-      message: `Circuit breaker reset for ${serviceName}`,
-      data: breaker.getStatus()
-    });
-  } catch (error) {
-    logger.error('Circuit breaker reset error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to reset circuit breaker'
-    });
+router.post('/services/:serviceName/reset', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
+  const { serviceName } = req.params;
+  const breaker = registry.getBreaker(serviceName);
+  
+  if (!breaker) {
+    throw new NotFoundError('Service not found');
   }
-});
+  
+  breaker.reset();
+  
+  logger.info(`Circuit breaker reset for ${serviceName}`, {
+    userId: req.user.id
+  });
+  
+  res.json({
+    status: 'success',
+    message: `Circuit breaker reset for ${serviceName}`,
+    data: breaker.getStatus()
+  });
+}));
 
 /**
  * @route   GET /health/memory
  * @desc    Get memory and resource statistics
  * @access  Private (Admin only)
  */
-router.get('/memory', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    const { registry, MemoryMonitor } = require('../utils/memoryLeakPrevention');
-    
-    // Get memory stats
-    const memoryUsage = process.memoryUsage();
-    const memoryStats = {
+router.get('/memory', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
+  const { registry, MemoryMonitor } = require('../utils/memoryLeakPrevention');
+  
+  // Get memory stats
+  const memoryUsage = process.memoryUsage();
+  const memoryStats = {
       heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024) + 'MB',
       heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024) + 'MB',
       rss: Math.round(memoryUsage.rss / 1024 / 1024) + 'MB',
@@ -247,57 +223,39 @@ router.get('/memory', auth, requireRole(['admin']), async (req, res) => {
         hasViolations: violations.length > 0
       }
     });
-  } catch (error) {
-    logger.error('Memory stats error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to get memory statistics'
-    });
-  }
-});
+}));
 
 /**
  * @route   POST /health/gc
  * @desc    Trigger garbage collection (if exposed)
  * @access  Private (Admin only)
  */
-router.post('/gc', auth, requireRole(['admin']), async (req, res) => {
-  try {
-    if (global.gc) {
-      const beforeHeap = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
-      global.gc();
-      const afterHeap = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
-      
-      logger.info('Manual garbage collection triggered', {
-        userId: req.user.id,
+router.post('/gc', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
+  if (global.gc) {
+    const beforeHeap = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+    global.gc();
+    const afterHeap = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+    
+    logger.info('Manual garbage collection triggered', {
+      userId: req.user.id,
+      beforeHeap: `${beforeHeap}MB`,
+      afterHeap: `${afterHeap}MB`,
+      freed: `${beforeHeap - afterHeap}MB`
+    });
+    
+    res.json({
+      status: 'success',
+      message: 'Garbage collection triggered',
+      data: {
         beforeHeap: `${beforeHeap}MB`,
         afterHeap: `${afterHeap}MB`,
         freed: `${beforeHeap - afterHeap}MB`
-      });
-      
-      res.json({
-        status: 'success',
-        message: 'Garbage collection triggered',
-        data: {
-          beforeHeap: `${beforeHeap}MB`,
-          afterHeap: `${afterHeap}MB`,
-          freed: `${beforeHeap - afterHeap}MB`
-        }
-      });
-    } else {
-      res.status(501).json({
-        status: 'error',
-        message: 'Garbage collection not exposed. Start with --expose-gc flag.'
-      });
-    }
-  } catch (error) {
-    logger.error('Manual GC error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to trigger garbage collection'
+      }
     });
+  } else {
+    throw new ApplicationError('Garbage collection not exposed. Start with --expose-gc flag.', 501, 'FEATURE_NOT_AVAILABLE');
   }
-});
+}));
 
 module.exports = router;
 

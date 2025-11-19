@@ -125,6 +125,11 @@ const formatErrorResponse = (error, req) => {
     response.errors = error.errors; // Validation errors
   }
   
+  // Include details if present (e.g., payment verification details)
+  if (error.details) {
+    response.details = error.details;
+  }
+  
   if (error.retryable) {
     response.retryable = true;
     response.retryAfter = error.retryAfter || 5000; // milliseconds
@@ -227,6 +232,13 @@ const errorHandler = (err, req, res, next) => {
   
   // Format and send response
   const response = formatErrorResponse(error, req);
+  
+  // Special case: health check errors may include health data to return
+  if (error.health) {
+    // Merge health data with error response for health check endpoints
+    Object.assign(response, error.health);
+  }
+  
   res.status(error.statusCode || 500).json(response);
 };
 

@@ -3,6 +3,8 @@ const { getRows } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const logger = require('../utils/logger');
 const { standardLimiter } = require('../middleware/rateLimiting');
+const { asyncHandler } = require('../middleware/errorHandler');
+const { NotFoundError } = require('../utils/errorTypes');
 
 const router = express.Router();
 
@@ -15,35 +17,31 @@ router.use(standardLimiter);
 // @route   GET /api/earnings
 // @desc    Get provider's earnings data
 // @access  Private (Providers only)
-router.get('/', requireRole('provider'), async (req, res) => {
-  try {
-    const providerUserId = req.user.id;
+router.get('/', requireRole('provider'), asyncHandler(async (req, res) => {
+  const providerUserId = req.user.id;
 
-    // Get current date and month boundaries
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    const startOfMonth = new Date(currentYear, currentMonth, 1);
-    const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
-    
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  // Get current date and month boundaries
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const startOfMonth = new Date(currentYear, currentMonth, 1);
+  const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
+  
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 
-    // Get provider's profile ID
-    const providerProfile = await getRows(`
-      SELECT id FROM provider_profiles WHERE user_id = $1
-    `, [providerUserId]);
+  // Get provider's profile ID
+  const providerProfile = await getRows(`
+    SELECT id FROM provider_profiles WHERE user_id = $1
+  `, [providerUserId]);
 
-    if (!providerProfile || providerProfile.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Provider profile not found'
-      });
-    }
+  if (!providerProfile || providerProfile.length === 0) {
+    throw new NotFoundError('Provider profile not found');
+  }
 
-    const providerProfileId = providerProfile[0].id;
+  const providerProfileId = providerProfile[0].id;
 
-    // Business Logic for Earnings Calculation:
+  // Business Logic for Earnings Calculation:
     // - This Month/Today: Only count bookings with status = 'completed' 
     //   (work has been done and provider should be paid)
     // - Pending: Count bookings with status = 'pending' or 'accepted'
@@ -88,26 +86,18 @@ router.get('/', requireRole('provider'), async (req, res) => {
       return `₹${parseInt(amount).toLocaleString('en-IN')}`;
     };
 
-    const earnings = {
-      thisMonth: formatAmount(thisMonthEarnings[0]?.total_earnings || 0),
-      today: formatAmount(todayEarnings[0]?.total_earnings || 0),
-      pending: formatAmount(pendingEarnings[0]?.total_earnings || 0)
-    };
+  const earnings = {
+    thisMonth: formatAmount(thisMonthEarnings[0]?.total_earnings || 0),
+    today: formatAmount(todayEarnings[0]?.total_earnings || 0),
+    pending: formatAmount(pendingEarnings[0]?.total_earnings || 0)
+  };
 
-    res.json({
-      status: 'success',
-      data: {
-        earnings
-      }
-    });
-
-  } catch (error) {
-    logger.error('Get earnings error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch earnings data'
-    });
-  }
-});
+  res.json({
+    status: 'success',
+    data: {
+      earnings
+    }
+  });
+}));
 
 module.exports = router;

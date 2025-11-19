@@ -12,7 +12,7 @@ const {
 const { sanitizeBody } = require('../middleware/inputSanitization');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { validateCallPermissions } = require('../utils/callPermissions');
-const { WebRTCPermissionError } = require('../utils/errorTypes');
+const { WebRTCPermissionError, ValidationError } = require('../utils/errorTypes');
 
 const router = express.Router();
 
@@ -34,11 +34,7 @@ router.post('/initiate', [
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'Validation failed',
-      errors: errors.array()
-    });
+    throw new ValidationError('Validation failed', { errors: errors.array() });
   }
 
   const { bookingId, callerType } = req.body;
@@ -77,11 +73,7 @@ router.post('/log', [
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'Validation failed',
-      errors: errors.array()
-    });
+    throw new ValidationError('Validation failed', { errors: errors.array() });
   }
 
   const { 
@@ -160,11 +152,7 @@ router.post('/event', [
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({
-      status: 'error',
-      message: 'Validation failed',
-      errors: errors.array()
-    });
+    throw new ValidationError('Validation failed', { errors: errors.array() });
   }
 
   const { callLogId, eventType, eventData } = req.body;

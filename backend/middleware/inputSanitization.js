@@ -1,11 +1,3 @@
-/**
- * ============================================================================
- * INPUT SANITIZATION MIDDLEWARE
- * Purpose: Sanitize and validate all user input to prevent XSS, SQL injection, and other attacks
- * Features: HTML sanitization, SQL pattern detection, XSS prevention
- * ============================================================================
- */
-
 const logger = require('../utils/logger');
 
 /**
@@ -42,9 +34,22 @@ const stripHtmlTags = (text) => {
 };
 
 /**
- * Detect potentially malicious SQL patterns
+ * Detect potentially malicious SQL patterns (for logging/monitoring only)
+ * 
+ * ⚠️ SECURITY NOTE: This function is for monitoring/logging purposes ONLY.
+ * It does NOT provide SQL injection protection. Pattern matching is unreliable:
+ * - Can have false positives (blocking legitimate input)
+ * - Can have false negatives (missing actual attacks)
+ * 
+ * REAL SQL INJECTION PROTECTION comes from:
+ * - Using parameterized queries (already implemented throughout codebase)
+ * - Never concatenating user input into SQL strings
+ * - Using the query() function from database/connection.js which uses parameterized queries
+ * 
  * @param {string} text - Text to check
- * @returns {boolean} True if suspicious patterns found
+ * @returns {boolean} True if suspicious patterns found (for logging only)
+ * @deprecated This function should not be used to block requests. 
+ *             SQL injection protection is provided by parameterized queries.
  */
 const containsSqlInjectionPatterns = (text) => {
   if (typeof text !== 'string') return false;
@@ -122,7 +127,7 @@ const sanitizeValue = (value, options = {}) => {
   const {
     stripHtml = true,
     escapeHtml: shouldEscapeHtml = false,
-    checkSqlInjection = true,
+    checkSqlInjection = false, // DISABLED BY DEFAULT - SQL injection protection comes from parameterized queries, not pattern matching
     checkXss = true,
     maxLength = null,
     trim = true
@@ -139,14 +144,22 @@ const sanitizeValue = (value, options = {}) => {
     sanitized = sanitized.trim();
   }
   
-  // Check for malicious patterns
+  // SQL injection pattern detection (for logging/monitoring only - NOT a security control)
+  // ⚠️ IMPORTANT: Pattern matching does NOT provide SQL injection protection.
+  // Real protection comes from using parameterized queries (already implemented).
+  // Pattern matching can have false positives and false negatives.
+  // Only enable for logging/monitoring purposes, not for blocking requests.
   if (checkSqlInjection && containsSqlInjectionPatterns(sanitized)) {
-    logger.warn('SQL injection pattern detected', {
-      value: sanitized.substring(0, 100)
+    // Log for monitoring but don't block - parameterized queries provide the real protection
+    logger.warn('SQL injection pattern detected (logged for monitoring - not blocked)', {
+      value: sanitized.substring(0, 100),
+      note: 'SQL injection protection is provided by parameterized queries, not pattern matching'
     });
-    throw new Error('Invalid input: Potential SQL injection detected');
+    // DO NOT throw error - pattern matching is unreliable and can block legitimate input
+    // If you need to block, use proper input validation (e.g., express-validator)
   }
   
+  // XSS pattern detection (still useful for output sanitization)
   if (checkXss && containsXssPatterns(sanitized)) {
     logger.warn('XSS pattern detected', {
       value: sanitized.substring(0, 100)
