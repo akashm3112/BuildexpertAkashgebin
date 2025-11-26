@@ -18,7 +18,9 @@ const seedServices = async () => {
       { name: 'interiors-building', is_paid: true },
       { name: 'stainless-steel', is_paid: true },
       { name: 'contact-building', is_paid: true },
-      { name: 'glass-mirror', is_paid: true }
+      { name: 'glass-mirror', is_paid: true },
+      { name: 'cleaning', is_paid: true },
+      { name: 'borewell', is_paid: true }
     ];
 
     // Check existing services

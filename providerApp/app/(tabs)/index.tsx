@@ -495,6 +495,7 @@ export default function HomeScreen() {
           'plumber': 'plumber',
           'mason-mastri': 'mason-mastri',
           'painting-cleaning': 'painting-cleaning',
+          'cleaning': 'cleaning',
           'granite-tiles': 'granite-tiles',
           'engineer-interior': 'engineer-interior',
           'electrician': 'electrician',
@@ -503,7 +504,8 @@ export default function HomeScreen() {
           'interiors-building': 'interiors-building',
           'stainless-steel': 'stainless-steel',
           'contact-building': 'contact-building',
-          'glass-mirror': 'glass-mirror'
+          'glass-mirror': 'glass-mirror',
+          'borewell': 'borewell'
         };
 
         const registeredCategoryIds = data.data.registeredServices.map((service: any) => {

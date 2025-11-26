@@ -92,6 +92,18 @@ const addProviderSpecificServices = async () => {
         'Other Painting Work'
       ],
       'painting-cleaning': [
+        'Interior Painting',
+        'Exterior Painting',
+        'Wall Texture',
+        'Wallpaper Installation',
+        'Wood Painting',
+        'Metal Painting',
+        'Waterproofing',
+        'Color Consultation',
+        'Paint Repair',
+        'Other Painting Work'
+      ],
+      'cleaning': [
         'House Cleaning',
         'Office Cleaning',
         'Deep Cleaning',
@@ -174,6 +186,18 @@ const addProviderSpecificServices = async () => {
         'Building Maintenance',
         'Construction Consultation',
         'Other Building Work'
+      ],
+      'borewell': [
+        'Borewell Drilling',
+        'Submersible Pump Installation',
+        'Casing Pipe Installation',
+        'Borewell Flushing & Cleaning',
+        'Pipeline Extension',
+        'Motor Repair & Maintenance',
+        'Water Quality Testing',
+        'Yield Testing',
+        'Annual Maintenance Contracts',
+        'Other Borewell Work'
       ]
     };
 

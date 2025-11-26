@@ -27,6 +27,7 @@ const categoryToServiceMap = {
   'plumber': 'plumber',
   'mason-mastri': 'mason-mastri',
   'painting-cleaning': 'painting-cleaning',
+  'cleaning': 'cleaning',
   'granite-tiles': 'granite-tiles',
   'engineer-interior': 'engineer-interior',
   'electrician': 'electrician',
@@ -35,7 +36,8 @@ const categoryToServiceMap = {
   'interiors-building': 'interiors-building',
   'stainless-steel': 'stainless-steel',
   'contact-building': 'contact-building',
-  'glass-mirror': 'glass-mirror'
+  'glass-mirror': 'glass-mirror',
+  'borewell': 'borewell'
 };
 
 // @route   GET /api/services

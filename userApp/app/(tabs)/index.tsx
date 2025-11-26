@@ -39,7 +39,9 @@ const getServiceTranslationKey = (serviceId: string) => {
     'mason-mastri': 'masonMistri',
     'interiors-building': 'interiorsDesigners',
     'stainless-steel': 'stainlessSteelMS',
+    'cleaning': 'cleaningServices',
     'glass-mirror': 'glassMirror',
+    'borewell': 'borewellServices',
   };
   return translationMap[serviceId] || serviceId;
 };

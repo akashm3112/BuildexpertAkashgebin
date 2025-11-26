@@ -109,11 +109,12 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
     'cleaning': 'House Cleaning, Office Cleaning, Deep Cleaning, Post Construction Cleaning',
     'mason-mastri': 'Brick Work, Cement Work, Wall Construction, Foundation Work',
     'granite-tiles': 'Floor Tiling, Wall Tiling, Granite Installation, Marble Work',
-    'painting-cleaning': 'Interior Painting, Exterior Painting, Deep Cleaning, Wall Texture',
+    'painting-cleaning': 'Interior Painting, Exterior Painting, Wall Texture, Color Consultation',
     'engineer-interior': 'Interior Design, Space Planning, 3D Visualization, Project Management',
     'interiors-building': 'Interior Design, Furniture Arrangement, Lighting Design, Color Schemes',
     'stainless-steel': 'Kitchen Sink Installation, Railing Work, Gate Installation, Fabrication',
-    'contact-building': 'Complete Construction, Building Work, Project Management, Quality Control'
+    'contact-building': 'Complete Construction, Building Work, Project Management, Quality Control',
+    'borewell': 'Borewell Drilling, Pump Installation, Maintenance, Water Testing'
   };
 
   // Update service descriptions based on service category
@@ -204,11 +205,12 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
     'cleaning': 'House Cleaning, Office Cleaning, Deep Cleaning, Post Construction Cleaning',
     'mason-mastri': 'Brick Work, Cement Work, Wall Construction, Foundation Work',
     'granite-tiles': 'Floor Tiling, Wall Tiling, Granite Installation, Marble Work',
-    'painting-cleaning': 'Interior Painting, Exterior Painting, Deep Cleaning, Wall Texture',
+    'painting-cleaning': 'Interior Painting, Exterior Painting, Wall Texture, Color Consultation',
     'engineer-interior': 'Interior Design, Space Planning, 3D Visualization, Project Management',
     'interiors-building': 'Interior Design, Furniture Arrangement, Lighting Design, Color Schemes',
     'stainless-steel': 'Kitchen Sink Installation, Railing Work, Gate Installation, Fabrication',
-    'contact-building': 'Complete Construction, Building Work, Project Management, Quality Control'
+    'contact-building': 'Complete Construction, Building Work, Project Management, Quality Control',
+    'borewell': 'Borewell Drilling, Pump Installation, Maintenance, Water Testing'
   };
 
   // Update service description based on service category

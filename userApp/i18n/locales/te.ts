@@ -44,13 +44,15 @@ export default {
     engineers: 'ఇంజినీర్',
     plumbersRegistration: 'ప్లంబర్',
     graniteTilesLaying: 'గ్రానైట్ మరియు టైల్స్ వేయడం',
-    paintingAndCleaning: 'పెయింటింగ్ మరియు శుభ్రపరచడం',
+    paintingAndCleaning: 'పెయింటింగ్',
     contractorAndBuilding: 'కాంట్రాక్టర్ మరియు భవన నిర్మాణం',
     labors: 'కూలీలు',
     masonMistri: 'మేసన్/మిస్త్రి',
     interiorsDesigners: 'ఇంటీరియర్ డిజైనర్లు',
     stainlessSteelMS: 'స్టెయిన్లెస్ స్టీల్ ఎం.ఎస్',
+    cleaningServices: 'క్లీనింగ్',
     glassMirror: 'గ్లాస్ మరియు మిర్రర్',
+    borewellServices: 'బోర్వెల్',
   },
   
   // Bookings Screen
@@ -446,6 +448,10 @@ export default {
     completeHouseConstruction: 'పూర్తి ఇల్లు నిర్మాణం',
     commercialBuilding: 'వాణిజ్య భవనం',
     renovationServices: 'పునరుద్ధరణ సేవలు',
+    borewellDrilling: 'Borewell Drilling',
+    submersiblePumpInstallation: 'Submersible Pump Installation',
+    borewellMaintenance: 'Borewell Maintenance & Repair',
+    waterTesting: 'Water Quality Testing',
     others: 'ఇతరులు',
   },
 

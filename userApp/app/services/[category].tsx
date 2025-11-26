@@ -346,7 +346,9 @@ export default function ServiceListingScreen() {
       'carpentry': 'carpenter',
       'painter': 'painter',
       'painting': 'painter',
-      'cleaning': 'painting-cleaning',
+      'cleaning': 'cleaning',
+      'cleaning services': 'cleaning',
+      'deep cleaning': 'cleaning',
       'painting-cleaning': 'painting-cleaning',
       'granite': 'granite-tiles',
       'tiles': 'granite-tiles',
@@ -366,6 +368,10 @@ export default function ServiceListingScreen() {
       'construction': 'contact-building',
       'building': 'contact-building',
       'contact-building': 'contact-building',
+      'borewell': 'borewell',
+      'bore well': 'borewell',
+      'bore-well': 'borewell',
+      'borewell services': 'borewell',
     };
     
     // Default service options for each category (3 main + Others)
@@ -401,6 +407,12 @@ export default function ServiceListingScreen() {
         t('serviceOptions.others')
       ],
       'painting-cleaning': [
+        t('serviceOptions.interiorPainting'),
+        t('serviceOptions.exteriorPainting'),
+        t('serviceOptions.wallTexture'),
+        t('serviceOptions.others')
+      ],
+      'cleaning': [
         t('serviceOptions.houseCleaning'),
         t('serviceOptions.officeCleaning'),
         t('serviceOptions.deepCleaning'),
@@ -441,6 +453,12 @@ export default function ServiceListingScreen() {
         t('serviceOptions.commercialBuilding'),
         t('serviceOptions.renovationServices'),
         t('serviceOptions.others')
+      ],
+      'borewell': [
+        t('serviceOptions.borewellDrilling'),
+        t('serviceOptions.submersiblePumpInstallation'),
+        t('serviceOptions.borewellMaintenance'),
+        t('serviceOptions.waterTesting')
       ]
     };
     

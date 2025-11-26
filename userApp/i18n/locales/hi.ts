@@ -44,13 +44,15 @@ export default {
     engineers: 'इंजीनियर',
     plumbersRegistration: 'प्लंबर',
     graniteTilesLaying: 'ग्रेनाइट और टाइल्स लगाना',
-    paintingAndCleaning: 'पेंटिंग और सफाई',
+    paintingAndCleaning: 'पेंटिंग',
     contractorAndBuilding: 'ठेकेदार और भवन निर्माण',
     labors: 'मजदूर',
     masonMistri: 'राजमिस्त्री/मिस्त्री',
     interiorsDesigners: 'इंटीरियर डिज़ाइनर',
     stainlessSteelMS: 'स्टेनलेस स्टील एम.एस',
+    cleaningServices: 'क्लीनिंग',
     glassMirror: 'ग्लास और मिरर',
+    borewellServices: 'बोरवेल',
   },
   
   // Bookings Screen
@@ -491,6 +493,10 @@ export default {
     mirrorInstallation: 'दर्पण स्थापना',
     glassDoorInstallation: 'कांच का दरवाजा स्थापना',
     windowGlassReplacement: 'खिड़की का कांच बदलना',
+    borewellDrilling: 'Borewell Drilling',
+    submersiblePumpInstallation: 'Submersible Pump Installation',
+    borewellMaintenance: 'Borewell Maintenance & Repair',
+    waterTesting: 'Water Quality Testing',
     others: 'अन्य',
   },
 

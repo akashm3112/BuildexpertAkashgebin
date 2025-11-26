@@ -44,13 +44,15 @@ export default {
     engineers: 'ಎಂಜಿನಿಯರ್',
     plumbersRegistration: 'ಪ್ಲಂಬರ್',
     graniteTilesLaying: 'ಗ್ರಾನೈಟ್ ಮತ್ತು ಟೈಲ್ಸ್ ಹಾಕುವುದು',
-    paintingAndCleaning: 'ಬಣ್ಣ ಮತ್ತು ಸ್ವಚ್ಛತೆ',
+    paintingAndCleaning: 'ಬಣ್ಣ ಹಚ್ಚುವಿಕೆ',
     contractorAndBuilding: 'ಠೇಕುದಾರ ಮತ್ತು ಕಟ್ಟಡ ನಿರ್ಮಾಣ',
     labors: 'ಕಾರ್ಮಿಕರು',
     masonMistri: 'ಕುಶಲಕರ್ಮಿ/ಮಿಸ್ತ್ರಿ',
     interiorsDesigners: 'ಒಳಾಂಗಣ ವಿನ್ಯಾಸಕಾರರು',
     stainlessSteelMS: 'ಸ್ಟೇನ್ಲೆಸ್ ಸ್ಟೀಲ್ ಎಂ.ಎಸ್',
+    cleaningServices: 'ಕ್ಲೀನಿಂಗ್',
     glassMirror: 'ಗಾಜು ಮತ್ತು ಕನ್ನಡಿ',
+    borewellServices: 'ಬೋರ್‌ವೆಲ್',
   },
   
   // Bookings Screen
@@ -449,6 +451,10 @@ export default {
     mirrorInstallation: 'ಕನ್ನಡಿ ಸ್ಥಾಪನೆ',
     glassDoorInstallation: 'ಗಾಜಿನ ಬಾಗಿಲು ಸ್ಥಾಪನೆ',
     windowGlassReplacement: 'ಕಿಟಕಿ ಗಾಜು ಬದಲಾವಣೆ',
+    borewellDrilling: 'Borewell Drilling',
+    submersiblePumpInstallation: 'Submersible Pump Installation',
+    borewellMaintenance: 'Borewell Maintenance & Repair',
+    waterTesting: 'Water Quality Testing',
     others: 'ಇತರರು',
   },
 

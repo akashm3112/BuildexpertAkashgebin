@@ -44,13 +44,15 @@ export default {
     engineers: 'பொறியாளர்',
     plumbersRegistration: 'குழாய் வேலை',
     graniteTilesLaying: 'கிரானைட் மற்றும் ஓடு போடுதல்',
-    paintingAndCleaning: 'வண்ணம் மற்றும் சுத்தம்',
+    paintingAndCleaning: 'வண்ணம் தீட்டுதல்',
     contractorAndBuilding: 'ஒப்பந்தக்காரர் மற்றும் கட்டிடம்',
     labors: 'தொழிலாளர்கள்',
     masonMistri: 'கட்டட வேலைக்காரர்/மிஸ்திரி',
     interiorsDesigners: 'உள்துறை வடிவமைப்பாளர்கள்',
     stainlessSteelMS: 'ஸ்டெயின்லெஸ் ஸ்டீல் எம்.எஸ்',
+    cleaningServices: 'சுத்தம் செய்தல்',
     glassMirror: 'கண்ணாடி மற்றும் கண்ணாடி',
+    borewellServices: 'போர்வெல்',
   },
   
   // Bookings Screen
@@ -446,6 +448,10 @@ export default {
     completeHouseConstruction: 'முழுமையான வீட்டு கட்டுமானம்',
     commercialBuilding: 'வணிக கட்டிடம்',
     renovationServices: 'புதுப்பித்தல் சேவைகள்',
+    borewellDrilling: 'Borewell Drilling',
+    submersiblePumpInstallation: 'Submersible Pump Installation',
+    borewellMaintenance: 'Borewell Maintenance & Repair',
+    waterTesting: 'Water Quality Testing',
     others: 'மற்றவை',
   },
 

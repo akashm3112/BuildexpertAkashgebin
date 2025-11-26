@@ -44,13 +44,15 @@ export default {
     engineers: "Engineer's",
     plumbersRegistration: 'Plumbers',
     graniteTilesLaying: 'Granite & Tiles Laying',
-    paintingAndCleaning: 'Painting and Cleaning',
+    paintingAndCleaning: 'Painting',
     contractorAndBuilding: 'Contractor and Building',
     labors: "Labor's",
     masonMistri: 'Mason/Mistri',
     interiorsDesigners: "Interiors Designer's",
     stainlessSteelMS: 'Stainless Steel M.S',
+    cleaningServices: 'Cleaning',
     glassMirror: 'Glass & Mirror',
+    borewellServices: 'Borewell',
   },
   
   // Bookings Screen
@@ -408,6 +410,10 @@ export default {
     mirrorInstallation: 'Mirror Installation',
     glassDoorInstallation: 'Glass Door Installation',
     windowGlassReplacement: 'Window Glass Replacement',
+    borewellDrilling: 'Borewell Drilling',
+    submersiblePumpInstallation: 'Submersible Pump Installation',
+    borewellMaintenance: 'Borewell Maintenance & Repair',
+    waterTesting: 'Water Quality Testing',
     others: 'Others',
   },
 

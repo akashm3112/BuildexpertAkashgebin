@@ -41,7 +41,9 @@ The following services are automatically seeded into the `services_master` table
 |--------------|---------------|--------------|
 | Plumber | `plumber` | Yes |
 | Mason / Mastri | `mason-mastri` | Yes |
-| Painting & Cleaning | `painting-cleaning` | Yes |
+| Painting | `painting-cleaning` | Yes |
+| Cleaning | `cleaning` | Yes |
+| Borewell | `borewell` | Yes |
 | Granite & Tiles | `granite-tiles` | Yes |
 | Engineer / Interior | `engineer-interior` | Yes |
 | Electrician | `electrician` | Yes |

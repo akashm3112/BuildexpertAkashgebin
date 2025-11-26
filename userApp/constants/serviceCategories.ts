@@ -26,9 +26,9 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'painting-cleaning',
-    name: 'Painting & Cleaning',
+    name: 'Painting',
     icon: '🎨',
-    description: 'Painting and Cleaning Services',
+    description: 'Painting Services',
     basePrice: 99,
     image: require('../assets/images/painting.jpg'),
   },
@@ -73,12 +73,28 @@ export const SERVICE_CATEGORIES = [
     image: require('../assets/images/steel.jpeg'),
   },
   {
+    id: 'cleaning',
+    name: 'Cleaning',
+    icon: '🧹',
+    description: 'Professional Cleaning Services',
+    basePrice: 99,
+    image: require('../assets/images/contractors.jpg'),
+  },
+  {
     id: 'glass-mirror',
     name: 'Glass & Mirror',
     icon: '🪞',
     description: 'Glass and Mirror Installation Services',
     basePrice: 99,
     image: require('../assets/images/mirrior.jpg'),
+  },
+  {
+    id: 'borewell',
+    name: 'Borewell',
+    icon: '💧',
+    description: 'Borewell Drilling and Maintenance Services',
+    basePrice: 99,
+    image: require('../assets/images/labors.jpg'),
   },
 ];
 

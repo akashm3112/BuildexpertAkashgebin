@@ -29,7 +29,9 @@ const getCategoryColor = (categoryId: string) => {
     'mason-mastri': '#10B981',
     'interiors-building': '#6366F1',
     'stainless-steel': '#F97316',
+    'cleaning': '#0EA5E9',
     'glass-mirror': '#06B6D4',
+    'borewell': '#A78BFA',
   };
   return colorMap[categoryId] || '#3B82F6';
 };
@@ -46,7 +48,9 @@ const getServiceTranslationKey = (serviceId: string) => {
     'mason-mastri': 'masonMistri',
     'interiors-building': 'interiorsDesigners',
     'stainless-steel': 'stainlessSteelMS',
+    'cleaning': 'cleaningServices',
     'glass-mirror': 'glassMirror',
+    'borewell': 'borewellServices',
   };
   return translationMap[serviceId] || serviceId;
 };
@@ -63,7 +67,9 @@ const getServiceRoute = (serviceId: string) => {
     'mason-mastri': 'mason',
     'interiors-building': 'interiors',
     'stainless-steel': 'stainless-steel',
+    'cleaning': 'cleaning',
     'glass-mirror': 'glass-mirror',
+    'borewell': 'borewell',
   };
   return routeMap[serviceId] || serviceId;
 };
@@ -95,51 +101,65 @@ const getCategories = (t: any) => [
     id: '4',
     name: t('serviceCategories.paintingAndCleaning'),
     route: 'painting-cleaning',
-    image: 'https://via.placeholder.com/100x100/8B5CF6/FFFFFF?text=PC',
+    image: 'https://via.placeholder.com/100x100/8B5CF6/FFFFFF?text=P',
     color: '#8B5CF6',
   },
   {
     id: '5',
-    name: t('serviceCategories.glassMirror'),
-    route: 'glass-mirror',
-    image: 'https://via.placeholder.com/100x100/06B6D4/FFFFFF?text=GM',
-    color: '#06B6D4',
-  },
-  {
-    id: '6',
     name: t('serviceCategories.contractorAndBuilding'),
     route: 'contractor',
     image: 'https://via.placeholder.com/100x100/EC4899/FFFFFF?text=C',
     color: '#EC4899',
   },
   {
-    id: '7',
+    id: '6',
     name: t('serviceCategories.labors'),
     route: 'laborer', 
     image: 'https://via.placeholder.com/100x100/EF4444/FFFFFF?text=L',
     color: '#EF4444',
   },
   {
-    id: '8',
+    id: '7',
     name: t('serviceCategories.masonMistri'),
     route: 'mason',
     image: 'https://via.placeholder.com/100x100/10B981/FFFFFF?text=M',
     color: '#10B981',
   },
   {
-    id: '9',
+    id: '8',
     name: t('serviceCategories.interiorsDesigners'),
     route: 'interiors',
     image: 'https://via.placeholder.com/100x100/6366F1/FFFFFF?text=I',
     color: '#6366F1',
   },
   {
-    id: '10',
+    id: '9',
     name: t('serviceCategories.stainlessSteelMS'),
     route: 'stainless-steel',
     image: 'https://via.placeholder.com/100x100/F97316/FFFFFF?text=SS',
     color: '#F97316',
-  }
+  },
+  {
+    id: '10',
+    name: t('serviceCategories.cleaningServices'),
+    route: 'cleaning',
+    image: 'https://via.placeholder.com/100x100/0EA5E9/FFFFFF?text=C',
+    color: '#0EA5E9',
+  },
+  {
+    id: '11',
+    name: t('serviceCategories.glassMirror'),
+    route: 'glass-mirror',
+    image: 'https://via.placeholder.com/100x100/06B6D4/FFFFFF?text=GM',
+    color: '#06B6D4',
+  },
+  {
+    id: '12',
+    name: t('serviceCategories.borewellServices'),
+    route: 'borewell',
+    image: 'https://via.placeholder.com/100x100/A78BFA/FFFFFF?text=BW',
+    color: '#A78BFA',
+  },
 ];
 
 interface ServiceCategoryGridProps {
@@ -204,7 +224,9 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
             'mason-mastri': 'mason',
             'interiors-building': 'interiors',
             'stainless-steel': 'stainless-steel',
+            'cleaning': 'cleaning',
             'glass-mirror': 'glass-mirror',
+            'borewell': 'borewell',
           };
           const map: any = {};
           data.data.services.forEach((service: { name: keyof typeof nameToRoute; id: string }) => {

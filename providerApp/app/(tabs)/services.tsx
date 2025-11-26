@@ -212,7 +212,7 @@ export default function ServicesScreen() {
       'labors': { id: 'labor', name: 'Labor', description: 'Skilled and unskilled labor services', icon: '👷' },
       'plumber': { id: 'plumber', name: 'Plumber', description: 'Plumbing and water system services', icon: '🔧' },
       'mason-mastri': { id: 'mason-mastri', name: 'Mason/Mastri', description: 'Masonry and construction work', icon: '🧱' },
-      'painting-cleaning': { id: 'painting-cleaning', name: 'Painting & Cleaning', description: 'Interior and exterior painting services', icon: '🎨' },
+      'painting-cleaning': { id: 'painting-cleaning', name: 'Painting', description: 'Interior and exterior painting services', icon: '🎨' },
       'granite-tiles': { id: 'granite-tiles', name: 'Granite & Tiles', description: 'Granite and tile installation services', icon: '🏗️' },
       'engineer-interior': { id: 'engineer-interior', name: 'Engineer & Interior', description: 'Engineering and interior design services', icon: '🏛️' },
       'electrician': { id: 'electrician', name: 'Electrician', description: 'Electrical installation and repair services', icon: '⚡' },
@@ -220,7 +220,9 @@ export default function ServicesScreen() {
       'painter': { id: 'painter', name: 'Painter', description: 'Professional painting services', icon: '🎨' },
       'interiors-building': { id: 'interiors-building', name: 'Interiors & Building', description: 'Interior design and building services', icon: '🏠' },
       'stainless-steel': { id: 'stainless-steel', name: 'Stainless Steel', description: 'Stainless steel fabrication services', icon: '🔩' },
-      'contact-building': { id: 'contact-building', name: 'Contact Building', description: 'General building and construction services', icon: '🏗️' }
+      'contact-building': { id: 'contact-building', name: 'Contact Building', description: 'General building and construction services', icon: '🏗️' },
+      'cleaning': { id: 'cleaning', name: 'Cleaning', description: 'Professional cleaning services', icon: '🧹' },
+      'borewell': { id: 'borewell', name: 'Borewell', description: 'Borewell drilling and maintenance services', icon: '💧' }
     };
 
     return serviceNameToCategoryMap[serviceName] || { 
