@@ -29,6 +29,7 @@ const createPendingPushNotificationsTable = require('./015-pending-push-notifica
 const createBlockedIdentifiersTable = require('./016-add-blocked-identifiers-table');
 const optimizeReportStatusIndexes = require('./017-optimize-report-status-indexes');
 const addRefreshTokensTable = require('./018-add-refresh-tokens-table');
+const updatePaintingService = require('./019-update-painting-service');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -157,6 +158,13 @@ const migrations = [
     description: 'Creates refresh_tokens table for secure token rotation and refresh token mechanism',
     function: addRefreshTokensTable,
     required: true // Required for refresh token functionality
+  },
+  {
+    id: '019',
+    name: 'Update Painting Service',
+    description: 'Migrates painting-cleaning service to painting, ensures cleaning and borewell services exist',
+    function: updatePaintingService,
+    required: true // Required for service separation
   }
 ];
 

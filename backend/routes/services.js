@@ -26,13 +26,14 @@ const categoryToServiceMap = {
   'labor': 'labors',
   'plumber': 'plumber',
   'mason-mastri': 'mason-mastri',
-  'painting-cleaning': 'painting-cleaning',
+  'painting-cleaning': 'painting', // Backward compatibility: map old ID to new service
+  'painting': 'painting',
   'cleaning': 'cleaning',
   'granite-tiles': 'granite-tiles',
   'engineer-interior': 'engineer-interior',
   'electrician': 'electrician',
   'carpenter': 'carpenter',
-  'painter': 'painter',
+  'painter': 'painting', // Map 'painter' to 'painting' service
   'interiors-building': 'interiors-building',
   'stainless-steel': 'stainless-steel',
   'contact-building': 'contact-building',

@@ -25,7 +25,7 @@ export const SERVICE_CATEGORIES = [
     image: require('../assets/images/tiles.jpg'),
   },
   {
-    id: 'painting-cleaning',
+    id: 'painting',
     name: 'Painting',
     icon: '🎨',
     description: 'Painting Services',
@@ -78,7 +78,7 @@ export const SERVICE_CATEGORIES = [
     icon: '🧹',
     description: 'Professional Cleaning Services',
     basePrice: 99,
-    image: require('../assets/images/contractors.jpg'),
+    image: require('../assets/images/cleaning.jpg'),
   },
   {
     id: 'glass-mirror',
@@ -94,7 +94,7 @@ export const SERVICE_CATEGORIES = [
     icon: '💧',
     description: 'Borewell Drilling and Maintenance Services',
     basePrice: 99,
-    image: require('../assets/images/labors.jpg'),
+    image: require('../assets/images/borewell.jpg'),
   },
 ];
 

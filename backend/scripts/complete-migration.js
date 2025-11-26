@@ -204,7 +204,7 @@ const completeMigration = async () => {
     const services = [
       { name: 'plumber', is_paid: true },
       { name: 'mason-mastri', is_paid: true },
-      { name: 'painting-cleaning', is_paid: true },
+      { name: 'painting', is_paid: true },
       { name: 'granite-tiles', is_paid: true },
       { name: 'engineer-interior', is_paid: true },
       { name: 'electrician', is_paid: true },

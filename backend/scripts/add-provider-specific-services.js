@@ -91,7 +91,19 @@ const addProviderSpecificServices = async () => {
         'Paint Repair',
         'Other Painting Work'
       ],
-      'painting-cleaning': [
+      'painting': [
+        'Interior Painting',
+        'Exterior Painting',
+        'Wall Texture',
+        'Wallpaper Installation',
+        'Wood Painting',
+        'Metal Painting',
+        'Waterproofing',
+        'Color Consultation',
+        'Paint Repair',
+        'Other Painting Work'
+      ],
+      'painting-cleaning': [ // Backward compatibility
         'Interior Painting',
         'Exterior Painting',
         'Wall Texture',

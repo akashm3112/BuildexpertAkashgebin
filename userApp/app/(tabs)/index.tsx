@@ -34,6 +34,7 @@ const getServiceTranslationKey = (serviceId: string) => {
     'plumber': 'plumbersRegistration',
     'granite-tiles': 'graniteTilesLaying',
     'painting-cleaning': 'paintingAndCleaning',
+    'painting': 'paintingAndCleaning',
     'contact-building': 'contractorAndBuilding',
     'labor': 'labors',
     'mason-mastri': 'masonMistri',

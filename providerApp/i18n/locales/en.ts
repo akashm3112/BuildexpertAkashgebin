@@ -239,6 +239,7 @@ export default {
     'plumber': 'Plumber',
     'granite-tiles': 'Granite & Tiles Laying',
     'painting-cleaning': 'Painting',
+    'painting': 'Painting',
     'contact-building': 'Contact & Building',
     'labor': 'Labor',
     'mason-mastri': 'Mason / Mastri',
