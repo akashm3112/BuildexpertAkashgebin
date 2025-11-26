@@ -118,6 +118,20 @@ export class TokenManager {
       const tokenData = await this.getStoredToken();
       if (!tokenData) return null;
 
+      // Check if user exists before attempting token refresh
+      // This prevents token refresh attempts during signup/login flows
+      try {
+        const userData = await storage.getJSON<any>('user', { maxRetries: 1 });
+        if (!userData) {
+          // No user data means we're in signup/login flow, skip token refresh
+          this.invalidateCache();
+          return null;
+        }
+      } catch {
+        // If we can't read user data, skip token refresh to avoid errors during signup
+        return null;
+      }
+
       const now = Date.now();
       
       // If access token is already expired, try to refresh
@@ -139,7 +153,11 @@ export class TokenManager {
 
       return tokenData.accessToken;
     } catch (error) {
-      console.error('Error getting valid token:', error);
+      // Silently fail during signup/login flows - don't log as error
+      const isTimeout = error instanceof Error && error.message.includes('timeout');
+      if (!isTimeout) {
+        console.error('Error getting valid token:', error);
+      }
       this.invalidateCache();
       return null;
     }
@@ -255,6 +273,20 @@ export class TokenManager {
 
   private async performTokenRefresh(): Promise<string | null> {
     try {
+      // Check if user exists before attempting refresh
+      // Skip refresh during signup/login flows
+      try {
+        const userData = await storage.getJSON<any>('user', { maxRetries: 1 });
+        if (!userData) {
+          // No user data means we're in signup/login flow, skip refresh
+          this.invalidateCache();
+          return null;
+        }
+      } catch {
+        // Can't read user data, skip refresh
+        return null;
+      }
+
       const tokenData = await this.getStoredToken();
       if (!tokenData || !tokenData.refreshToken) {
         this.invalidateCache();
@@ -281,12 +313,12 @@ export class TokenManager {
           }),
         },
         {
-          maxRetries: 2,
+          maxRetries: 1, // Reduce retries to avoid long waits during backend issues
           retryDelay: 1000,
           exponentialBackoff: true,
-          timeout: 15000,
+          timeout: 10000, // Reduce timeout from 15s to 10s
           onRetry: (attempt) => {
-            console.log(`Token refresh retry attempt ${attempt}/2`);
+            console.log(`Token refresh retry attempt ${attempt}/1`);
           },
         }
       );
@@ -342,7 +374,27 @@ export class TokenManager {
 
       return newTokenData.accessToken;
     } catch (error) {
-      console.error('Error refreshing token:', error);
+      // Handle timeout errors silently during signup/login flows
+      const isTimeout = error instanceof Error && (
+        error.message.includes('timeout') || 
+        error.message.includes('Request timeout') ||
+        error.message.includes('TIMEOUT')
+      );
+      
+      if (isTimeout) {
+        // Silently handle timeout - don't log as error to avoid console error during signup
+        // Just clear invalid tokens and return null
+        try {
+          await this.clearStoredData();
+        } catch {
+          // Ignore errors during cleanup
+        }
+        this.invalidateCache();
+        return null;
+      }
+      
+      // For other errors, log but don't show to user
+      console.warn('Error refreshing token:', error instanceof Error ? error.message : error);
       await this.clearStoredData();
       this.invalidateCache();
       return null;

@@ -66,7 +66,8 @@ export default function MonitoringScreen() {
   // Handle hardware back button to navigate to admin dashboard
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      router.back();
+      // Always navigate to dashboard to prevent going back to provider screens
+      router.replace('/admin/dashboard');
       return true; // Prevent default behavior (exiting app)
     });
 
@@ -182,7 +183,7 @@ export default function MonitoringScreen() {
     <SafeView backgroundColor="#F9FAFB">
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.replace('/admin/dashboard')}>
             <ArrowLeft size={24} color="#374151" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>System Monitoring</Text>

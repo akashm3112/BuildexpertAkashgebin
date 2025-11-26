@@ -96,7 +96,18 @@ class GlobalErrorHandler {
       // Check if it's an Error object
       const errorArg = args.find(arg => arg instanceof Error);
       if (errorArg) {
-        this.handleError(errorArg as Error, false, 'Console Error');
+        const error = errorArg as Error;
+        
+        // Suppress timeout errors during signup/login flows
+        // These are handled gracefully by tokenManager and don't need user notification
+        const isTokenRefreshTimeout = error.message.includes('timeout') && 
+          (error.message.includes('refreshing token') || 
+           error.stack?.includes('tokenManager') ||
+           error.stack?.includes('performTokenRefresh'));
+        
+        if (!isTokenRefreshTimeout) {
+          this.handleError(error, false, 'Console Error');
+        }
       }
 
       // Call original console.error

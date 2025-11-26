@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Linking, BackHandler, Image, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, UserPlus, Eye, EyeOff, ArrowRight, User, Mail, Phone, Lock, Camera, X } from 'lucide-react-native';
+import { ArrowLeft, UserPlus, Eye, EyeOff, ArrowRight, User, Mail, Phone, Lock, Camera, X, AlertCircle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
@@ -37,6 +37,10 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({
+    phone: '',
+    password: '',
+  });
   const [modalVisible, setModalVisible] = useState(false);
   const [profileImage, setProfileImage] = useState<string>('');
   const [imageLoading, setImageLoading] = useState(false);
@@ -77,6 +81,42 @@ export default function SignUpScreen() {
   const showModal = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons?: { text: string; onPress: () => void; style?: 'primary' | 'secondary' | 'destructive' }[]) => {
     setModalConfig({ title, message, type, buttons });
     setModalVisible(true);
+  };
+
+  const validatePhone = (phoneNumber: string) => {
+    // Allow admin phone number (9999999999) and regular Indian mobile numbers (6-9)
+    const phoneRegex = /^(9999999999|[6-9]\d{9})$/;
+    return phoneRegex.test(phoneNumber);
+  };
+
+  const validateField = (field: 'phone' | 'password', value: string) => {
+    let error = '';
+    switch (field) {
+      case 'phone':
+        if (value.length > 0 && !validatePhone(value)) {
+          error = 'Please enter a valid 10-digit mobile number';
+        }
+        break;
+      case 'password':
+        if (value.length > 0 && value.length < 6) {
+          error = 'Password must contain 6 characters';
+        }
+        break;
+    }
+    setErrors(prev => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
+  const handlePhoneChange = (value: string) => {
+    // Only allow numeric input and limit to 10 digits
+    const numericValue = value.replace(/\D/g, '').slice(0, 10);
+    setPhone(numericValue);
+    validateField('phone', numericValue);
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    validateField('password', value);
   };
 
   const handleImagePicker = async () => {
@@ -396,12 +436,12 @@ export default function SignUpScreen() {
 
             {/* Phone */}
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, errors.phone && styles.inputError]}>
                 <Phone size={20} color="#64748B" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={handlePhoneChange}
                   placeholder="Mobile Number"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="numeric"
@@ -409,16 +449,22 @@ export default function SignUpScreen() {
                   returnKeyType="next"
                 />
               </View>
+              {errors.phone && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle size={14} color="#EF4444" />
+                  <Text style={styles.errorText}>{errors.phone}</Text>
+                </View>
+              )}
             </View>
 
             {/* Password */}
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
                 <Lock size={20} color="#64748B" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={handlePasswordChange}
                   placeholder="Password"
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showPassword}
@@ -435,6 +481,12 @@ export default function SignUpScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+              {errors.password && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle size={14} color="#EF4444" />
+                  <Text style={styles.errorText}>{errors.password}</Text>
+                </View>
+              )}
             </View>
 
             {/* Confirm Password */}
@@ -560,6 +612,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   inputIcon: {
     marginRight: 12,
   },
@@ -631,6 +686,17 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginLeft: 4,
   },
 });
 

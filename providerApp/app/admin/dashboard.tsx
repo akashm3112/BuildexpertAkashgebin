@@ -60,10 +60,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     // Prevent back navigation from admin dashboard
-    // This ensures users can't navigate back to provider screens
+    // Stay on dashboard instead of navigating back to provider screens
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Exit app instead of navigating back to prevent accessing provider screens
-      BackHandler.exitApp();
+      // Do nothing - stay on admin dashboard
+      // Only logout button should navigate away from admin dashboard
       return true;
     });
     return () => backHandler.remove();

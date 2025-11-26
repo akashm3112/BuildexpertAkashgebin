@@ -45,35 +45,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (userData) {
         // Verify that tokens exist in TokenManager
-        const { tokenManager } = await import('@/utils/tokenManager');
-        const hasValidToken = await tokenManager.isTokenValid();
-        
-        if (!hasValidToken) {
-          // Tokens don't exist or are invalid, clear user data
-          console.log('📱 AuthContext: No valid tokens found, clearing user data');
-          try {
-            await storage.removeItem('user', { maxRetries: 2 });
-          } catch (error) {
-            console.error('Error removing user data:', error);
-          }
-          setUser(null);
-        } else {
-          console.log('📱 AuthContext: Loading user from storage:', { 
-            id: userData.id, 
-            phone: userData.phone, 
-            role: userData.role,
-            fullName: userData.fullName || userData.full_name 
-          });
+        // Wrap in try-catch to prevent errors during signup from blocking app load
+        try {
+          const { tokenManager } = await import('@/utils/tokenManager');
+          const hasValidToken = await tokenManager.isTokenValid();
           
-          setUser(userData);
+          if (!hasValidToken) {
+            // Tokens don't exist or are invalid, clear user data
+            console.log('📱 AuthContext: No valid tokens found, clearing user data');
+            try {
+              await storage.removeItem('user', { maxRetries: 2 });
+            } catch (error) {
+              console.error('Error removing user data:', error);
+            }
+            setUser(null);
+          } else {
+            console.log('📱 AuthContext: Loading user from storage:', { 
+              id: userData.id, 
+              phone: userData.phone, 
+              role: userData.role,
+              fullName: userData.fullName || userData.full_name 
+            });
+            
+            setUser(userData);
+          }
+        } catch (tokenError) {
+          // If token validation fails (e.g., timeout during signup), don't block app load
+          // Just log and continue without user data
+          const isTimeout = tokenError instanceof Error && tokenError.message.includes('timeout');
+          if (isTimeout) {
+            console.log('📱 AuthContext: Token validation timeout, skipping token check');
+          } else {
+            console.warn('📱 AuthContext: Error validating tokens:', tokenError);
+          }
+          // Don't set user if token validation fails
+          setUser(null);
         }
       } else {
-        // No user data, ensure tokens are also cleared
-        const { tokenManager } = await import('@/utils/tokenManager');
-        const hasValidToken = await tokenManager.isTokenValid();
-        if (!hasValidToken) {
-          // Already cleared, nothing to do
-        }
+        // No user data - don't check tokens to avoid triggering refresh during signup
+        setUser(null);
       }
     } catch (error) {
       console.error('Error loading user:', error);
