@@ -13,6 +13,7 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -98,6 +99,39 @@ export default function EditProfileScreen() {
       setHasChanges(changed);
     }
   }, [formData, profileImage, originalData, user]);
+
+  // Handle Android back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (hasChanges) {
+        showAlert(
+          'Unsaved Changes',
+          t('profile.unsavedChangesMessage'),
+          'warning',
+          [
+            {
+              text: 'Cancel',
+              onPress: () => setShowAlertModal(false),
+              style: 'secondary',
+            },
+            {
+              text: 'Discard',
+              style: 'destructive',
+              onPress: () => {
+                setShowAlertModal(false);
+                router.back();
+              },
+            },
+          ]
+        );
+      } else {
+        router.back();
+      }
+      return true; // Prevent default back behavior
+    });
+
+    return () => backHandler.remove();
+  }, [hasChanges]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -421,13 +455,14 @@ export default function EditProfileScreen() {
         <Text style={styles.headerTitle}>{t('profile.editProfile')}</Text>
         <TouchableOpacity 
           onPress={handleSave} 
-          style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
           disabled={!hasChanges || isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color="#3B82F6" />
           ) : (
-            <Save size={20} color="#FFFFFF" />
+            <Text style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}>
+              Save
+            </Text>
           )}
         </TouchableOpacity>
       </View>
@@ -558,16 +593,12 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   saveButton: {
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '600',
+    color: '#3B82F6',
   },
   saveButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    color: '#9CA3AF',
   },
   keyboardAvoidingView: {
     flex: 1,

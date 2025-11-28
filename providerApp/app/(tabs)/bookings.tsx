@@ -79,12 +79,13 @@ interface Booking {
 
 export default function BookingsScreen() {
   const { user, isLoading: authLoading } = useAuth();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filter, setFilter] = useState<'pending' | 'accepted' | 'completed'| 'all' >('all');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
 
   // Alert Modal State
   const [showAlertModal, setShowAlertModal] = useState(false);
@@ -189,10 +190,11 @@ export default function BookingsScreen() {
     try {
       if (showSpinner) setIsLoading(true);
       setError(null);
+      setErrorKey(null);
       
       const token = await tokenManager.getValidToken();
       if (!token) {
-        setError('No authentication token available');
+        setErrorKey('noToken');
         return;
       }
 
@@ -218,20 +220,20 @@ export default function BookingsScreen() {
           });
           setBookings(data.data.bookings);
         } else {
-          setError('Invalid response format from server');
+          setErrorKey('invalidResponse');
         }
       } else {
         const errorText = await response.text();
         
         if (response.status === 403) {
-          setError('Access denied. Only providers can view bookings.');
+          setErrorKey('accessDenied');
         } else {
-          setError('Failed to fetch bookings. Please try again.');
+          setErrorKey('fetchFailed');
         }
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
-      setError('Network error. Please check your connection and try again.');
+      setErrorKey('networkError');
     } finally {
       if (showSpinner) setIsLoading(false);
     }
@@ -523,42 +525,46 @@ export default function BookingsScreen() {
 
         {/* Action buttons */}
         <View style={styles.actionButtons}>
-          {item.status === 'pending' && (
-            <>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.acceptButton]}
-                onPress={() => handleBookingAction(item.id, 'accept')}
-              >
-                <CheckCircle size={14} color="#FFFFFF" />
-                <Text style={[styles.actionButtonText, styles.acceptButtonText]}>Accept</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.rejectButton]}
-                onPress={() => openRejectModal(item.id)}
-              >
-                <XCircle size={14} color="#FFFFFF" />
-                <Text style={[styles.actionButtonText, styles.rejectButtonText]}>Reject</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          
           {item.status === 'accepted' && (
-            <>
+            <View style={styles.callButtonContainer}>
               <WebRTCCallButton
                 bookingId={item.id}
                 size="small"
                 variant="primary"
                 style={styles.callButton}
               />
+            </View>
+          )}
+          <View style={styles.secondaryActions}>
+            {item.status === 'pending' && (
+              <>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.acceptButton]}
+                  onPress={() => handleBookingAction(item.id, 'accept')}
+                >
+                  <CheckCircle size={14} color="#FFFFFF" />
+                  <Text style={[styles.actionButtonText, styles.acceptButtonText]}>Accept</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.rejectButton]}
+                  onPress={() => openRejectModal(item.id)}
+                >
+                  <XCircle size={14} color="#FFFFFF" />
+                  <Text style={[styles.actionButtonText, styles.rejectButtonText]}>Reject</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            
+            {item.status === 'accepted' && (
               <TouchableOpacity
                 style={[styles.actionButton, styles.completeButton]}
                 onPress={() => openRatingModal(item.id)}
               >
-                <CheckCircle size={14} color="#FFFFFF" />
+                <CheckCircle size={14} color="#2563EB" />
                 <Text style={[styles.actionButtonText, styles.completeButtonText]}>Complete</Text>
               </TouchableOpacity>
-            </>
-          )}
+            )}
+          </View>
         </View>
       </View>
     );
@@ -580,7 +586,7 @@ export default function BookingsScreen() {
     );
   }
 
-  if (error) {
+  if (error || errorKey) {
     return (
       <SafeView backgroundColor="#F8FAFC">
         <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
@@ -590,7 +596,9 @@ export default function BookingsScreen() {
         </View>
         <View style={styles.errorContainer}>
           <AlertTriangle size={48} color="#EF4444" />
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>
+            {errorKey ? t(`bookings.errors.${errorKey}`) : (error || t('bookings.errors.fetchFailed'))}
+          </Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => loadBookings(true)}>
             <Text style={styles.retryButtonText}>{t('bookings.retry')}</Text>
           </TouchableOpacity>
@@ -1062,9 +1070,16 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-    gap: getResponsiveSpacing(6, 8, 10),
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: getResponsiveSpacing(10, 12, 14),
+    paddingBottom: getResponsiveSpacing(16, 18, 20),
+  },
+  callButtonContainer: {
+    alignItems: 'center',
+    marginRight: getResponsiveSpacing(12, 14, 16),
+    alignSelf: 'flex-end',
+    position: 'relative',
   },
   actionButton: {
     flexDirection: 'row',
@@ -1098,16 +1113,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   callButton: {
-    backgroundColor: '#3B82F6',
+    // Let the button size itself based on content
   },
-  callButtonText: {
-    color: '#FFFFFF',
+  callButtonLabel: {
+    position: 'absolute',
+    top: '100%',
+    marginTop: 4,
+    fontSize: getResponsiveFontSize(11, 12, 13),
+    fontWeight: '600',
+    color: '#2563EB',
+    textAlign: 'center',
+    width: '100%',
+  },
+  secondaryActions: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    gap: getResponsiveSpacing(6, 8, 10),
   },
   completeButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#EEF2FF',
   },
   completeButtonText: {
-    color: '#FFFFFF',
+    color: '#2563EB',
+    fontWeight: '600',
   },
   reportUserIconBtn: {
     width: getResponsiveSpacing(28, 32, 36),

@@ -450,58 +450,61 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
         
         {/* Action buttons */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity 
-            style={[
-              styles.actionButton, 
-              styles.reportButton,
-              booking.reportReason && styles.disabledButton
-            ]}
-            onPress={handleReportProvider}
-            disabled={isReporting || !!booking.reportReason}
-          >
-            <Flag size={14} color={booking.reportReason ? "#9CA3AF" : "#EF4444"} />
-                            <Text style={[
+          {booking.status === 'accepted' && (
+            <View style={styles.callButtonContainer}>
+              <WebRTCCallButton
+                bookingId={booking.id}
+                size="small"
+                variant="primary"
+                style={styles.callButton}
+              />
+            </View>
+          )}
+          <View style={styles.secondaryActions}>
+            <TouchableOpacity 
+              style={[
+                styles.actionButton, 
+                styles.reportButton,
+                booking.reportReason && styles.disabledButton
+              ]}
+              onPress={handleReportProvider}
+              disabled={isReporting || !!booking.reportReason}
+            >
+              <Flag size={14} color={booking.reportReason ? "#9CA3AF" : "#EF4444"} />
+              <Text style={[
                   styles.actionButtonText, 
                   styles.reportButtonText,
                   booking.reportReason && styles.disabledButtonText
                 ]}>
                   {booking.reportReason ? t('bookingItem.reported') : t('bookingItem.report')}
                 </Text>
-          </TouchableOpacity>
-          
-          {booking.status === 'completed' && (
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.rateButton]}
-              onPress={handleRateService}
-            >
-              <Star size={14} color="#F59E0B" />
-              <Text style={[styles.actionButtonText, styles.rateButtonText]}>
-                {booking.rating ? t('bookingItem.updateRating') : t('bookingItem.rate')}
-              </Text>
             </TouchableOpacity>
-          )}
+            
+            {booking.status === 'completed' && (
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.rateButton]}
+                onPress={handleRateService}
+              >
+                <Star size={14} color="#F59E0B" />
+                <Text style={[styles.actionButtonText, styles.rateButtonText]}>
+                  {booking.rating ? t('bookingItem.updateRating') : t('bookingItem.rate')}
+                </Text>
+              </TouchableOpacity>
+            )}
 
-          {canCancel && (
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.cancelButton]}
-              onPress={handleCancelBooking}
-              disabled={isCancelling}
-            >
-              <XCircle size={14} color="#EF4444" />
-              <Text style={[styles.actionButtonText, styles.cancelButtonText]}>
-                {isCancelling ? t('bookingItem.cancelling') : t('bookingItem.cancel')}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {booking.status === 'accepted' && (
-            <WebRTCCallButton
-              bookingId={booking.id}
-              size="small"
-              variant="outline"
-              style={styles.callButton}
-            />
-          )}
+            {canCancel && (
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.cancelButton]}
+                onPress={handleCancelBooking}
+                disabled={isCancelling}
+              >
+                <XCircle size={14} color="#EF4444" />
+                <Text style={[styles.actionButtonText, styles.cancelButtonText]}>
+                  {isCancelling ? t('bookingItem.cancelling') : t('bookingItem.cancel')}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </TouchableOpacity>
 
@@ -956,8 +959,36 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingBottom: 18,
+  },
+  callButtonContainer: {
+    alignItems: 'center',
+    marginRight: 16,
+    alignSelf: 'flex-end',
+    position: 'relative',
+  },
+  callButton: {
+    // Let the button size itself based on content
+  },
+  callButtonLabel: {
+    position: 'absolute',
+    top: '100%',
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2563EB',
+    textAlign: 'center',
+    width: '100%',
+  },
+  secondaryActions: {
+    flex: 1,
+    flexDirection: 'row',
     justifyContent: 'flex-end',
     flexWrap: 'wrap',
+    alignItems: 'flex-end',
     gap: 8,
   },
   actionButton: {
@@ -993,12 +1024,6 @@ const styles = StyleSheet.create({
   },
   reportButtonText: {
     color: '#EF4444',
-  },
-  callButton: {
-    backgroundColor: '#ECFDF5',
-  },
-  callButtonText: {
-    color: '#10B981',
   },
   disabledButtonText: {
     color: '#9CA3AF',

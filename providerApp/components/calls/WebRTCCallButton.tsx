@@ -1,7 +1,25 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Platform, Dimensions } from 'react-native';
 import { Phone } from 'lucide-react-native';
 import { useWebRTCCall } from '@/hooks/useWebRTCCall';
+
+// Responsive design utilities
+const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 375;
+const isMediumScreen = screenWidth >= 375 && screenWidth < 414;
+const isLargeScreen = screenWidth >= 414;
+
+const getResponsiveSpacing = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
+
+const getResponsiveFontSize = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
 
 interface WebRTCCallButtonProps {
   bookingId: string;
@@ -34,19 +52,45 @@ export default function WebRTCCallButton({
   const getButtonSize = () => {
     switch (size) {
       case 'small':
-        return { paddingHorizontal: 12, paddingVertical: 8, minHeight: 36 };
+        return { 
+          paddingVertical: getResponsiveSpacing(6, 8, 10), 
+          paddingHorizontal: getResponsiveSpacing(10, 12, 14), 
+          minHeight: getResponsiveSpacing(32, 36, 40),
+          borderRadius: getResponsiveSpacing(8, 10, 12),
+          gap: getResponsiveSpacing(4, 6, 8),
+        };
       case 'large':
-        return { paddingHorizontal: 20, paddingVertical: 14, minHeight: 48 };
+        return { 
+          paddingVertical: getResponsiveSpacing(12, 14, 16), 
+          paddingHorizontal: getResponsiveSpacing(18, 20, 22), 
+          minHeight: getResponsiveSpacing(44, 48, 52),
+          borderRadius: getResponsiveSpacing(10, 12, 14),
+          gap: getResponsiveSpacing(6, 8, 10),
+        };
       default:
-        return { paddingHorizontal: 16, paddingVertical: 10, minHeight: 40 };
+        return { 
+          paddingVertical: getResponsiveSpacing(8, 10, 12), 
+          paddingHorizontal: getResponsiveSpacing(14, 16, 18), 
+          minHeight: getResponsiveSpacing(36, 40, 44),
+          borderRadius: getResponsiveSpacing(8, 10, 12),
+          gap: getResponsiveSpacing(4, 6, 8),
+        };
     }
   };
 
   const getIconSize = () => {
     switch (size) {
-      case 'small': return 16;
-      case 'large': return 24;
-      default: return 20;
+      case 'small': return getResponsiveFontSize(12, 14, 16);
+      case 'large': return getResponsiveFontSize(18, 20, 22);
+      default: return getResponsiveFontSize(14, 16, 18);
+    }
+  };
+
+  const getTextSize = () => {
+    switch (size) {
+      case 'small': return getResponsiveFontSize(10, 12, 14);
+      case 'large': return getResponsiveFontSize(14, 16, 18);
+      default: return getResponsiveFontSize(12, 14, 16);
     }
   };
 
@@ -71,30 +115,23 @@ export default function WebRTCCallButton({
     return baseStyle;
   };
 
-  const getTextStyle = () => {
-    const baseStyle: any[] = [styles.buttonText];
-    
-    switch (variant) {
-      case 'secondary':
-        baseStyle.push(styles.secondaryText);
-        break;
-      case 'outline':
-        baseStyle.push(styles.outlineText);
-        break;
-      default:
-        baseStyle.push(styles.primaryText);
-    }
-    
-    return baseStyle;
-  };
-
   const getIconColor = () => {
     if (disabled || isLoading) return '#9CA3AF';
     
     switch (variant) {
       case 'secondary': return '#6B7280';
-      case 'outline': return '#10B981';
-      default: return '#FFFFFF';
+      case 'outline': return '#2563EB';
+      default: return '#2563EB';
+    }
+  };
+
+  const getTextColor = () => {
+    if (disabled || isLoading) return '#9CA3AF';
+    
+    switch (variant) {
+      case 'secondary': return '#6B7280';
+      case 'outline': return '#2563EB';
+      default: return '#2563EB';
     }
   };
 
@@ -108,12 +145,12 @@ export default function WebRTCCallButton({
       {isLoading ? (
         <ActivityIndicator size="small" color={getIconColor()} />
       ) : (
-        <Phone size={getIconSize()} color={getIconColor()} />
-      )}
-      {size !== 'small' && (
-        <Text style={getTextStyle()}>
-          {isLoading ? 'Calling...' : 'Call'}
-        </Text>
+        <>
+          <Phone size={getIconSize()} color={getIconColor()} />
+          <Text style={[styles.buttonText, { fontSize: getTextSize(), color: getTextColor() }]}>
+            {isLoading ? 'Calling...' : 'Call'}
+          </Text>
+        </>
       )}
     </TouchableOpacity>
   );
@@ -124,35 +161,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    gap: 6,
   },
   primaryButton: {
-    backgroundColor: '#10B981', // Green for call action
+    backgroundColor: '#EEF2FF', // Light blue background like action buttons
   },
   secondaryButton: {
-    backgroundColor: '#6B7280',
+    backgroundColor: '#F3F4F6',
   },
   outlineButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: '#2563EB',
   },
   disabledButton: {
     opacity: 0.5,
   },
   buttonText: {
-    fontSize: 14,
     fontWeight: '600',
-  },
-  primaryText: {
-    color: '#FFFFFF',
-  },
-  secondaryText: {
-    color: '#FFFFFF',
-  },
-  outlineText: {
-    color: '#10B981',
+    marginLeft: 0,
   },
 });
 

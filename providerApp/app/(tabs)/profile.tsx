@@ -1,9 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, StatusBar, Image, ActivityIndicator, RefreshControl, Modal as RNModal } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, StatusBar, Image, ActivityIndicator, RefreshControl, Modal as RNModal, Platform, Linking, Share, BackHandler } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import enTranslations from '@/i18n/locales/en';
+import hiTranslations from '@/i18n/locales/hi';
+import knTranslations from '@/i18n/locales/kn';
+import taTranslations from '@/i18n/locales/ta';
+import teTranslations from '@/i18n/locales/te';
+import mlTranslations from '@/i18n/locales/ml';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { User, Phone, MapPin, LogOut, CreditCard as Edit, Bell, Shield, Globe, Volume2, CircleHelp as HelpCircle, FileText, Star, Settings, CreditCard, TriangleAlert as AlertTriangle, Trash2, Camera, X } from 'lucide-react-native';
+import { User, Phone, MapPin, LogOut, CreditCard as Edit, Bell, Shield, Globe, Volume2, CircleHelp as HelpCircle, FileText, Star, Settings, CreditCard, TriangleAlert as AlertTriangle, Trash2, Camera, X, Gift, Mail, MessageCircle, Instagram, ExternalLink, ChevronRight, Share2 } from 'lucide-react-native';
 import { SafeView } from '@/components/SafeView';
 import { LanguageModal } from '@/components/common/LanguageModal';
 import { Modal } from '@/components/common/Modal';
@@ -13,6 +19,10 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import NotificationSettings from '@/components/NotificationSettings';
 import { tokenManager } from '../../utils/tokenManager';
+
+// Store links for provider app
+const PLAY_STORE_LINK = 'https://play.google.com/store/apps/details?id=com.builtxpert.provider';
+const APP_STORE_LINK = 'https://apps.apple.com/app/builtxpert-provider/id1234567890'; // Update with actual App Store ID when available
 
 // Responsive design utilities
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -28,14 +38,57 @@ const getResponsiveSpacing = (small: number, medium: number, large: number) => {
 
 export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
-  const { t, currentLanguageName } = useLanguage();
+  const { t, currentLanguageName, currentLanguage } = useLanguage();
   const router = useRouter();
+  
+  // Helper function to get array translations
+  const getArrayTranslation = (key: string): string[] => {
+    try {
+      const keys = key.split('.');
+      const translationMap: Record<string, any> = {
+        en: enTranslations,
+        hi: hiTranslations,
+        kn: knTranslations,
+        ta: taTranslations,
+        te: teTranslations,
+        ml: mlTranslations,
+      };
+      
+      let value: any = translationMap[currentLanguage] || enTranslations;
+      
+      for (const k of keys) {
+        if (value && typeof value === 'object' && k in value) {
+          value = value[k];
+        } else {
+          // Fallback to English
+          value = enTranslations;
+          for (const fallbackKey of keys) {
+            if (value && typeof value === 'object' && fallbackKey in value) {
+              value = value[fallbackKey];
+            } else {
+              return [];
+            }
+          }
+          break;
+        }
+      }
+      
+      return Array.isArray(value) ? value : [];
+    } catch (error) {
+      console.error('Error getting array translation:', error);
+      return [];
+    }
+  };
   const [serviceCount, setServiceCount] = useState(0);
   const [jobsDone, setJobsDone] = useState(0);
   const [averageRating, setAverageRating] = useState(0);
   const [totalRatings, setTotalRatings] = useState(0);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [notificationSettingsVisible, setNotificationSettingsVisible] = useState(false);
+  const [referModalVisible, setReferModalVisible] = useState(false);
+  const [supportModalVisible, setSupportModalVisible] = useState(false);
+  const [rateModalVisible, setRateModalVisible] = useState(false);
+  const [termsModalVisible, setTermsModalVisible] = useState(false);
   
   // Profile picture state
   const [userProfile, setUserProfile] = useState({
@@ -816,6 +869,53 @@ export default function ProfileScreen() {
     }
   };
 
+  // Handle Android hardware back button
+  useFocusEffect(
+    React.useCallback(() => {
+      const handleHardwareBack = () => {
+        if (notificationSettingsVisible) {
+          setNotificationSettingsVisible(false);
+          return true;
+        }
+        if (referModalVisible) {
+          setReferModalVisible(false);
+          return true;
+        }
+        if (supportModalVisible) {
+          setSupportModalVisible(false);
+          return true;
+        }
+        if (rateModalVisible) {
+          setRateModalVisible(false);
+          return true;
+        }
+        if (languageModalVisible) {
+          setLanguageModalVisible(false);
+          return true;
+        }
+        if (showAlertModal) {
+          setShowAlertModal(false);
+          return true;
+        }
+        return false;
+      };
+
+      if (Platform.OS === 'android') {
+        const subscription = BackHandler.addEventListener('hardwareBackPress', handleHardwareBack);
+        return () => {
+          subscription.remove();
+        };
+      }
+    }, [
+      notificationSettingsVisible,
+      referModalVisible,
+      supportModalVisible,
+      rateModalVisible,
+      languageModalVisible,
+      showAlertModal,
+    ])
+  );
+
   const handleSettingsAction = (action: string) => {
     if (action === 'notifications') {
       setNotificationSettingsVisible(true);
@@ -824,6 +924,16 @@ export default function ProfileScreen() {
     
     if (action === 'edit-profile') {
       router.push('/edit-profile');
+      return;
+    }
+    
+    if (action === 'help') {
+      setSupportModalVisible(true);
+      return;
+    }
+    
+    if (action === 'rate') {
+      setRateModalVisible(true);
       return;
     }
     
@@ -844,26 +954,15 @@ export default function ProfileScreen() {
         title: t('settings.sound.title'),
         message: t('settings.sound.message')
       },
-      'help': {
-        title: t('settings.help.title'),
-        message: t('settings.help.message')
-      },
       'terms': {
         title: t('settings.terms.title'),
         message: t('settings.terms.message')
-      },
-      'privacy-policy': {
-        title: t('settings.privacyPolicy.title'),
-        message: t('settings.privacyPolicy.message')
-      },
-      'rate': {
-        title: t('settings.rate.title'),
-        message: t('settings.rate.message')
-      },
-      'feedback': {
-        title: t('settings.feedback.title'),
-        message: t('settings.feedback.message')
       }
+    };
+
+    if (action === 'terms') {
+      setTermsModalVisible(true);
+      return;
     };
 
     const info = settingsInfo[action as keyof typeof settingsInfo];
@@ -871,6 +970,185 @@ export default function ProfileScreen() {
       showAlert(info.title, info.message, 'info');
     }
   };
+
+  const getReferralMessage = () => {
+    const message = `Hey! I have been using BuildXpert Provider for reliable service bookings. Download it here:\n\n📱 Android: ${PLAY_STORE_LINK}\n🍎 iOS: ${APP_STORE_LINK}`;
+    return message;
+  };
+
+  const openReferModal = () => {
+    setReferModalVisible(true);
+  };
+
+  const openSupportModal = () => {
+    setSupportModalVisible(true);
+  };
+
+  const openRateModal = () => {
+    setRateModalVisible(true);
+  };
+
+  const openPlayStoreLink = async () => {
+    try {
+      const supported = await Linking.canOpenURL(PLAY_STORE_LINK);
+      if (supported) {
+        await Linking.openURL(PLAY_STORE_LINK);
+      } else {
+        showAlert('Error', 'Unable to open the Play Store on this device.', 'error');
+      }
+    } catch (error) {
+      showAlert('Error', 'Unable to open the Play Store on this device.', 'error');
+    }
+  };
+
+  const openPlayStoreForRating = async () => {
+    try {
+      const supported = await Linking.canOpenURL(PLAY_STORE_LINK);
+      if (supported) {
+        await Linking.openURL(PLAY_STORE_LINK);
+      } else {
+        showAlert('Error', t('rateAppModal.error'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('rateAppModal.error'), 'error');
+    }
+  };
+
+  const openAppStoreForRating = async () => {
+    try {
+      const supported = await Linking.canOpenURL(APP_STORE_LINK);
+      if (supported) {
+        await Linking.openURL(APP_STORE_LINK);
+      } else {
+        showAlert('Error', t('rateAppModal.error'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('rateAppModal.error'), 'error');
+    }
+  };
+
+  const shareApp = async () => {
+    try {
+      await Share.share({
+        message: getReferralMessage(),
+      });
+    } catch (error) {
+      showAlert('Error', 'Unable to open the share sheet right now. Please try again.', 'error');
+    }
+  };
+
+  const shareViaWhatsApp = async () => {
+    const message = encodeURIComponent(getReferralMessage());
+    const whatsappUrl = `whatsapp://send?text=${message}`;
+    try {
+      const supported = await Linking.canOpenURL(whatsappUrl);
+      if (supported) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        await shareApp();
+      }
+    } catch (error) {
+      await shareApp();
+    }
+  };
+
+  const shareViaInstagram = async () => {
+    await shareApp();
+  };
+
+  const shareViaSms = async () => {
+    const smsUrl = Platform.select({
+      ios: `sms:&body=${encodeURIComponent(getReferralMessage())}`,
+      android: `sms:?body=${encodeURIComponent(getReferralMessage())}`,
+    });
+
+    if (!smsUrl) {
+      await shareApp();
+      return;
+    }
+
+    try {
+      const supported = await Linking.canOpenURL(smsUrl);
+      if (supported) {
+        await Linking.openURL(smsUrl);
+      } else {
+        await shareApp();
+      }
+    } catch (error) {
+      await shareApp();
+    }
+  };
+
+  const openEmailClient = async () => {
+    const email = t('supportModal.emailAddress');
+    const subject = encodeURIComponent(t('supportModal.emailSubject'));
+    const body = encodeURIComponent(t('supportModal.emailBody'));
+    const mailto = `mailto:${email}?subject=${subject}&body=${body}`;
+    try {
+      const supported = await Linking.canOpenURL(mailto);
+      if (supported) {
+        await Linking.openURL(mailto);
+      } else {
+        showAlert('Error', t('supportModal.emailError'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('supportModal.emailError'), 'error');
+    }
+  };
+
+  const callSupportNumber = async () => {
+    const phoneNumber = t('supportModal.phoneNumber');
+    const phoneUrl = `tel:${phoneNumber}`;
+    try {
+      const supported = await Linking.canOpenURL(phoneUrl);
+      if (supported) {
+        await Linking.openURL(phoneUrl);
+      } else {
+        showAlert('Error', t('supportModal.phoneError'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('supportModal.phoneError'), 'error');
+    }
+  };
+
+  const openWhatsAppSupport = async () => {
+    const message = encodeURIComponent(t('supportModal.whatsappMessage'));
+    const phone = t('supportModal.whatsappNumber');
+    const whatsappUrl = `whatsapp://send?phone=${phone}&text=${message}`;
+    try {
+      const supported = await Linking.canOpenURL(whatsappUrl);
+      if (supported) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        showAlert('Error', t('supportModal.whatsappError'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('supportModal.whatsappError'), 'error');
+    }
+  };
+
+  const ratingSteps = useMemo(() => [
+    t('rateAppModal.steps.one'),
+    t('rateAppModal.steps.two'),
+    t('rateAppModal.steps.three'),
+  ], [t, currentLanguageName]);
+
+  // Memoize arrays for Terms & Privacy modal to ensure they're always arrays
+  const providerResponsibilitiesList = useMemo(() => {
+    return getArrayTranslation('termsPrivacy.providerResponsibilitiesList');
+  }, [currentLanguage, currentLanguageName]);
+
+  const informationWeCollectList = useMemo(() => {
+    return getArrayTranslation('termsPrivacy.informationWeCollectList');
+  }, [currentLanguage, currentLanguageName]);
+
+  const howWeUseInfoList = useMemo(() => {
+    return getArrayTranslation('termsPrivacy.howWeUseInfoList');
+  }, [currentLanguage, currentLanguageName]);
+
+  const dataSecurityList = useMemo(() => {
+    return getArrayTranslation('termsPrivacy.dataSecurityList');
+  }, [currentLanguage, currentLanguageName]);
 
   return (
     <SafeView backgroundColor="#F8FAFC">
@@ -1061,17 +1339,6 @@ export default function ProfileScreen() {
               <Text style={styles.arrowText}>›</Text>
             </View>
           </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => handleSettingsAction('privacy')}
-          >
-            <Shield size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>{t('profile.privacyAndSecurity')}</Text>
-            <View style={styles.actionButtonArrow}>
-              <Text style={styles.arrowText}>›</Text>
-            </View>
-          </TouchableOpacity>
         </View>
 
         {/* App Preferences */}
@@ -1122,10 +1389,10 @@ export default function ProfileScreen() {
 
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => handleSettingsAction('feedback')}
+            onPress={openReferModal}
           >
-            <Settings size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>{t('profile.sendFeedback')}</Text>
+            <Gift size={20} color="#6B7280" />
+            <Text style={styles.actionButtonText}>Refer a Friend</Text>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1153,17 +1420,6 @@ export default function ProfileScreen() {
           >
             <FileText size={20} color="#6B7280" />
             <Text style={styles.actionButtonText}>{t('profile.termsAndConditions')}</Text>
-            <View style={styles.actionButtonArrow}>
-              <Text style={styles.arrowText}>›</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => handleSettingsAction('privacy-policy')}
-          >
-            <Shield size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>{t('profile.privacyPolicy')}</Text>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1196,6 +1452,7 @@ export default function ProfileScreen() {
         visible={notificationSettingsVisible}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => setNotificationSettingsVisible(false)}
       >
         <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
           <View style={styles.modalHeader}>
@@ -1208,6 +1465,257 @@ export default function ProfileScreen() {
 
           <ScrollView style={styles.modalContent}>
             <NotificationSettings onClose={() => setNotificationSettingsVisible(false)} />
+          </ScrollView>
+        </SafeView>
+      </RNModal>
+
+      {/* Refer Friends Modal */}
+      <RNModal
+        visible={referModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setReferModalVisible(false)}
+      >
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setReferModalVisible(false)}>
+              <X size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{t('referFriendsModal.title')}</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.referralHero}>
+              <Text style={styles.referralHeroTitle}>{t('referFriendsModal.subtitle')}</Text>
+              <Text style={styles.referralHeroText}>{t('referFriendsModal.description')}</Text>
+            </View>
+
+            <View style={styles.referralCard}>
+              <Text style={styles.referralCardLabel}>{t('referFriendsModal.linkLabel')}</Text>
+              <TouchableOpacity style={styles.referralLinkButton} onPress={openPlayStoreLink}>
+                <ExternalLink size={getResponsiveSpacing(14, 16, 18)} color="#2563EB" />
+                <Text style={styles.referralLinkText}>{PLAY_STORE_LINK}</Text>
+              </TouchableOpacity>
+              <Text style={styles.referralLinkHint}>{t('referFriendsModal.linkHint')}</Text>
+            </View>
+
+            <View style={styles.shareSection}>
+              <Text style={styles.shareSectionTitle}>{t('referFriendsModal.shareVia')}</Text>
+              <View style={styles.shareButtonsRow}>
+                <TouchableOpacity style={styles.shareButton} onPress={shareApp}>
+                  <Share2 size={getResponsiveSpacing(16, 18, 20)} color="#0F172A" />
+                  <Text style={styles.shareButtonText}>{t('referFriendsModal.shareGeneric')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.shareButton} onPress={shareViaWhatsApp}>
+                  <MessageCircle size={getResponsiveSpacing(16, 18, 20)} color="#0F172A" />
+                  <Text style={styles.shareButtonText}>{t('referFriendsModal.shareWhatsApp')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.shareButton} onPress={shareViaInstagram}>
+                  <Instagram size={getResponsiveSpacing(16, 18, 20)} color="#0F172A" />
+                  <Text style={styles.shareButtonText}>{t('referFriendsModal.shareInstagram')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.shareButton} onPress={shareViaSms}>
+                  <MessageCircle size={getResponsiveSpacing(16, 18, 20)} color="#0F172A" />
+                  <Text style={styles.shareButtonText}>{t('referFriendsModal.shareSms')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.referralInfoBox}>
+              <Text style={styles.referralInfoTitle}>{t('referFriendsModal.tipTitle')}</Text>
+              <Text style={styles.referralInfoText}>{t('referFriendsModal.tipDescription')}</Text>
+            </View>
+
+            <TouchableOpacity style={styles.referralPlayStoreButton} onPress={openPlayStoreLink}>
+              <Text style={styles.referralPlayStoreText}>{t('referFriendsModal.openStore')}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeView>
+      </RNModal>
+
+      {/* Help & Support Modal */}
+      <RNModal
+        visible={supportModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSupportModalVisible(false)}
+      >
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setSupportModalVisible(false)}>
+              <X size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{t('supportModal.title')}</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.referralHero}>
+              <Text style={styles.referralHeroTitle}>{t('supportModal.subtitle')}</Text>
+              <Text style={styles.referralHeroText}>{t('supportModal.description')}</Text>
+            </View>
+
+            <View style={styles.supportCard}>
+              <Text style={styles.supportSectionTitle}>{t('supportModal.contactTitle')}</Text>
+
+              <TouchableOpacity style={styles.supportItem} onPress={openEmailClient}>
+                <View style={styles.supportIcon}>
+                  <Mail size={getResponsiveSpacing(16, 18, 20)} color="#1D4ED8" />
+                </View>
+                <View style={styles.supportContent}>
+                  <Text style={styles.supportLabel}>{t('supportModal.emailLabel')}</Text>
+                  <Text style={styles.supportValue}>{t('supportModal.emailAddress')}</Text>
+                </View>
+                <ChevronRight size={getResponsiveSpacing(16, 18, 20)} color="#94A3B8" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.supportItem} onPress={callSupportNumber}>
+                <View style={styles.supportIcon}>
+                  <Phone size={getResponsiveSpacing(16, 18, 20)} color="#059669" />
+                </View>
+                <View style={styles.supportContent}>
+                  <Text style={styles.supportLabel}>{t('supportModal.phoneLabel')}</Text>
+                  <Text style={styles.supportValue}>{t('supportModal.displayPhoneNumber')}</Text>
+                </View>
+                <ChevronRight size={getResponsiveSpacing(16, 18, 20)} color="#94A3B8" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.supportItem} onPress={openWhatsAppSupport}>
+                <View style={styles.supportIcon}>
+                  <MessageCircle size={getResponsiveSpacing(16, 18, 20)} color="#10B981" />
+                </View>
+                <View style={styles.supportContent}>
+                  <Text style={styles.supportLabel}>{t('supportModal.whatsappLabel')}</Text>
+                  <Text style={styles.supportValue}>{t('supportModal.displayWhatsApp')}</Text>
+                </View>
+                <ChevronRight size={getResponsiveSpacing(16, 18, 20)} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.supportInfoBox}>
+              <Text style={styles.supportInfoTitle}>{t('supportModal.availableTitle')}</Text>
+              <Text style={styles.supportInfoText}>{t('supportModal.availableHours')}</Text>
+            </View>
+          </ScrollView>
+        </SafeView>
+      </RNModal>
+
+      {/* Rate App Modal */}
+      <RNModal
+        visible={rateModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setRateModalVisible(false)}
+      >
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setRateModalVisible(false)}>
+              <X size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{t('rateAppModal.title')}</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.referralHero}>
+              <Text style={styles.referralHeroTitle}>{t('rateAppModal.subtitle')}</Text>
+              <Text style={styles.referralHeroText}>{t('rateAppModal.description')}</Text>
+            </View>
+
+            <View style={styles.rateStepsContainer}>
+              <Text style={styles.rateStepsTitle}>{t('rateAppModal.stepsTitle')}</Text>
+              {ratingSteps.map((step, index) => (
+                <View key={index} style={styles.rateStepItem}>
+                  <View style={styles.rateStepIndex}>
+                    <Text style={styles.rateStepIndexText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.rateStepText}>{step}</Text>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity style={[styles.referralPlayStoreButton, { marginBottom: 12 }]} onPress={openPlayStoreForRating}>
+              <Text style={styles.referralPlayStoreText}>{t('rateAppModal.openStore')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.referralPlayStoreButton, styles.appStoreButton]} onPress={openAppStoreForRating}>
+              <Text style={styles.referralPlayStoreText}>{t('rateAppModal.openAppStore')}</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.rateReminder}>{t('rateAppModal.reminder')}</Text>
+          </ScrollView>
+        </SafeView>
+      </RNModal>
+
+      {/* Terms & Privacy Modal */}
+      <RNModal
+        visible={termsModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setTermsModalVisible(false)}
+      >
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setTermsModalVisible(false)}>
+              <X size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{t('termsPrivacy.title')}</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.termsSection}>
+              <Text style={styles.termsSectionTitle}>{t('termsPrivacy.termsOfService')}</Text>
+              <Text style={styles.termsText}>
+                {t('termsPrivacy.termsDescription')}
+              </Text>
+              
+              <Text style={styles.termsSubtitle}>{t('termsPrivacy.providerResponsibilities')}</Text>
+              <Text style={styles.termsText}>
+                {providerResponsibilitiesList.map((item: string, index: number) => 
+                  index === 0 ? `• ${item}` : `\n• ${item}`
+                ).join('')}
+              </Text>
+            </View>
+
+            <View style={styles.termsSection}>
+              <Text style={styles.termsSectionTitle}>{t('termsPrivacy.privacyPolicy')}</Text>
+              <Text style={styles.termsText}>
+                {t('termsPrivacy.privacyDescription')}
+              </Text>
+
+              <Text style={styles.termsSubtitle}>{t('termsPrivacy.informationWeCollect')}</Text>
+              <Text style={styles.termsText}>
+                {informationWeCollectList.map((item: string, index: number) => 
+                  index === 0 ? `• ${item}` : `\n• ${item}`
+                ).join('')}
+              </Text>
+
+              <Text style={styles.termsSubtitle}>{t('termsPrivacy.howWeUseInfo')}</Text>
+              <Text style={styles.termsText}>
+                {howWeUseInfoList.map((item: string, index: number) => 
+                  index === 0 ? `• ${item}` : `\n• ${item}`
+                ).join('')}
+              </Text>
+
+              <Text style={styles.termsSubtitle}>{t('termsPrivacy.dataSecurity')}</Text>
+              <Text style={styles.termsText}>
+                {dataSecurityList.map((item: string, index: number) => 
+                  index === 0 ? `• ${item}` : `\n• ${item}`
+                ).join('')}
+              </Text>
+            </View>
+
+            <View style={styles.termsSection}>
+              <Text style={styles.termsSectionTitle}>{t('termsPrivacy.contactInfo')}</Text>
+              <Text style={styles.termsText}>
+                {t('termsPrivacy.contactDescription')}{'\n\n'}
+                {t('termsPrivacy.contactEmail')}{'\n'}
+                {t('termsPrivacy.contactPhone')}{'\n'}
+                {t('termsPrivacy.contactAddress')}
+              </Text>
+            </View>
           </ScrollView>
         </SafeView>
       </RNModal>
@@ -1523,5 +2031,269 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+  },
+  // Refer Friends Modal Styles
+  referralHero: {
+    backgroundColor: '#EEF2FF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  referralHeroTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1E293B',
+    marginBottom: 6,
+  },
+  referralHeroText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#475569',
+    lineHeight: 18,
+  },
+  referralCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  referralCardLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#475569',
+    marginBottom: 10,
+  },
+  referralLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  referralLinkText: {
+    marginLeft: 10,
+    color: '#1D4ED8',
+    fontFamily: 'Inter-SemiBold',
+    flex: 1,
+    flexWrap: 'wrap',
+    fontSize: 12,
+  },
+  referralLinkHint: {
+    marginTop: 10,
+    color: '#64748B',
+    fontSize: 11,
+    fontFamily: 'Inter-Regular',
+  },
+  shareSection: {
+    marginBottom: 20,
+  },
+  shareSectionTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1E293B',
+    marginBottom: 12,
+  },
+  shareButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexGrow: 1,
+    minWidth: '45%',
+    gap: 10,
+  },
+  shareButtonText: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontFamily: 'Inter-Medium',
+  },
+  referralInfoBox: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginBottom: 20,
+  },
+  referralInfoTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter-SemiBold',
+    color: '#065F46',
+    marginBottom: 6,
+  },
+  referralInfoText: {
+    fontSize: 12,
+    color: '#065F46',
+    lineHeight: 18,
+    fontFamily: 'Inter-Regular',
+  },
+  referralPlayStoreButton: {
+    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  appStoreButton: {
+    marginTop: 0,
+    marginBottom: 24,
+  },
+  referralPlayStoreText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+  },
+  // Support Modal Styles
+  supportCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  supportSectionTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1E293B',
+    marginBottom: 8,
+  },
+  supportItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  supportIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  supportContent: {
+    flex: 1,
+  },
+  supportLabel: {
+    fontSize: 12,
+    color: '#475569',
+    marginBottom: 2,
+    fontFamily: 'Inter-Regular',
+  },
+  supportValue: {
+    fontSize: 13,
+    fontFamily: 'Inter-Medium',
+    color: '#0F172A',
+  },
+  supportInfoBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginBottom: 24,
+  },
+  supportInfoTitle: {
+    fontSize: 13,
+    fontFamily: 'Inter-SemiBold',
+    color: '#166534',
+    marginBottom: 6,
+  },
+  supportInfoText: {
+    fontSize: 12,
+    color: '#166534',
+    lineHeight: 18,
+    fontFamily: 'Inter-Regular',
+  },
+  // Rate App Modal Styles
+  rateStepsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  rateStepsTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1E293B',
+    marginBottom: 12,
+  },
+  rateStepItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  rateStepIndex: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  rateStepIndexText: {
+    color: '#2563EB',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+  },
+  rateStepText: {
+    flex: 1,
+    color: '#475569',
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'Inter-Regular',
+  },
+  rateReminder: {
+    textAlign: 'center',
+    color: '#475569',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 24,
+    fontFamily: 'Inter-Regular',
+  },
+  // Terms & Privacy Styles
+  termsSection: {
+    marginBottom: 28,
+  },
+  termsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: 16,
+  },
+  termsSubtitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1E293B',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  termsText: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20,
   },
 });
