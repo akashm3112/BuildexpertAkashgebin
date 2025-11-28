@@ -13,12 +13,14 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { SafeView } from '@/components/SafeView';
-import { ArrowLeft, Camera, Save, X } from 'lucide-react-native';
+import { Modal } from '@/components/common/Modal';
+import { ArrowLeft, Camera, Save, X, Trash2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { API_BASE_URL } from '@/constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -43,7 +45,7 @@ const getResponsiveFontSize = (small: number, medium: number, large: number) => 
 };
 
 export default function EditProfileScreen() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -59,6 +61,21 @@ export default function EditProfileScreen() {
   const [profileImage, setProfileImage] = useState<string>('');
   const [hasChanges, setHasChanges] = useState(false);
   const [originalData, setOriginalData] = useState<any>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  
+  // Alert Modal State
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    title: '',
+    message: '',
+    type: 'info' as 'success' | 'error' | 'warning' | 'info',
+    buttons: [] as { text: string; onPress: () => void; style?: 'primary' | 'secondary' | 'destructive' }[]
+  });
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons?: { text: string; onPress: () => void; style?: 'primary' | 'secondary' | 'destructive' }[]) => {
+    setAlertConfig({ title, message, type, buttons: buttons || [] });
+    setShowAlertModal(true);
+  };
 
   useEffect(() => {
     if (user) {
@@ -82,6 +99,39 @@ export default function EditProfileScreen() {
       setHasChanges(changed);
     }
   }, [formData, profileImage, originalData, user]);
+
+  // Handle Android back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (hasChanges) {
+        showAlert(
+          'Unsaved Changes',
+          t('profile.unsavedChangesMessage'),
+          'warning',
+          [
+            {
+              text: 'Cancel',
+              onPress: () => setShowAlertModal(false),
+              style: 'secondary',
+            },
+            {
+              text: 'Discard',
+              style: 'destructive',
+              onPress: () => {
+                setShowAlertModal(false);
+                router.back();
+              },
+            },
+          ]
+        );
+      } else {
+        router.back();
+      }
+      return true; // Prevent default back behavior
+    });
+
+    return () => backHandler.remove();
+  }, [hasChanges]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -237,7 +287,6 @@ export default function EditProfileScreen() {
         ...(profileImageUrl && { profilePicUrl: profileImageUrl }),
       };
 
-      console.log('Sending update data:', updateData);
 
       // Update user profile via API
       const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
@@ -249,13 +298,10 @@ export default function EditProfileScreen() {
         body: JSON.stringify(updateData),
       });
 
-      console.log('Response status:', response.status);
       const responseText = await response.text();
-      console.log('Response body:', responseText);
 
       if (response.ok) {
         const responseData = JSON.parse(responseText);
-        console.log('Profile updated successfully:', responseData);
 
         // Update local user data
         const updatedUser = {
@@ -310,24 +356,91 @@ export default function EditProfileScreen() {
 
   const handleCancel = () => {
     if (hasChanges) {
-      Alert.alert(
+      showAlert(
         'Unsaved Changes',
         t('profile.unsavedChangesMessage'),
+        'warning',
         [
           {
             text: 'Cancel',
-            style: 'cancel',
+            onPress: () => setShowAlertModal(false),
+            style: 'secondary',
           },
           {
             text: 'Discard',
             style: 'destructive',
-            onPress: () => router.back(),
+            onPress: () => {
+              setShowAlertModal(false);
+              router.back();
+            },
           },
         ]
       );
     } else {
       router.back();
     }
+  };
+
+  const handleDeleteAccount = async () => {
+    showAlert(
+      t('alerts.deleteAccount'),
+      t('alerts.deleteAccountMessage'),
+      'warning',
+      [
+        {
+          text: t('alerts.cancel'),
+          onPress: () => setShowAlertModal(false),
+          style: 'secondary',
+        },
+        {
+          text: t('alerts.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setShowAlertModal(false);
+              setDeleteLoading(true);
+              const token = await tokenManager.getValidToken();
+              if (!token) {
+                setDeleteLoading(false);
+                showAlert(t('alerts.error'), t('alerts.noAuthToken'), 'error');
+                return;
+              }
+              const response = await fetch(`${API_BASE_URL}/api/users/delete-account`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (response.ok) {
+                await logout();
+                setDeleteLoading(false);
+                showAlert(
+                  t('alerts.accountDeleted'),
+                  t('alerts.accountDeletedMessage'),
+                  'success',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        setShowAlertModal(false);
+                        // Navigate to root index which will handle auth redirect and prevent back navigation
+                        router.replace('/');
+                      },
+                      style: 'primary',
+                    },
+                  ]
+                );
+              } else {
+                const data = await response.json();
+                setDeleteLoading(false);
+                showAlert(t('alerts.error'), data.message || t('alerts.failedToDeleteAccount'), 'error');
+              }
+            } catch (error) {
+              setDeleteLoading(false);
+              showAlert(t('alerts.error'), t('alerts.failedToDeleteAccount'), 'error');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -342,13 +455,14 @@ export default function EditProfileScreen() {
         <Text style={styles.headerTitle}>{t('profile.editProfile')}</Text>
         <TouchableOpacity 
           onPress={handleSave} 
-          style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
           disabled={!hasChanges || isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color="#3B82F6" />
           ) : (
-            <Save size={20} color="#FFFFFF" />
+            <Text style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}>
+              Save
+            </Text>
           )}
         </TouchableOpacity>
       </View>
@@ -424,9 +538,37 @@ export default function EditProfileScreen() {
             </View>
             <Text style={styles.readOnlyNote}>{t('profile.phoneReadOnly')}</Text>
           </View>
+
+          {/* Delete Account Section */}
+          <View style={styles.deleteAccountSection}>
+            <TouchableOpacity 
+              style={[styles.deleteAccountButton, deleteLoading && styles.deleteAccountButtonDisabled]} 
+              onPress={handleDeleteAccount}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? (
+                <ActivityIndicator size="small" color="#EF4444" style={{ marginRight: 10 }} />
+              ) : (
+                <Trash2 size={20} color="#EF4444" style={{ marginRight: 10 }} />
+              )}
+              <Text style={styles.deleteAccountButtonText}>
+                {deleteLoading ? 'Deleting Account...' : t('profile.deleteAccount')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Alert Modal */}
+      <Modal
+        visible={showAlertModal}
+        onClose={() => setShowAlertModal(false)}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        buttons={alertConfig.buttons}
+      />
     </SafeView>
   );
 }
@@ -451,16 +593,12 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   saveButton: {
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '600',
+    color: '#3B82F6',
   },
   saveButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    color: '#9CA3AF',
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -567,5 +705,28 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  deleteAccountSection: {
+    marginTop: getResponsiveSpacing(24, 28, 32),
+    paddingTop: getResponsiveSpacing(20, 24, 28),
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+  },
+  deleteAccountButtonDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#F9FAFB',
+  },
+  deleteAccountButtonText: {
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '500',
+    color: '#EF4444',
   },
 });

@@ -11,28 +11,24 @@ export default function Index() {
   useEffect(() => {
     if (!isLoading) {
       if (user) {
-        console.log('🏠 Index: User found!');
-        console.log('   User ID:', user.id);
-        console.log('   Phone:', user.phone);
-        console.log('   Role:', user.role);
-        console.log('   Role type:', typeof user.role);
-        console.log('   Is admin?', user.role === 'admin');
-        console.log('   Full user object keys:', Object.keys(user));
-        
         // Navigate based on user role
+        // Using router.replace() ensures the navigation stack is properly reset
+        // This prevents back navigation to previous role's screens
         if (user.role === 'admin') {
-          console.log('👑 Index: Role is "admin" - navigating to /admin/dashboard');
           setTimeout(() => {
+            // Replace current route with admin dashboard
+            // This clears any provider screens from the navigation stack
             router.replace('/admin/dashboard');
           }, 100);
         } else {
-          console.log('👷 Index: Role is "' + user.role + '" - navigating to /(tabs)');
           setTimeout(() => {
+            // Replace current route with provider tabs
+            // This clears any admin screens from the navigation stack
             router.replace('/(tabs)');
           }, 100);
         }
       } else {
-        console.log('🔐 Index: No user found, redirecting to auth');
+        // No user, navigate to auth screen
         router.replace('/auth');
       }
     }

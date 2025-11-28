@@ -88,7 +88,9 @@ The following services are automatically seeded:
 |--------------|---------------|--------------|-------------|
 | Plumber | `plumber` | Yes | Plumbing services |
 | Mason / Mastri | `mason-mastri` | Yes | Masonry and construction |
-| Painting & Cleaning | `painting-cleaning` | Yes | Painting and cleaning services |
+| Painting | `painting-cleaning` | Yes | Painting services |
+| Cleaning | `cleaning` | Yes | Cleaning services |
+| Borewell | `borewell` | Yes | Borewell drilling and maintenance |
 | Granite & Tiles | `granite-tiles` | Yes | Granite and tile work |
 | Engineer / Interior | `engineer-interior` | Yes | Interior design and engineering |
 | Electrician | `electrician` | Yes | Electrical services |

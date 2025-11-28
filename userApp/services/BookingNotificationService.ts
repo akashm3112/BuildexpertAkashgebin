@@ -114,7 +114,6 @@ class BookingNotificationService {
    * Handle booking accepted notification
    */
   public async notifyBookingAccepted(providerName: string, serviceName: string) {
-    console.log('🎉 Booking accepted notification triggered');
     
     // Success vibration pattern
     await this.triggerVibration('medium');
@@ -136,7 +135,6 @@ class BookingNotificationService {
    * Handle booking cancelled notification
    */
   public async notifyBookingCancelled(providerName: string, serviceName: string, reason?: string) {
-    console.log('❌ Booking cancelled notification triggered');
     
     // Warning vibration pattern
     await this.triggerVibration('heavy');
@@ -160,7 +158,6 @@ class BookingNotificationService {
    * Handle booking completed notification
    */
   public async notifyBookingCompleted(providerName: string, serviceName: string) {
-    console.log('🎊 Booking completed notification triggered');
     
     // Success vibration pattern (different from accepted)
     await this.triggerVibration('heavy');
@@ -184,7 +181,6 @@ class BookingNotificationService {
    * Handle booking confirmed notification
    */
   public async notifyBookingConfirmed(providerName: string, serviceName: string, scheduledDate: string) {
-    console.log('✅ Booking confirmed notification triggered');
     
     // Confirmation vibration
     await this.triggerVibration('medium');
@@ -204,7 +200,6 @@ class BookingNotificationService {
    * Handle booking rejected notification
    */
   public async notifyBookingRejected(providerName: string, serviceName: string, reason?: string) {
-    console.log('🚫 Booking rejected notification triggered');
     
     // Error vibration pattern
     await this.triggerVibration('heavy');
@@ -228,7 +223,6 @@ class BookingNotificationService {
    * Handle booking reminder notification
    */
   public async notifyBookingReminder(providerName: string, serviceName: string, timeUntil: string) {
-    console.log('⏰ Booking reminder notification triggered');
     
     // Gentle reminder vibration
     await this.triggerVibration('light');
@@ -248,7 +242,6 @@ class BookingNotificationService {
    * Handle payment received notification
    */
   public async notifyPaymentReceived(amount: number, serviceName: string) {
-    console.log('💰 Payment received notification triggered');
     
     // Success vibration pattern
     await this.triggerVibration('medium');
@@ -270,7 +263,6 @@ class BookingNotificationService {
    * Handle service started notification
    */
   public async notifyServiceStarted(providerName: string, serviceName: string) {
-    console.log('🚀 Service started notification triggered');
     
     // Start vibration pattern
     await this.triggerVibration('medium');

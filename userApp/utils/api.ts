@@ -1,5 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/constants/api';
+import { tokenManager } from './tokenManager';
+import { handleError, handleApiError, safeApiCall, ErrorInfo } from './errorHandler';
+import { globalErrorHandler } from './globalErrorHandler';
+import { requestQueue, RequestPriority } from './requestQueue';
+import { frontendMonitor } from './monitoring';
 
 // Global logout function - will be set by the app
 let globalLogout: (() => Promise<void>) | null = null;
@@ -8,12 +13,14 @@ export const setGlobalLogout = (logoutFn: () => Promise<void>) => {
   globalLogout = logoutFn;
 };
 
-export const apiRequest = async (
+const apiRequestImpl = async (
   endpoint: string,
   options: RequestInit = {}
 ): Promise<Response> => {
+  const startTime = Date.now();
+  
   try {
-    const token = await AsyncStorage.getItem('token');
+    const token = await tokenManager.getValidToken();
     
     const headers = {
       'Content-Type': 'application/json',
@@ -21,37 +28,282 @@ export const apiRequest = async (
       ...options.headers,
     };
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
-    });
-
-    // Handle 401 errors globally
-    if (response.status === 401) {
-      console.log('🔐 API: Token expired, logging out user');
-      if (globalLogout) {
-        await globalLogout();
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
+      
+      // Record API call performance
+      const duration = Date.now() - startTime;
+      frontendMonitor.recordPerformance(
+        `api.${options.method || 'GET'}.${endpoint}`,
+        duration,
+        'ms',
+        { statusCode: response.status }
+      );
+    } catch (fetchError) {
+      // Check if it's a network error (offline)
+      const isNetworkError = fetchError instanceof TypeError && 
+        (fetchError.message.includes('Network request failed') || 
+         fetchError.message.includes('Failed to fetch'));
+      
+      if (isNetworkError) {
+        // Determine priority based on endpoint
+        const priority = getRequestPriority(endpoint, options.method || 'GET');
+        
+        // Queue the request for retry when network is restored
+        const requestId = await requestQueue.enqueue(
+          endpoint,
+          options,
+          priority,
+          { originalError: fetchError.message }
+        );
+        
+        console.log(`📴 Network offline, queued request: ${endpoint} (ID: ${requestId})`);
+        
+        // Use unified error handler
+        await handleError(fetchError, undefined, { showAlert: false });
+        
+        // Throw error to let caller know request was queued
+        throw new Error(`Request queued (offline): ${requestId}`);
       }
+      
+      // Other errors - use unified error handler
+      await handleError(fetchError, undefined, { showAlert: false });
+      throw fetchError;
+    }
+
+    // Handle 401 errors globally - try to refresh token first (silent refresh)
+    if (response.status === 401) {
+      // Try to refresh the token silently
+      const refreshedToken = await tokenManager.forceRefreshToken();
+      if (refreshedToken) {
+        // Retry the request with the new token (silent retry - no error shown)
+        const retryHeaders = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${refreshedToken}`,
+          ...options.headers,
+        };
+        try {
+          response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...options,
+            headers: retryHeaders,
+          });
+          // If retry succeeds, return the response (no error shown to user)
+          if (response.ok) {
+            return response;
+          }
+          // If retry still fails with 401, refresh token is expired (30 days passed)
+          if (response.status === 401) {
+            // Refresh token expired - logout silently
+            if (globalLogout) {
+              await globalLogout();
+            }
+            // Don't show error - logout handles navigation
+            throw new Error('Session expired');
+          }
+        } catch (retryError) {
+          // Only show error if it's not a 401 (network error, etc.)
+          if (!(retryError instanceof Error && retryError.message === 'Session expired')) {
+            await handleError(retryError, undefined, { showAlert: false });
+          }
+          throw retryError;
+        }
+      } else {
+        // Refresh token expired (30 days) - logout silently
+        if (globalLogout) {
+          await globalLogout();
+        }
+        // Don't show error alert - logout handles navigation to login
+        throw new Error('Session expired');
+      }
+    }
+
+    // Log non-2xx responses for debugging (but don't throw - let caller handle)
+    if (!response.ok) {
+      // Record error in monitoring
+      frontendMonitor.recordError(
+        new Error(`API Error: ${response.status} ${response.statusText}`),
+        `api.${options.method || 'GET'}.${endpoint}`,
+        { statusCode: response.status, endpoint }
+      );
+      await handleApiError(response, { showAlert: false });
     }
 
     return response;
   } catch (error) {
-    console.error('API request error:', error);
+    // Use unified error handler for logging
+    await handleError(error, undefined, { showAlert: false });
     throw error;
   }
 };
 
+// Wrap with error handler to catch unhandled rejections
+export const apiRequest = globalErrorHandler.wrapAsync(apiRequestImpl, 'API Request');
+
+/**
+ * Enhanced API request with unified error handling
+ */
+export const apiRequestWithErrorHandling = async (
+  endpoint: string,
+  options: RequestInit = {},
+  errorOptions?: {
+    showAlert?: boolean;
+    onError?: (errorInfo: ErrorInfo) => void;
+    customMessage?: string;
+  }
+): Promise<{ success: boolean; response?: Response; error?: ErrorInfo }> => {
+  return safeApiCall(
+    async () => {
+      const token = await tokenManager.getValidToken();
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...options.headers,
+      };
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
+
+      // Handle 401 errors globally - try to refresh token first (silent refresh)
+      if (response.status === 401) {
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          // Retry with new token silently
+          const retryHeaders = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${refreshedToken}`,
+            ...options.headers,
+          };
+          const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...options,
+            headers: retryHeaders,
+          });
+          // If retry succeeds, return response
+          if (retryResponse.ok) {
+            return retryResponse;
+          }
+          // If still 401, refresh token expired (30 days)
+          if (retryResponse.status === 401) {
+            if (globalLogout) {
+              await globalLogout();
+            }
+            throw new Error('Session expired');
+          }
+          return retryResponse;
+        }
+        
+        // Refresh token expired (30 days) - logout silently
+        if (globalLogout) {
+          await globalLogout();
+        }
+        throw new Error('Session expired');
+      }
+
+      return response;
+    },
+    errorOptions
+  );
+};
+
+/**
+ * Determine request priority based on endpoint and method
+ */
+function getRequestPriority(endpoint: string, method: string): RequestPriority {
+  // Critical: Login, payment, critical updates
+  if (
+    endpoint.includes('/auth/login') ||
+    endpoint.includes('/auth/signup') ||
+    endpoint.includes('/auth/verify-otp') ||
+    endpoint.includes('/payment') ||
+    endpoint.includes('/payments')
+  ) {
+    return RequestPriority.CRITICAL;
+  }
+  
+  // High: Bookings, notifications, user actions
+  if (
+    endpoint.includes('/bookings') ||
+    endpoint.includes('/notifications') ||
+    endpoint.includes('/reports') ||
+    method === 'POST' || method === 'PUT'
+  ) {
+    return RequestPriority.HIGH;
+  }
+  
+  // Low: Analytics, non-critical updates
+  if (
+    endpoint.includes('/analytics') ||
+    endpoint.includes('/stats') ||
+    method === 'GET' && endpoint.includes('/search')
+  ) {
+    return RequestPriority.LOW;
+  }
+  
+  // Normal: Everything else
+  return RequestPriority.NORMAL;
+}
+
+/**
+ * Queue a request with explicit priority
+ */
+export async function apiRequestWithPriority(
+  endpoint: string,
+  options: RequestInit = {},
+  priority: RequestPriority = RequestPriority.NORMAL
+): Promise<Response> {
+  // Try normal request first
+  try {
+    return await apiRequest(endpoint, options);
+  } catch (error: any) {
+    // If it's a queued error, re-throw
+    if (error.message?.includes('Request queued')) {
+      throw error;
+    }
+    
+    // For network errors, queue with explicit priority
+    const isNetworkError = error instanceof TypeError && 
+      (error.message.includes('Network request failed') || 
+       error.message.includes('Failed to fetch'));
+    
+    if (isNetworkError) {
+      const requestId = await requestQueue.enqueue(
+        endpoint,
+        options,
+        priority,
+        { originalError: error.message }
+      );
+      throw new Error(`Request queued (offline): ${requestId}`);
+    }
+    
+    throw error;
+  }
+}
+
 // Convenience methods
 export const apiGet = (endpoint: string) => apiRequest(endpoint);
-export const apiPost = (endpoint: string, data?: any) => 
-  apiRequest(endpoint, {
+export const apiPost = (endpoint: string, data?: any, priority?: RequestPriority) => {
+  const options: RequestInit = {
     method: 'POST',
     body: data ? JSON.stringify(data) : undefined,
-  });
-export const apiPut = (endpoint: string, data?: any) => 
-  apiRequest(endpoint, {
+  };
+  return priority !== undefined 
+    ? apiRequestWithPriority(endpoint, options, priority)
+    : apiRequest(endpoint, options);
+};
+export const apiPut = (endpoint: string, data?: any, priority?: RequestPriority) => {
+  const options: RequestInit = {
     method: 'PUT',
     body: data ? JSON.stringify(data) : undefined,
-  });
+  };
+  return priority !== undefined 
+    ? apiRequestWithPriority(endpoint, options, priority)
+    : apiRequest(endpoint, options);
+};
 export const apiDelete = (endpoint: string) => 
   apiRequest(endpoint, { method: 'DELETE' });

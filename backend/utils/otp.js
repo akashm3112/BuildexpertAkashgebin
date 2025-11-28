@@ -1,32 +1,75 @@
 const { v4: uuidv4 } = require('uuid');
+const { ManagedMap, registry } = require('./memoryLeakPrevention');
 
 // Load environment variables
 require('dotenv').config({ path: './config.env' });
 
 // OTP Service initialized - console logging enabled for OTP display
 
-// Store OTPs in memory (in production, use Redis)
-const otpStore = new Map();
-
-// Store pending signups in memory (for production, use Redis)
-// Map key: phoneNumber_role, value: signupData
-const pendingSignups = new Map();
-
-// Store password reset sessions in memory (for production, use Redis)
-// Map key: phoneNumber, value: { token, expiryTime }
-const passwordResetSessions = new Map();
-
-// Store OTP attempt tracking (in production, use Redis)
-// Map key: phoneNumber, value: { attempts: number, firstAttemptTime: number, lockedUntil: number }
-const otpAttempts = new Map();
-
 // OTP attempt configuration
 const MAX_OTP_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
 const ATTEMPT_RESET_DURATION = 15 * 60 * 1000; // Reset attempts after 15 minutes
 
+// Store OTPs in memory with automatic cleanup (in production, use Redis)
+const otpStore = new ManagedMap({
+  name: 'otpStore',
+  ttl: parseInt(process.env.OTP_EXPIRE) || 300000, // 5 minutes
+  maxSize: 10000,
+  cleanupInterval: 60000 // Clean every minute
+});
+
+// Store pending signups in memory with automatic cleanup (for production, use Redis)
+const pendingSignups = new ManagedMap({
+  name: 'pendingSignups',
+  ttl: 600000, // 10 minutes
+  maxSize: 5000,
+  cleanupInterval: 120000 // Clean every 2 minutes
+});
+
+// Store password reset sessions in memory with automatic cleanup (for production, use Redis)
+const passwordResetSessions = new ManagedMap({
+  name: 'passwordResetSessions',
+  ttl: 600000, // 10 minutes
+  maxSize: 5000,
+  cleanupInterval: 120000 // Clean every 2 minutes
+});
+
+// Store OTP attempt tracking (in production, use Redis)
+const otpAttempts = new ManagedMap({
+  name: 'otpAttempts',
+  ttl: LOCKOUT_DURATION, // 15 minutes
+  maxSize: 10000,
+  cleanupInterval: 300000 // Clean every 5 minutes
+});
+
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const formatLockoutDuration = (totalSeconds) => {
+  const seconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  const parts = [];
+
+  if (minutes > 0) {
+    parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`);
+  }
+
+  if (remainingSeconds > 0) {
+    parts.push(`${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}`);
+  }
+
+  if (!parts.length) {
+    parts.push('a few seconds');
+  }
+
+  return parts.join(' and ');
+};
+
+const buildLockoutMessage = (seconds) => {
+  return `Too many failed attempts. Please wait ${formatLockoutDuration(seconds)} before retrying.`;
 };
 
 // Check if phone number is locked due to too many attempts
@@ -137,37 +180,57 @@ const formatPhoneNumber = (phoneNumber) => {
 };
 
 const sendOTP = async (phoneNumber, otp) => {
+  const { breakers } = require('./circuitBreaker');
+  const { withSmsRetry } = require('./retryLogic');
+  const { SmsDeliveryError, SmsRateLimitError } = require('./errorTypes');
+  
   try {
     // Check if phone is locked
     if (isPhoneLocked(phoneNumber)) {
       const lockoutTime = getLockoutTimeRemaining(phoneNumber);
-      const minutes = Math.floor(lockoutTime / 60);
-      const seconds = lockoutTime % 60;
-      return { 
-        success: false, 
-        error: `Too many failed attempts. Please try again in ${minutes}:${seconds.toString().padStart(2, '0')}` 
+      return {
+        success: false,
+        error: buildLockoutMessage(lockoutTime)
       };
     }
 
     // Format phone number with appropriate country code
     const formattedPhoneNumber = formatPhoneNumber(phoneNumber);
     
-    // Log OTP to console (for development/testing)
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('📱 OTP VERIFICATION CODE');
-    console.log(`Phone: ${formattedPhoneNumber}`);
-    console.log(`Code: ${otp}`);
-    console.log('Message: Your BuildXpert verification code is: ' + otp);
-    console.log('Valid for: 5 minutes');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    // Attempt to send via circuit breaker with retry logic
+    const sendWithProtection = async () => {
+      return await breakers.sms.execute(
+        async () => {
+          // Log OTP to console (for development/testing)
+          console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('📱 OTP VERIFICATION CODE');
+          console.log(`Phone: ${formattedPhoneNumber}`);
+          console.log(`Code: ${otp}`);
+          console.log('Message: Your BuildXpert verification code is: ' + otp);
+          console.log('Valid for: 5 minutes');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+          
+          // Return success (OTP is logged for manual entry)
+          return { success: true, method: 'console' };
+        },
+        // Fallback: still log OTP even if circuit is open
+        async () => {
+          console.log(`📱 [FALLBACK] OTP for ${formattedPhoneNumber}: ${otp}`);
+          return { success: true, method: 'console-fallback' };
+        }
+      );
+    };
     
-    // Return success (OTP is logged for manual entry)
-    return { success: true, method: 'console' };
+    // Execute with retry logic
+    return await withSmsRetry(sendWithProtection, `send OTP to ${phoneNumber}`);
+    
   } catch (error) {
-    console.error('❌ Unexpected error in sendOTP:', error.message);
+    console.error('❌ Failed to send OTP after all retries:', error.message);
     const formattedPhoneNumber = formatPhoneNumber(phoneNumber);
     console.log(`📱 [ERROR] OTP for ${formattedPhoneNumber}: ${otp} (logged due to error)`);
-    return { success: false, error: error.message };
+    
+    // Return success anyway - OTP is logged
+    return { success: true, method: 'console-error', error: error.message };
   }
 };
 
@@ -180,11 +243,9 @@ const verifyOTP = (phoneNumber, otp) => {
   // Check if phone is locked
   if (isPhoneLocked(phoneNumber)) {
     const lockoutTime = getLockoutTimeRemaining(phoneNumber);
-    const minutes = Math.floor(lockoutTime / 60);
-    const seconds = lockoutTime % 60;
-    return { 
-      valid: false, 
-      message: `Too many failed attempts. Please try again in ${minutes}:${seconds.toString().padStart(2, '0')}`,
+    return {
+      valid: false,
+      message: buildLockoutMessage(lockoutTime),
       locked: true,
       lockoutTimeRemaining: lockoutTime
     };
@@ -218,11 +279,9 @@ const verifyOTP = (phoneNumber, otp) => {
     
     if (isLocked) {
       const lockoutTime = getLockoutTimeRemaining(phoneNumber);
-      const minutes = Math.floor(lockoutTime / 60);
-      const seconds = lockoutTime % 60;
-      return { 
-        valid: false, 
-        message: `Too many failed attempts. Please try again in ${minutes}:${seconds.toString().padStart(2, '0')}`,
+      return {
+        valid: false,
+        message: buildLockoutMessage(lockoutTime),
         locked: true,
         lockoutTimeRemaining: lockoutTime
       };

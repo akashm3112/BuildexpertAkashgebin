@@ -2,50 +2,39 @@ const cron = require('node-cron');
 const { query, getRows } = require('../database/connection');
 const { sendNotification } = require('../utils/notifications');
 const { pushNotificationService } = require('../utils/pushNotifications');
+const { registry } = require('../utils/memoryLeakPrevention');
 
-/**
- * Service Expiry Management System
- * - Sends notifications 2 days before expiry (day 28)
- * - Deactivates services after 30 days
- */
 class ServiceExpiryManager {
   constructor() {
     this.isRunning = false;
   }
 
-  /**
-   * Start cron jobs for service expiry management
-   */
   start() {
     if (this.isRunning) {
-      console.log('⚠️ Service expiry manager is already running');
       return;
     }
 
-    console.log('🚀 Starting Service Expiry Manager...');
 
     // Run expiry warning check daily at 9 AM
     this.expiryWarningJob = cron.schedule('0 9 * * *', async () => {
-      console.log('⏰ Running service expiry warning check...');
       await this.sendExpiryWarnings();
     });
 
     // Run service deactivation check daily at 10 AM
     this.deactivationJob = cron.schedule('0 10 * * *', async () => {
-      console.log('⏰ Running service deactivation check...');
       await this.deactivateExpiredServices();
     });
 
     // Run immediately on startup (for testing)
-    setTimeout(() => {
+    this.startupTimeout = setTimeout(() => {
       this.sendExpiryWarnings();
       this.deactivateExpiredServices();
     }, 5000); // Wait 5 seconds after startup
+    
+    // Register with memory leak prevention registry
+    registry.registerCleanup(() => this.stop());
 
     this.isRunning = true;
-    console.log('✅ Service expiry manager started successfully');
-    console.log('   - Expiry warnings: Daily at 9:00 AM');
-    console.log('   - Service deactivation: Daily at 10:00 AM');
   }
 
   /**
@@ -53,7 +42,6 @@ class ServiceExpiryManager {
    */
   async sendExpiryWarnings() {
     try {
-      console.log('📢 Checking for services expiring in 2 days...');
 
       // Find services expiring in exactly 2 days
       const expiringServices = await getRows(`
@@ -80,7 +68,6 @@ class ServiceExpiryManager {
         )
       `);
 
-      console.log(`📊 Found ${expiringServices.length} services expiring in 2 days`);
 
       for (const service of expiringServices) {
         const expiryDate = new Date(service.payment_end_date);
@@ -116,10 +103,8 @@ class ServiceExpiryManager {
           console.error('Failed to send push notification:', pushError);
         }
 
-        console.log(`✅ Sent expiry warning to ${service.full_name} for ${service.service_name}`);
       }
 
-      console.log(`✅ Expiry warning check completed. Sent ${expiringServices.length} notifications.`);
 
     } catch (error) {
       console.error('❌ Error sending expiry warnings:', error);
@@ -131,7 +116,6 @@ class ServiceExpiryManager {
    */
   async deactivateExpiredServices() {
     try {
-      console.log('🔴 Checking for expired services...');
 
       // Find services that have expired
       const expiredServices = await getRows(`
@@ -150,7 +134,6 @@ class ServiceExpiryManager {
         AND ps.payment_end_date::date < CURRENT_DATE
       `);
 
-      console.log(`📊 Found ${expiredServices.length} expired services to deactivate`);
 
       for (const service of expiredServices) {
         // Update service status to expired
@@ -185,10 +168,8 @@ class ServiceExpiryManager {
           console.error('Failed to send push notification:', pushError);
         }
 
-        console.log(`✅ Deactivated expired service for ${service.full_name}: ${service.service_name}`);
       }
 
-      console.log(`✅ Service deactivation completed. Deactivated ${expiredServices.length} services.`);
 
     } catch (error) {
       console.error('❌ Error deactivating expired services:', error);
@@ -196,17 +177,22 @@ class ServiceExpiryManager {
   }
 
   /**
-   * Stop all cron jobs
+   * Stop all cron jobs and timers
    */
   stop() {
     if (this.expiryWarningJob) {
       this.expiryWarningJob.stop();
+      this.expiryWarningJob = null;
     }
     if (this.deactivationJob) {
       this.deactivationJob.stop();
+      this.deactivationJob = null;
+    }
+    if (this.startupTimeout) {
+      clearTimeout(this.startupTimeout);
+      this.startupTimeout = null;
     }
     this.isRunning = false;
-    console.log('⏹️ Service expiry manager stopped');
   }
 
   /**

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { 
   View, 
   Text, 
@@ -15,20 +16,31 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  BackHandler,
+  Share,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Settings, MapPin, CreditCard, Bell, CircleHelp as HelpCircle, LogOut, CreditCard as Edit3, Camera, Star, Shield, Gift, Users, FileText, X, ArrowLeft, Trash2, Lock, Eye, EyeOff, Smartphone, Mail, UserCheck, Globe } from 'lucide-react-native';
+import { ChevronRight, MapPin, CreditCard, Bell, CircleHelp as HelpCircle, LogOut, CreditCard as Edit3, Camera, Star, Gift, Users, FileText, X, ArrowLeft, Trash2, Lock, Eye, EyeOff, Smartphone, Mail, UserCheck, Globe, Share2, MessageCircle, Instagram, ExternalLink, Phone } from 'lucide-react-native';
 import { Modal } from '@/components/common/Modal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
 import { useLanguage } from '@/context/LanguageContext';
+import enTranslations from '@/i18n/locales/en';
+import hiTranslations from '@/i18n/locales/hi';
+import knTranslations from '@/i18n/locales/kn';
+import taTranslations from '@/i18n/locales/ta';
+import teTranslations from '@/i18n/locales/te';
+import mlTranslations from '@/i18n/locales/ml';
 import { API_BASE_URL } from '@/constants/api';
 import { SafeView } from '@/components/SafeView';
 import NotificationSettings from '@/components/NotificationSettings';
 
 // Default profile image (consistent with backend)
 const DEFAULT_PROFILE_IMAGE = 'https://res.cloudinary.com/dqoizs0fu/raw/upload/v1756189484/profile-pictures/m3szbez4bzvwh76j1fle';
+const PLAY_STORE_LINK = 'https://play.google.com/store/apps/details?id=com.builtxpert.user';
+const APP_STORE_LINK = 'https://apps.apple.com/app/builtxpert/id1234567890'; // Update with actual App Store ID when available
 
 // Responsive design constants
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -58,8 +70,65 @@ const getResponsiveImageSize = (small: number, medium: number, large: number) =>
 export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
   const { unreadCount } = useNotifications();
-  const { t, currentLanguageName, setLanguage, availableLanguages } = useLanguage();
+  const { t, currentLanguageName, setLanguage, availableLanguages, currentLanguage } = useLanguage();
   const router = useRouter();
+  
+  // Helper function to get array translations
+  const getArrayTranslation = (key: string): string[] => {
+    try {
+      const keys = key.split('.');
+      const translationMap: Record<string, any> = {
+        en: enTranslations,
+        hi: hiTranslations,
+        kn: knTranslations,
+        ta: taTranslations,
+        te: teTranslations,
+        ml: mlTranslations,
+      };
+      
+      let value: any = translationMap[currentLanguage] || enTranslations;
+      
+      for (const k of keys) {
+        if (value && typeof value === 'object' && k in value) {
+          value = value[k];
+        } else {
+          // Fallback to English
+          value = enTranslations;
+          for (const fallbackKey of keys) {
+            if (value && typeof value === 'object' && fallbackKey in value) {
+              value = value[fallbackKey];
+            } else {
+              return [];
+            }
+          }
+          break;
+        }
+      }
+      
+      return Array.isArray(value) ? value : [];
+    } catch (error) {
+      console.error('Error getting array translation:', error);
+      return [];
+    }
+  };
+
+  // Memoize arrays for Terms & Privacy modal to ensure they're always arrays
+  const userResponsibilitiesList = useMemo(() => {
+    return getArrayTranslation('termsPrivacy.userResponsibilitiesList');
+  }, [currentLanguage, currentLanguageName]);
+
+  const informationWeCollectList = useMemo(() => {
+    return getArrayTranslation('termsPrivacy.informationWeCollectList');
+  }, [currentLanguage, currentLanguageName]);
+
+  const howWeUseInfoList = useMemo(() => {
+    return getArrayTranslation('termsPrivacy.howWeUseInfoList');
+  }, [currentLanguage, currentLanguageName]);
+
+  const dataSecurityList = useMemo(() => {
+    return getArrayTranslation('termsPrivacy.dataSecurityList');
+  }, [currentLanguage, currentLanguageName]);
+
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [showAlertModal, setShowAlertModal] = useState(false);
@@ -67,6 +136,9 @@ export default function ProfileScreen() {
   const [termsModalVisible, setTermsModalVisible] = useState(false);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [notificationSettingsVisible, setNotificationSettingsVisible] = useState(false);
+  const [rateModalVisible, setRateModalVisible] = useState(false);
+  const [supportModalVisible, setSupportModalVisible] = useState(false);
+  const [referModalVisible, setReferModalVisible] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{
     title: string;
     message: string;
@@ -89,9 +161,65 @@ export default function ProfileScreen() {
   const [averageRating, setAverageRating] = useState(0);
   const [totalReviews, setTotalReviews] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [refreshing, setRefreshing] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  // Handle Android hardware back button to close active overlays
+  useEffect(() => {
+    const handleHardwareBack = () => {
+      if (showAlertModal) {
+        setShowAlertModal(false);
+        return true;
+      }
+      if (notificationSettingsVisible) {
+        setNotificationSettingsVisible(false);
+        return true;
+      }
+      if (languageModalVisible) {
+        setLanguageModalVisible(false);
+        return true;
+      }
+      if (termsModalVisible) {
+        setTermsModalVisible(false);
+        return true;
+      }
+      if (privacyModalVisible) {
+        setPrivacyModalVisible(false);
+        return true;
+      }
+      if (referModalVisible) {
+        setReferModalVisible(false);
+        return true;
+      }
+      if (rateModalVisible) {
+        setRateModalVisible(false);
+        return true;
+      }
+      if (supportModalVisible) {
+        setSupportModalVisible(false);
+        return true;
+      }
+      if (editModalVisible) {
+        setEditModalVisible(false);
+        return true;
+      }
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleHardwareBack);
+    return () => subscription.remove();
+  }, [
+    editModalVisible,
+    privacyModalVisible,
+    termsModalVisible,
+    languageModalVisible,
+    notificationSettingsVisible,
+    referModalVisible,
+    rateModalVisible,
+    supportModalVisible,
+    showAlertModal,
+  ]);
 
   // Privacy & Security Settings
   const [privacySettings, setPrivacySettings] = useState({
@@ -117,7 +245,6 @@ export default function ProfileScreen() {
       } else {
         // Initialize userProfile with user context data
         const initialImage = user.profile_pic_url || '';
-        console.log('🖼️ Initial profile picture URL:', initialImage);
         
         setUserProfile((prev) => ({
           ...prev,
@@ -166,7 +293,6 @@ export default function ProfileScreen() {
       await AsyncStorage.setItem('cached_profile_image', imageUrl);
       setCachedImageUrl(imageUrl);
     } catch (error) {
-      console.log('❌ Failed to cache profile image:', error);
     }
   };
 
@@ -176,19 +302,15 @@ export default function ProfileScreen() {
       const cached = await AsyncStorage.getItem('cached_profile_image');
       if (cached) {
         setCachedImageUrl(cached);
-        console.log('📦 Loaded cached profile image:', cached);
         return cached;
       }
     } catch (error) {
-      console.log('❌ Failed to load cached profile image:', error);
     }
     return null;
   };
 
   // Debug: Log userProfile changes
   useEffect(() => {
-    console.log('📊 Current userProfile state:', userProfile);
-    console.log('🖼️ Profile image URL:', userProfile.image);
     
     // Cache the image URL when it changes
     if (userProfile.image && userProfile.image.trim() !== '') {
@@ -198,8 +320,6 @@ export default function ProfileScreen() {
 
   // Debug: Log user context data
   useEffect(() => {
-    console.log('👤 Current user context:', user);
-    console.log('🖼️ User context profile_pic_url:', user?.profile_pic_url);
   }, [user]);
 
   // Cleanup timeout on unmount
@@ -298,66 +418,68 @@ export default function ProfileScreen() {
         return;
       }
 
-      // Convert image to base64
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      const reader = new FileReader();
-      
-      reader.onload = async () => {
-        const base64 = reader.result as string;
+      const optimizedImage = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 1080 } }],
+        { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+
+      if (!optimizedImage.base64) {
+        showAlert('Error', 'Unable to process image. Please try a different photo.', 'error');
+        return;
+      }
+
+      // Optimistic preview while upload is in progress
+      if (optimizedImage.uri) {
+        setUserProfile(prev => ({ ...prev, image: optimizedImage.uri }));
+      }
+
+      const payload = `data:image/jpeg;base64,${optimizedImage.base64}`;
+
+      const uploadResponse = await fetch(`${API_BASE_URL}/api/users/profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          profilePicUrl: payload,
+        }),
+      });
+
+      if (uploadResponse.ok) {
+        const data = await uploadResponse.json();
         
-        // Upload to backend
-        const uploadResponse = await fetch(`${API_BASE_URL}/api/users/profile`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            profilePicUrl: base64,
-          }),
-        });
-
-        if (uploadResponse.ok) {
-          const data = await uploadResponse.json();
-          console.log('📤 Upload response:', data);
-          
-          // Handle different response structures
-          let newImageUrl = '';
-          if (data.data && data.data.user && data.data.user.profilePicUrl) {
-            newImageUrl = data.data.user.profilePicUrl;
-          } else if (data.data && data.data.user && data.data.user.profile_pic_url) {
-            newImageUrl = data.data.user.profile_pic_url;
-          } else if (data.user && data.user.profilePicUrl) {
-            newImageUrl = data.user.profilePicUrl;
-          } else if (data.user && data.user.profile_pic_url) {
-            newImageUrl = data.user.profile_pic_url;
-          }
-          
-          console.log('🖼️ New image URL:', newImageUrl);
-          
-          if (newImageUrl) {
-            setUserProfile(prev => ({ ...prev, image: newImageUrl }));
-            await cacheProfileImage(newImageUrl);
-            
-            // Update user context with new profile picture
-            if (user) {
-              await updateUser({ profile_pic_url: newImageUrl });
-            }
-            
-            showAlert('Success', 'Profile picture updated successfully!', 'success');
-          } else {
-            console.error('❌ No image URL in response:', data);
-            showAlert('Error', 'Failed to get image URL from response.', 'error');
-          }
-        } else {
-          const errorData = await uploadResponse.json();
-          console.error('❌ Upload failed:', errorData);
-          showAlert('Error', errorData.message || 'Failed to update profile picture.', 'error');
+        let newImageUrl = '';
+        if (data.data && data.data.user && data.data.user.profilePicUrl) {
+          newImageUrl = data.data.user.profilePicUrl;
+        } else if (data.data && data.data.user && data.data.user.profile_pic_url) {
+          newImageUrl = data.data.user.profile_pic_url;
+        } else if (data.user && data.user.profilePicUrl) {
+          newImageUrl = data.user.profilePicUrl;
+        } else if (data.user && data.user.profile_pic_url) {
+          newImageUrl = data.user.profile_pic_url;
         }
-      };
 
-      reader.readAsDataURL(blob);
+
+        if (newImageUrl) {
+          setUserProfile(prev => ({ ...prev, image: newImageUrl }));
+          await cacheProfileImage(newImageUrl);
+
+          if (user) {
+            await updateUser({ profile_pic_url: newImageUrl });
+          }
+
+          showAlert('Success', 'Profile picture updated successfully!', 'success');
+        } else {
+          console.error('❌ No image URL in response:', data);
+          showAlert('Error', 'Failed to get image URL from response.', 'error');
+        }
+      } else {
+        const errorData = await uploadResponse.json();
+        console.error('❌ Upload failed:', errorData);
+        showAlert('Error', errorData.message || 'Failed to update profile picture.', 'error');
+      }
     } catch (error) {
       console.error('Error uploading profile picture:', error);
       showAlert('Error', 'Failed to upload profile picture. Please try again.', 'error');
@@ -411,11 +533,9 @@ export default function ProfileScreen() {
     try {
       let token = await AsyncStorage.getItem('token');
       if (!token) {
-        console.log('❌ No token found, using user context data');
         // Use user context data as fallback
         if (user) {
           const fallbackImage = user.profile_pic_url || '';
-          console.log('🖼️ Using fallback profile picture URL:', fallbackImage);
           
           setUserProfile((prev) => ({
             ...prev,
@@ -428,8 +548,6 @@ export default function ProfileScreen() {
         return;
       }
       
-      console.log('🔍 Fetching user profile...');
-      console.log('🌐 API URL:', `${API_BASE_URL}/api/users/profile`);
       
       // Fetch user profile
       const profileRes = await fetch(`${API_BASE_URL}/api/users/profile`, {
@@ -437,8 +555,6 @@ export default function ProfileScreen() {
       });
       const profileData = await profileRes.json();
       
-      console.log('📥 Profile response status:', profileRes.status);
-      console.log('📥 Profile response data:', profileData);
       
       if (profileRes.ok && profileData.status === 'success') {
         // Handle different response structures
@@ -446,8 +562,6 @@ export default function ProfileScreen() {
         const profilePicUrl = userData.profilePicUrl || userData.profile_pic_url || '';
         const fullName = userData.fullName || userData.full_name || '';
         
-        console.log('🖼️ Profile picture URL:', profilePicUrl);
-        console.log('👤 Full name:', fullName);
         
         setUserProfile((prev) => ({
           ...prev,
@@ -456,13 +570,10 @@ export default function ProfileScreen() {
           phone: userData.phone || '',
           image: profilePicUrl,
         }));
-        console.log('✅ Profile data set successfully');
       } else {
-        console.log('⚠️ Profile fetch failed, using fallback data');
         // If profile fetch fails, use user data from context as fallback
         if (user) {
           const fallbackImage = user.profile_pic_url || '';
-          console.log('🖼️ Fallback profile picture URL:', fallbackImage);
           
           setUserProfile((prev) => ({
             ...prev,
@@ -502,24 +613,19 @@ export default function ProfileScreen() {
   const fetchBookingsStats = async () => {
     try {
       setStatsLoading(true);
-      console.log('📊 Fetching bookings stats...');
       let token = await AsyncStorage.getItem('token');
       if (!token) {
-        console.log('❌ No token found for bookings stats');
         setStatsLoading(false);
         return;
       }
       
-      console.log('🌐 API URL:', `${API_BASE_URL}/api/bookings`);
       const response = await fetch(`${API_BASE_URL}/api/bookings`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
       
-      console.log('📥 Bookings response status:', response.status);
       const data = await response.json();
-      console.log('📥 Bookings response data:', data);
       
       if (response.ok && data.status === 'success') {
         // Handle different response structures
@@ -527,7 +633,6 @@ export default function ProfileScreen() {
         const pagination = data.data?.pagination || {};
         const totalBookings = pagination.total || bookings.length || 0;
         
-        console.log('📊 Total bookings found:', totalBookings);
         setBookingsCount(totalBookings);
         
         // Calculate ratings and reviews from bookings
@@ -540,11 +645,9 @@ export default function ProfileScreen() {
           }
         });
         
-        console.log('⭐ Ratings calculated:', { ratingsSum, ratingsCount });
         setTotalReviews(ratingsCount);
         setAverageRating(ratingsCount > 0 ? (ratingsSum / ratingsCount) : 0);
       } else {
-        console.log('⚠️ Bookings fetch failed:', data.message || 'Unknown error');
         // Set default values on failure
         setBookingsCount(0);
         setTotalReviews(0);
@@ -591,13 +694,6 @@ export default function ProfileScreen() {
         { text: t('alerts.logout.cancel'), onPress: () => setShowAlertModal(false), style: 'secondary' },
         { text: t('alerts.logout.confirm'), onPress: async () => { 
           await logout(); 
-          try {
-            if (router.dismissAll) {
-              router.dismissAll();
-            }
-          } catch (e) {
-            // dismissAll might not be available in all versions
-          }
           router.replace('/(auth)/login'); 
         }, style: 'destructive' }
       ]
@@ -654,16 +750,8 @@ export default function ProfileScreen() {
                 await logout();
                 setDeleteLoading(false);
                 showAlert('Account Deleted', 'Your account and all related data have been deleted.', 'success');
-                // Redirect to login screen with navigation stack reset (production pattern)
+                // Redirect to login screen
                 setTimeout(() => {
-                  // Clear any modals/routes in stack, then replace to login
-                  try {
-                    if (router.dismissAll) {
-                      router.dismissAll();
-                    }
-                  } catch (e) {
-                    // dismissAll might not be available in all versions
-                  }
                   router.replace('/(auth)/login');
                 }, 1500);
               } else {
@@ -694,6 +782,114 @@ export default function ProfileScreen() {
     setLanguageModalVisible(true);
   };
 
+  const getReferralMessage = () => {
+    const message = `Hey! I have been using BuildXpert for reliable home services. Download it here:\n\n📱 Android: ${PLAY_STORE_LINK}\n🍎 iOS: ${APP_STORE_LINK}`;
+    return message;
+  };
+
+  const openReferModal = () => {
+    setReferModalVisible(true);
+  };
+
+  const openRateModal = () => {
+    setRateModalVisible(true);
+  };
+
+  const openSupportModal = () => {
+    setSupportModalVisible(true);
+  };
+
+  const openPlayStoreLink = async () => {
+    try {
+      const supported = await Linking.canOpenURL(PLAY_STORE_LINK);
+      if (supported) {
+        await Linking.openURL(PLAY_STORE_LINK);
+      } else {
+        showAlert('Error', t('referFriendsModal.linkError'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('referFriendsModal.linkError'), 'error');
+    }
+  };
+
+  const openPlayStoreForRating = async () => {
+    try {
+      const supported = await Linking.canOpenURL(PLAY_STORE_LINK);
+      if (supported) {
+        await Linking.openURL(PLAY_STORE_LINK);
+      } else {
+        showAlert('Error', t('rateAppModal.error'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('rateAppModal.error'), 'error');
+    }
+  };
+
+  const openAppStoreForRating = async () => {
+    try {
+      const supported = await Linking.canOpenURL(APP_STORE_LINK);
+      if (supported) {
+        await Linking.openURL(APP_STORE_LINK);
+      } else {
+        showAlert('Error', t('rateAppModal.error'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('rateAppModal.error'), 'error');
+    }
+  };
+
+  const shareApp = async () => {
+    try {
+      await Share.share({
+        message: getReferralMessage(),
+      });
+    } catch (error) {
+      showAlert('Error', t('referFriendsModal.shareError'), 'error');
+    }
+  };
+
+  const shareViaWhatsApp = async () => {
+    const message = encodeURIComponent(getReferralMessage());
+    const whatsappUrl = `whatsapp://send?text=${message}`;
+    try {
+      const supported = await Linking.canOpenURL(whatsappUrl);
+      if (supported) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        await shareApp();
+      }
+    } catch (error) {
+      await shareApp();
+    }
+  };
+
+  const shareViaInstagram = async () => {
+    await shareApp();
+  };
+
+  const shareViaSms = async () => {
+    const smsUrl = Platform.select({
+      ios: `sms:&body=${encodeURIComponent(getReferralMessage())}`,
+      android: `sms:?body=${encodeURIComponent(getReferralMessage())}`,
+    });
+
+    if (!smsUrl) {
+      await shareApp();
+      return;
+    }
+
+    try {
+      const supported = await Linking.canOpenURL(smsUrl);
+      if (supported) {
+        await Linking.openURL(smsUrl);
+      } else {
+        await shareApp();
+      }
+    } catch (error) {
+      await shareApp();
+    }
+  };
+
   const selectLanguage = async (languageCode: string) => {
     const languageMap: { [key: string]: string } = {
       'English': 'en',
@@ -716,6 +912,60 @@ export default function ProfileScreen() {
     setPrivacySettings(prev => ({ ...prev, [key]: value }));
     const settingName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
     showAlert('Success', t('alerts.success.settingUpdated', { setting: settingName }), 'success');
+  };
+
+  const ratingSteps = [
+    t('rateAppModal.steps.one'),
+    t('rateAppModal.steps.two'),
+    t('rateAppModal.steps.three'),
+  ].filter((step) => typeof step === 'string' && step.trim().length > 0) as string[];
+
+  const openEmailClient = async () => {
+    const email = t('supportModal.emailAddress');
+    const subject = encodeURIComponent(t('supportModal.emailSubject'));
+    const body = encodeURIComponent(t('supportModal.emailBody'));
+    const mailto = `mailto:${email}?subject=${subject}&body=${body}`;
+    try {
+      const supported = await Linking.canOpenURL(mailto);
+      if (supported) {
+        await Linking.openURL(mailto);
+      } else {
+        showAlert('Error', t('supportModal.emailError'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('supportModal.emailError'), 'error');
+    }
+  };
+
+  const callSupportNumber = async () => {
+    const phoneNumber = t('supportModal.phoneNumber');
+    const phoneUrl = `tel:${phoneNumber}`;
+    try {
+      const supported = await Linking.canOpenURL(phoneUrl);
+      if (supported) {
+        await Linking.openURL(phoneUrl);
+      } else {
+        showAlert('Error', t('supportModal.phoneError'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('supportModal.phoneError'), 'error');
+    }
+  };
+
+  const openWhatsAppSupport = async () => {
+    const message = encodeURIComponent(t('supportModal.whatsappMessage'));
+    const phone = t('supportModal.whatsappNumber');
+    const whatsappUrl = `whatsapp://send?phone=${phone}&text=${message}`;
+    try {
+      const supported = await Linking.canOpenURL(whatsappUrl);
+      if (supported) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        showAlert('Error', t('supportModal.whatsappError'), 'error');
+      }
+    } catch (error) {
+      showAlert('Error', t('supportModal.whatsappError'), 'error');
+    }
   };
 
   const menuSections = [
@@ -754,12 +1004,6 @@ export default function ProfileScreen() {
           switchValue: notificationsEnabled,
           onSwitchChange: setNotificationsEnabled,
         },
-        {
-          icon: <Shield size={20} color="#3B82F6" />,
-          title: t('profile.privacySecurity'),
-          subtitle: t('profile.managePrivacy'),
-          onPress: handlePrivacySettings,
-        },
       ]
     },
     {
@@ -769,19 +1013,19 @@ export default function ProfileScreen() {
           icon: <Gift size={20} color="#3B82F6" />,
           title: t('profile.referFriends'),
           subtitle: t('profile.earnRewards'),
-          onPress: () => showAlert(t('profile.referFriends'), t('alerts.info.referFriends'), 'info'),
+          onPress: openReferModal,
         },
         {
           icon: <Star size={20} color="#3B82F6" />,
           title: t('profile.rateApp'),
           subtitle: t('profile.helpImprove'),
-          onPress: () => showAlert('Thank you!', t('alerts.info.rateApp'), 'info'),
+          onPress: openRateModal,
         },
         {
           icon: <HelpCircle size={20} color="#3B82F6" />,
           title: t('profile.helpSupport'),
           subtitle: t('profile.getHelp'),
-          onPress: () => showAlert(t('profile.helpSupport'), t('alerts.info.helpSupport'), 'info'),
+          onPress: openSupportModal,
         },
         {
           icon: <FileText size={20} color="#3B82F6" />,
@@ -820,12 +1064,10 @@ export default function ProfileScreen() {
                     style={styles.profileImage} 
                     resizeMode="cover"
                     onLoadStart={() => {
-                      console.log('🔄 Image loading started:', userProfile.image || cachedImageUrl);
                       setImageLoading(true);
                       
                       // Set a timeout to fallback to text avatar if image takes too long
                       const timeout = setTimeout(() => {
-                        console.log('⏰ Image load timeout - falling back to text avatar');
                         setUserProfile(prev => ({ ...prev, image: '' }));
                         setImageLoading(false);
                       }, 5000); // 5 second timeout
@@ -833,7 +1075,6 @@ export default function ProfileScreen() {
                       setImageLoadTimeout(timeout);
                     }}
                     onLoadEnd={() => {
-                      console.log('✅ Image loaded successfully');
                       setImageLoading(false);
                       
                       // Clear timeout if image loads successfully
@@ -843,8 +1084,7 @@ export default function ProfileScreen() {
                       }
                     }}
                     onError={(error) => {
-                      console.log('❌ Image load error:', error);
-                      console.log('🔄 Falling back to text avatar');
+                     
                       
                       // Clear timeout on error
                       if (imageLoadTimeout) {
@@ -855,8 +1095,7 @@ export default function ProfileScreen() {
                       // Check if it's a network error
                       const errorMessage = error.nativeEvent?.error || '';
                       if (errorMessage.includes('Unable to resolve host') || errorMessage.includes('Network request failed')) {
-                        console.log('🌐 Network connectivity issue detected');
-                        console.log('💡 Using text avatar as fallback for network issues');
+                        
                       }
                       
                       // If the profile image fails to load, use text avatar
@@ -881,18 +1120,36 @@ export default function ProfileScreen() {
                  </TouchableOpacity>
               </View>
               <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{userProfile.name}</Text>
+                <Text 
+                  style={styles.profileName}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {userProfile.name}
+                </Text>
                 <View style={styles.profileDetails}>
                   {userProfile.location ? (
                     <View style={styles.detailItem}>
                       <View style={styles.detailIconContainer}>
                         <MapPin size={16} color="#64748B" />
                       </View>
-                      <Text style={styles.detailText}>{userProfile.location}</Text>
+                      <Text 
+                        style={styles.detailText}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {userProfile.location}
+                      </Text>
                     </View>
                   ) : null}
                   <View style={styles.detailItem}>
-                    <Text style={styles.detailText}>{userProfile.email}</Text>
+                    <Text 
+                      style={styles.detailText}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {userProfile.email}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -965,21 +1222,6 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>{t('profile.logout')}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.logoutButton, deleteLoading && styles.logoutButtonDisabled]} 
-          onPress={handleDeleteAccount}
-          disabled={deleteLoading}
-        >
-          {deleteLoading ? (
-            <ActivityIndicator size="small" color="#EF4444" style={{ marginRight: 10 }} />
-          ) : (
-            <Trash2 size={20} color="#EF4444" style={{ marginRight: 10 }} />
-          )}
-          <Text style={styles.logoutText}>
-            {deleteLoading ? 'Deleting Account...' : t('profile.deleteAccount')}
-          </Text>
-        </TouchableOpacity>
-
         <View style={styles.footer}>
           <Text style={styles.footerText}>{t('profile.version')}</Text>
         </View>
@@ -990,6 +1232,7 @@ export default function ProfileScreen() {
         visible={editModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => setEditModalVisible(false)}
       >
         <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
           <View style={styles.modalHeader}>
@@ -1012,7 +1255,6 @@ export default function ProfileScreen() {
                   onLoadStart={() => setImageLoading(true)}
                   onLoadEnd={() => setImageLoading(false)}
                   onError={() => {
-                    console.log('❌ Modal image load error');
                     // If the profile image fails to load, use text avatar
                     setUserProfile(prev => ({ ...prev, image: '' }));
                     setImageLoading(false);
@@ -1068,14 +1310,22 @@ export default function ProfileScreen() {
               <Text style={styles.disabledText}>{t('editProfile.phoneDisabled')}</Text>
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>{t('editProfile.location')}</Text>
-              <TextInput
-                style={styles.formInput}
-                value={userProfile.location}
-                onChangeText={(text) => setUserProfile(prev => ({ ...prev, location: text }))}
-                placeholder={t('editProfile.locationPlaceholder')}
-              />
+            {/* Delete Account Button */}
+            <View style={styles.deleteAccountSection}>
+              <TouchableOpacity 
+                style={[styles.deleteAccountButton, deleteLoading && styles.deleteAccountButtonDisabled]} 
+                onPress={handleDeleteAccount}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (
+                  <ActivityIndicator size="small" color="#EF4444" style={{ marginRight: 10 }} />
+                ) : (
+                  <Trash2 size={20} color="#EF4444" style={{ marginRight: 10 }} />
+                )}
+                <Text style={styles.deleteAccountButtonText}>
+                  {deleteLoading ? 'Deleting Account...' : t('profile.deleteAccount')}
+                </Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </SafeView>
@@ -1086,6 +1336,7 @@ export default function ProfileScreen() {
         visible={privacyModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => setPrivacyModalVisible(false)}
       >
         <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
           <View style={styles.modalHeader}>
@@ -1173,79 +1424,67 @@ export default function ProfileScreen() {
         visible={termsModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => setTermsModalVisible(false)}
       >
         <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setTermsModalVisible(false)}>
               <X size={24} color="#64748B" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Terms & Privacy</Text>
+            <Text style={styles.modalTitle}>{t('termsPrivacy.title')}</Text>
             <View style={{ width: 24 }} />
           </View>
 
           <ScrollView style={styles.modalContent}>
             <View style={styles.termsSection}>
-              <Text style={styles.termsSectionTitle}>Terms of Service</Text>
+              <Text style={styles.termsSectionTitle}>{t('termsPrivacy.termsOfService')}</Text>
               <Text style={styles.termsText}>
-                By using BuildXpert, you agree to these terms of service. Our platform connects users with service providers for various home improvement and maintenance services.
+                {t('termsPrivacy.termsDescription')}
               </Text>
               
-              <Text style={styles.termsSubtitle}>User Responsibilities:</Text>
+              <Text style={styles.termsSubtitle}>{t('termsPrivacy.userResponsibilities')}</Text>
               <Text style={styles.termsText}>
-                • Provide accurate information when booking services{'\n'}
-                • Treat service providers with respect and professionalism{'\n'}
-                • Pay for services as agreed upon{'\n'}
-                • Provide honest feedback and ratings
-              </Text>
-
-              <Text style={styles.termsSubtitle}>Service Provider Responsibilities:</Text>
-              <Text style={styles.termsText}>
-                • Deliver services as promised and on time{'\n'}
-                • Maintain professional standards and quality{'\n'}
-                • Provide accurate pricing and availability{'\n'}
-                • Respond promptly to user communications
+                {userResponsibilitiesList.map((item: string, index: number) => 
+                  index === 0 ? `• ${item}` : `\n• ${item}`
+                ).join('')}
               </Text>
             </View>
 
             <View style={styles.termsSection}>
-              <Text style={styles.termsSectionTitle}>Privacy Policy</Text>
+              <Text style={styles.termsSectionTitle}>{t('termsPrivacy.privacyPolicy')}</Text>
               <Text style={styles.termsText}>
-                We are committed to protecting your privacy and ensuring the security of your personal information.
+                {t('termsPrivacy.privacyDescription')}
               </Text>
 
-              <Text style={styles.termsSubtitle}>Information We Collect:</Text>
+              <Text style={styles.termsSubtitle}>{t('termsPrivacy.informationWeCollect')}</Text>
               <Text style={styles.termsText}>
-                • Personal information (name, email, phone, address){'\n'}
-                • Payment information (processed securely){'\n'}
-                • Service preferences and booking history{'\n'}
-                • Device information and app usage data
+                {informationWeCollectList.map((item: string, index: number) => 
+                  index === 0 ? `• ${item}` : `\n• ${item}`
+                ).join('')}
               </Text>
 
-              <Text style={styles.termsSubtitle}>How We Use Your Information:</Text>
+              <Text style={styles.termsSubtitle}>{t('termsPrivacy.howWeUseInfo')}</Text>
               <Text style={styles.termsText}>
-                • To provide and improve our services{'\n'}
-                • To connect you with service providers{'\n'}
-                • To process payments and transactions{'\n'}
-                • To send important notifications and updates{'\n'}
-                • To provide customer support
+                {howWeUseInfoList.map((item: string, index: number) => 
+                  index === 0 ? `• ${item}` : `\n• ${item}`
+                ).join('')}
               </Text>
 
-              <Text style={styles.termsSubtitle}>Data Security:</Text>
+              <Text style={styles.termsSubtitle}>{t('termsPrivacy.dataSecurity')}</Text>
               <Text style={styles.termsText}>
-                • All data is encrypted using industry-standard protocols{'\n'}
-                • We implement strict access controls{'\n'}
-                • Regular security audits and updates{'\n'}
-                • Compliance with data protection regulations
+                {dataSecurityList.map((item: string, index: number) => 
+                  index === 0 ? `• ${item}` : `\n• ${item}`
+                ).join('')}
               </Text>
             </View>
 
             <View style={styles.termsSection}>
-              <Text style={styles.termsSectionTitle}>Contact Information</Text>
+              <Text style={styles.termsSectionTitle}>{t('termsPrivacy.contactInfo')}</Text>
               <Text style={styles.termsText}>
-                For questions about these terms or privacy policy, please contact us:{'\n\n'}
-                Email: support@buildxpert.com{'\n'}
-                Phone: +1 (555) 123-4567{'\n'}
-                Address: 123 Main Street, City, State 12345
+                {t('termsPrivacy.contactDescription')}{'\n\n'}
+                {t('termsPrivacy.contactEmail')}{'\n'}
+                {t('termsPrivacy.contactPhone')}{'\n'}
+                {t('termsPrivacy.contactAddress')}
               </Text>
             </View>
           </ScrollView>
@@ -1257,6 +1496,7 @@ export default function ProfileScreen() {
         visible={languageModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => setLanguageModalVisible(false)}
       >
         <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
           <View style={styles.modalHeader}>
@@ -1311,6 +1551,7 @@ export default function ProfileScreen() {
         visible={notificationSettingsVisible}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => setNotificationSettingsVisible(false)}
       >
         <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
           <View style={styles.modalHeader}>
@@ -1323,6 +1564,185 @@ export default function ProfileScreen() {
 
           <ScrollView style={styles.modalContent}>
             <NotificationSettings onClose={() => setNotificationSettingsVisible(false)} />
+          </ScrollView>
+        </SafeView>
+      </RNModal>
+
+      {/* Refer Friends Modal */}
+      <RNModal
+        visible={referModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setReferModalVisible(false)}
+      >
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setReferModalVisible(false)}>
+              <X size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{t('referFriendsModal.title')}</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.referralHero}>
+              <Text style={styles.referralHeroTitle}>{t('referFriendsModal.subtitle')}</Text>
+              <Text style={styles.referralHeroText}>{t('referFriendsModal.description')}</Text>
+            </View>
+
+            <View style={styles.referralCard}>
+              <Text style={styles.referralCardLabel}>{t('referFriendsModal.linkLabel')}</Text>
+              <TouchableOpacity style={styles.referralLinkButton} onPress={openPlayStoreLink}>
+                <ExternalLink size={16} color="#2563EB" />
+                <Text style={styles.referralLinkText}>{PLAY_STORE_LINK}</Text>
+              </TouchableOpacity>
+              <Text style={styles.referralLinkHint}>{t('referFriendsModal.linkHint')}</Text>
+            </View>
+
+            <View style={styles.shareSection}>
+              <Text style={styles.shareSectionTitle}>{t('referFriendsModal.shareVia')}</Text>
+              <View style={styles.shareButtonsRow}>
+                <TouchableOpacity style={styles.shareButton} onPress={shareApp}>
+                  <Share2 size={18} color="#0F172A" />
+                  <Text style={styles.shareButtonText}>{t('referFriendsModal.shareGeneric')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.shareButton} onPress={shareViaWhatsApp}>
+                  <MessageCircle size={18} color="#0F172A" />
+                  <Text style={styles.shareButtonText}>{t('referFriendsModal.shareWhatsApp')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.shareButton} onPress={shareViaInstagram}>
+                  <Instagram size={18} color="#0F172A" />
+                  <Text style={styles.shareButtonText}>{t('referFriendsModal.shareInstagram')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.shareButton} onPress={shareViaSms}>
+                  <MessageCircle size={18} color="#0F172A" />
+                  <Text style={styles.shareButtonText}>{t('referFriendsModal.shareSms')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.referralInfoBox}>
+              <Text style={styles.referralInfoTitle}>{t('referFriendsModal.tipTitle')}</Text>
+              <Text style={styles.referralInfoText}>{t('referFriendsModal.tipDescription')}</Text>
+            </View>
+
+            <TouchableOpacity style={styles.referralPlayStoreButton} onPress={openPlayStoreLink}>
+              <Text style={styles.referralPlayStoreText}>{t('referFriendsModal.openStore')}</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeView>
+      </RNModal>
+
+      {/* Help & Support Modal */}
+      <RNModal
+        visible={supportModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSupportModalVisible(false)}
+      >
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setSupportModalVisible(false)}>
+              <X size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{t('supportModal.title')}</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.referralHero}>
+              <Text style={styles.referralHeroTitle}>{t('supportModal.subtitle')}</Text>
+              <Text style={styles.referralHeroText}>{t('supportModal.description')}</Text>
+            </View>
+
+            <View style={styles.supportCard}>
+              <Text style={styles.supportSectionTitle}>{t('supportModal.contactTitle')}</Text>
+
+              <TouchableOpacity style={styles.supportItem} onPress={openEmailClient}>
+                <View style={styles.supportIcon}>
+                  <Mail size={18} color="#1D4ED8" />
+                </View>
+                <View style={styles.supportContent}>
+                  <Text style={styles.supportLabel}>{t('supportModal.emailLabel')}</Text>
+                  <Text style={styles.supportValue}>{t('supportModal.emailAddress')}</Text>
+                </View>
+                <ChevronRight size={18} color="#94A3B8" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.supportItem} onPress={callSupportNumber}>
+                <View style={styles.supportIcon}>
+                  <Phone size={18} color="#059669" />
+                </View>
+                <View style={styles.supportContent}>
+                  <Text style={styles.supportLabel}>{t('supportModal.phoneLabel')}</Text>
+                  <Text style={styles.supportValue}>{t('supportModal.displayPhoneNumber')}</Text>
+                </View>
+                <ChevronRight size={18} color="#94A3B8" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.supportItem} onPress={openWhatsAppSupport}>
+                <View style={styles.supportIcon}>
+                  <MessageCircle size={18} color="#10B981" />
+                </View>
+                <View style={styles.supportContent}>
+                  <Text style={styles.supportLabel}>{t('supportModal.whatsappLabel')}</Text>
+                  <Text style={styles.supportValue}>{t('supportModal.displayWhatsApp')}</Text>
+                </View>
+                <ChevronRight size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.supportInfoBox}>
+              <Text style={styles.supportInfoTitle}>{t('supportModal.availableTitle')}</Text>
+              <Text style={styles.supportInfoText}>{t('supportModal.availableHours')}</Text>
+            </View>
+          </ScrollView>
+        </SafeView>
+      </RNModal>
+
+      {/* Rate App Modal */}
+      <RNModal
+        visible={rateModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setRateModalVisible(false)}
+      >
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setRateModalVisible(false)}>
+              <X size={24} color="#64748B" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{t('rateAppModal.title')}</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.referralHero}>
+              <Text style={styles.referralHeroTitle}>{t('rateAppModal.subtitle')}</Text>
+              <Text style={styles.referralHeroText}>{t('rateAppModal.description')}</Text>
+            </View>
+
+            <View style={styles.rateStepsContainer}>
+              <Text style={styles.rateStepsTitle}>{t('rateAppModal.stepsTitle')}</Text>
+              {ratingSteps?.map((step, index) => (
+                <View key={index} style={styles.rateStepItem}>
+                  <View style={styles.rateStepIndex}>
+                    <Text style={styles.rateStepIndexText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.rateStepText}>{step}</Text>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity style={[styles.referralPlayStoreButton, { marginBottom: getResponsiveSpacing(12, 14, 16) }]} onPress={openPlayStoreForRating}>
+              <Text style={styles.referralPlayStoreText}>Rate on Play Store</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.referralPlayStoreButton, styles.appStoreButton]} onPress={openAppStoreForRating}>
+              <Text style={styles.referralPlayStoreText}>Rate on App Store</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.rateReminder}>{t('rateAppModal.reminder')}</Text>
           </ScrollView>
         </SafeView>
       </RNModal>
@@ -1342,6 +1762,7 @@ export default function ProfileScreen() {
         transparent={true}
         animationType="fade"
         statusBarTranslucent={true}
+        onRequestClose={() => setDeleteLoading(false)}
       >
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingContainer}>
@@ -1532,12 +1953,14 @@ const styles = StyleSheet.create({
   profileInfo: {
     marginLeft: getResponsiveSpacing(16, 20, 24),
     flex: 1,
+    minWidth: 0, // Allows flex item to shrink below content size
   },
   profileName: {
     fontSize: getResponsiveFontSize(20, 24, 28),
     fontWeight: '700',
     color: '#1E293B',
     marginBottom: getResponsiveSpacing(8, 12, 16),
+    width: '100%', // Ensure text takes full available width for truncation
   },
   notificationButton: {
     width: getResponsiveSpacing(40, 44, 48),
@@ -1576,6 +1999,8 @@ const styles = StyleSheet.create({
     alignItems: 'baseline', // Use baseline alignment for better text-icon alignment
     minHeight: getResponsiveSpacing(20, 22, 24), // Ensure consistent height
     paddingVertical: getResponsiveSpacing(2, 3, 4), // Add vertical padding for better spacing
+    minWidth: 0, // Allows flex item to shrink below content size for truncation
+    flex: 1, // Allow item to take available space
   },
   detailIconContainer: {
     width: getResponsiveSpacing(18, 20, 22), // Slightly larger to accommodate size 16 icon
@@ -1590,6 +2015,7 @@ const styles = StyleSheet.create({
     marginLeft: getResponsiveSpacing(6, 8, 10), // Increased margin for better spacing
     fontWeight: '500',
     flex: 1, // Allow text to take remaining space
+    minWidth: 0, // Allows flex item to shrink below content size for truncation
     lineHeight: getResponsiveSpacing(16, 18, 20), // Better line height for alignment
     textAlignVertical: 'center', // Ensure text is vertically centered
     includeFontPadding: false, // Remove extra font padding on Android
@@ -1849,6 +2275,30 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: getResponsiveSpacing(2, 4, 6),
   },
+  deleteAccountSection: {
+    marginTop: getResponsiveSpacing(24, 28, 32),
+    marginBottom: getResponsiveSpacing(16, 20, 24),
+    paddingTop: getResponsiveSpacing(20, 24, 28),
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+  },
+  deleteAccountButtonDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#F9FAFB',
+  },
+  deleteAccountButtonText: {
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '500',
+    color: '#EF4444',
+  },
   // Privacy & Security Styles
   privacySection: {
     marginBottom: getResponsiveSpacing(28, 32, 36),
@@ -1999,5 +2449,237 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: getResponsiveFontSize(12, 14, 16),
     fontWeight: 'bold',
+  },
+  // Refer Friends Styles
+  referralHero: {
+    backgroundColor: '#EEF2FF',
+    padding: getResponsiveSpacing(16, 20, 24),
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+  },
+  referralHeroTitle: {
+    fontSize: getResponsiveFontSize(16, 18, 20),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: getResponsiveSpacing(6, 8, 10),
+  },
+  referralHeroText: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    color: '#475569',
+    lineHeight: getResponsiveSpacing(18, 20, 22),
+  },
+  referralCard: {
+    backgroundColor: '#FFFFFF',
+    padding: getResponsiveSpacing(16, 20, 24),
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+  },
+  referralCardLabel: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: getResponsiveSpacing(10, 12, 14),
+  },
+  referralLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+    paddingVertical: getResponsiveSpacing(10, 12, 14),
+    paddingHorizontal: getResponsiveSpacing(12, 16, 20),
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  referralLinkText: {
+    marginLeft: 10,
+    color: '#1D4ED8',
+    fontWeight: '600',
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  referralLinkHint: {
+    marginTop: getResponsiveSpacing(10, 12, 14),
+    color: '#64748B',
+    fontSize: getResponsiveFontSize(11, 13, 15),
+  },
+  shareSection: {
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+  },
+  shareSectionTitle: {
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: getResponsiveSpacing(12, 14, 16),
+  },
+  shareButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: getResponsiveSpacing(10, 12, 14),
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+    paddingVertical: getResponsiveSpacing(12, 14, 16),
+    paddingHorizontal: getResponsiveSpacing(14, 16, 18),
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexGrow: 1,
+    minWidth: '45%',
+    gap: 10,
+  },
+  shareButtonText: {
+    fontSize: getResponsiveFontSize(13, 15, 17),
+    color: '#0F172A',
+    fontWeight: '500',
+  },
+  referralInfoBox: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    padding: getResponsiveSpacing(16, 20, 24),
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+  },
+  referralInfoTitle: {
+    fontSize: getResponsiveFontSize(13, 15, 17),
+    fontWeight: '600',
+    color: '#065F46',
+    marginBottom: getResponsiveSpacing(6, 8, 10),
+  },
+  referralInfoText: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    color: '#065F46',
+    lineHeight: getResponsiveSpacing(18, 20, 22),
+  },
+  referralPlayStoreButton: {
+    backgroundColor: '#2563EB',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: getResponsiveSpacing(24, 28, 32),
+  },
+  appStoreButton: {
+    marginTop: 0,
+    marginBottom: getResponsiveSpacing(24, 28, 32),
+  },
+  referralPlayStoreText: {
+    color: '#FFFFFF',
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '600',
+  },
+  supportCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    padding: getResponsiveSpacing(12, 16, 20),
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+  },
+  supportSectionTitle: {
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: getResponsiveSpacing(8, 10, 12),
+  },
+  supportItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: getResponsiveSpacing(12, 14, 16),
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  supportItemFirst: {
+    borderTopWidth: 0,
+  },
+  supportIcon: {
+    width: getResponsiveSpacing(36, 40, 44),
+    height: getResponsiveSpacing(36, 40, 44),
+    borderRadius: getResponsiveSpacing(18, 20, 22),
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: getResponsiveSpacing(12, 14, 16),
+  },
+  supportContent: {
+    flex: 1,
+  },
+  supportLabel: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    color: '#475569',
+    marginBottom: 2,
+  },
+  supportValue: {
+    fontSize: getResponsiveFontSize(13, 15, 17),
+    fontWeight: '500',
+    color: '#0F172A',
+  },
+  supportInfoBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    padding: getResponsiveSpacing(14, 16, 18),
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginBottom: getResponsiveSpacing(24, 28, 32),
+  },
+  supportInfoTitle: {
+    fontSize: getResponsiveFontSize(13, 15, 17),
+    fontWeight: '600',
+    color: '#166534',
+    marginBottom: getResponsiveSpacing(6, 8, 10),
+  },
+  supportInfoText: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    color: '#166534',
+    lineHeight: getResponsiveSpacing(18, 20, 22),
+  },
+  rateStepsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    padding: getResponsiveSpacing(16, 20, 24),
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+  },
+  rateStepsTitle: {
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: getResponsiveSpacing(12, 14, 16),
+  },
+  rateStepItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: getResponsiveSpacing(10, 12, 14),
+  },
+  rateStepIndex: {
+    width: getResponsiveSpacing(28, 32, 36),
+    height: getResponsiveSpacing(28, 32, 36),
+    borderRadius: getResponsiveSpacing(14, 16, 18),
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: getResponsiveSpacing(12, 14, 16),
+  },
+  rateStepIndexText: {
+    color: '#2563EB',
+    fontWeight: '600',
+  },
+  rateStepText: {
+    flex: 1,
+    color: '#475569',
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    lineHeight: getResponsiveSpacing(18, 20, 22),
+  },
+  rateReminder: {
+    textAlign: 'center',
+    color: '#475569',
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    lineHeight: getResponsiveSpacing(18, 20, 22),
+    marginBottom: getResponsiveSpacing(24, 28, 32),
   },
 });

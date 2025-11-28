@@ -41,7 +41,6 @@ class I18n {
         this.setLanguage(savedLanguage as Language);
       }
     } catch (error) {
-      console.log('Error loading language:', error);
     }
   }
 

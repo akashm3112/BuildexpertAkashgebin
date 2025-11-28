@@ -26,7 +26,6 @@ class BookingReminderService {
       await this.sendMorningReminders();
     });
 
-    console.log('⏰ Booking reminder tasks initialized');
   }
 
   /**
@@ -34,7 +33,6 @@ class BookingReminderService {
    */
   async sendDailyReminders() {
     try {
-      console.log('📅 Checking for tomorrow\'s bookings...');
       
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
@@ -64,7 +62,6 @@ class BookingReminderService {
         )
       `, [tomorrowDate]);
 
-      console.log(`📋 Found ${upcomingBookings.length} bookings for tomorrow`);
 
       for (const booking of upcomingBookings) {
         const notification = {
@@ -82,7 +79,6 @@ class BookingReminderService {
         // Log the reminder
         await this.logNotification(booking.user_id, 'daily_reminder', notification, booking.id);
         
-        console.log(`📱 Daily reminder sent for booking ${booking.id}`);
       }
 
     } catch (error) {
@@ -95,7 +91,6 @@ class BookingReminderService {
    */
   async sendHourlyReminders() {
     try {
-      console.log('⏰ Checking for bookings in 2 hours...');
       
       const now = new Date();
       const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
@@ -128,7 +123,6 @@ class BookingReminderService {
         )
       `, [todayDate, targetHour]);
 
-      console.log(`⏰ Found ${upcomingBookings.length} bookings in 2 hours`);
 
       for (const booking of upcomingBookings) {
         const notification = {
@@ -148,7 +142,6 @@ class BookingReminderService {
         // Log the reminder
         await this.logNotification(booking.user_id, 'hourly_reminder', notification, booking.id);
         
-        console.log(`📱 Hourly reminder sent for booking ${booking.id}`);
       }
 
     } catch (error) {
@@ -161,7 +154,6 @@ class BookingReminderService {
    */
   async sendMorningReminders() {
     try {
-      console.log('🌅 Sending morning appointment summaries...');
       
       const today = new Date().toISOString().split('T')[0];
 
@@ -194,7 +186,6 @@ class BookingReminderService {
         };
 
         await pushNotificationService.sendToUser(userBookings.user_id, notification);
-        console.log(`🌅 Morning summary sent to user ${userBookings.user_id}`);
       }
 
     } catch (error) {
@@ -257,7 +248,6 @@ class BookingReminderService {
 
       await pushNotificationService.scheduleNotification(booking.user_id, notification, reminderTime);
       
-      console.log(`⏰ Custom reminder scheduled for booking ${bookingId}`);
       return { success: true };
     } catch (error) {
       console.error('❌ Error scheduling custom reminder:', error);

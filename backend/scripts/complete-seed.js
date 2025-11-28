@@ -4,7 +4,6 @@ require('dotenv').config({ path: './config.env' });
 
 const completeSeed = async () => {
   try {
-    console.log('🌱 Starting complete database seeding...');
 
     // 1. Create admin user
     const hashedAdminPassword = await bcrypt.hash('admin123', 12);
@@ -14,9 +13,7 @@ const completeSeed = async () => {
         INSERT INTO users (full_name, email, phone, password, role, is_verified)
         VALUES ($1, $2, $3, $4, $5, $6)
       `, ['Admin User', 'admin@buildxpert.com', '9999999999', hashedAdminPassword, 'admin', true]);
-      console.log('✅ Admin user created');
     } else {
-      console.log('⏭️  Admin user already exists');
     }
 
     // 2. Create sample users for testing
@@ -62,9 +59,7 @@ const completeSeed = async () => {
           INSERT INTO users (full_name, email, phone, password, role, is_verified)
           VALUES ($1, $2, $3, $4, $5, $6)
         `, [user.full_name, user.email, user.phone, user.password, user.role, user.is_verified]);
-        console.log(`✅ Created user: ${user.full_name}`);
       } else {
-        console.log(`⏭️  User already exists: ${user.full_name}`);
       }
     }
 
@@ -83,9 +78,7 @@ const completeSeed = async () => {
           INSERT INTO provider_profiles (user_id, years_of_experience, service_description, is_engineering_provider)
           VALUES ($1, $2, $3, $4)
         `, [provider.id, 5, `Experienced ${provider.full_name} with expertise in various construction services`, false]);
-        console.log(`✅ Created provider profile for: ${provider.full_name}`);
       } else {
-        console.log(`⏭️  Provider profile already exists for: ${provider.full_name}`);
       }
     }
 
@@ -123,9 +116,7 @@ const completeSeed = async () => {
             INSERT INTO addresses (user_id, type, state, full_address)
             VALUES ($1, $2, $3, $4)
           `, [user[0].id, address.type, address.state, address.full_address]);
-          console.log(`✅ Created address for user: ${address.user_phone}`);
         } else {
-          console.log(`⏭️  Address already exists for user: ${address.user_phone}`);
         }
       }
     }
@@ -156,7 +147,6 @@ const completeSeed = async () => {
             INSERT INTO provider_services (provider_id, service_id, service_charge_value, service_charge_unit, payment_status)
             VALUES ($1, $2, $3, $4, $5)
           `, [profile.id, service.id, chargeValue, chargeUnit, 'active']);
-          console.log(`✅ Created service '${service.name}' for provider: ${profile.full_name}`);
         }
       }
     }
@@ -205,7 +195,6 @@ const completeSeed = async () => {
             INSERT INTO bookings (user_id, provider_service_id, selected_service, appointment_date, appointment_time, status, description)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
           `, [booking.user_id, booking.provider_service_id, booking.selected_service, booking.appointment_date, booking.appointment_time, booking.status, booking.description]);
-          console.log(`✅ Created sample booking for user: ${users[0].full_name}`);
         }
       }
     }
@@ -238,7 +227,6 @@ const completeSeed = async () => {
             INSERT INTO notifications (user_id, title, message, role, is_read)
             VALUES ($1, $2, $3, $4, $5)
           `, [user.id, notification.title, notification.message, notification.role, false]);
-          console.log(`✅ Created welcome notification for ${notification.role}: ${user.id}`);
         }
       }
     }
@@ -253,14 +241,7 @@ const completeSeed = async () => {
         (SELECT COUNT(*) FROM notifications) as notifications_count
     `);
 
-    console.log('\n📊 Seeding Summary:');
-    console.log(`   - Users: ${finalStats[0].users_count}`);
-    console.log(`   - Provider Profiles: ${finalStats[0].providers_count}`);
-    console.log(`   - Provider Services: ${finalStats[0].services_count}`);
-    console.log(`   - Bookings: ${finalStats[0].bookings_count}`);
-    console.log(`   - Notifications: ${finalStats[0].notifications_count}`);
-
-    console.log('\n🎉 Complete database seeding finished successfully!');
+    
 
   } catch (error) {
     console.error('❌ Seeding failed:', error);
@@ -272,7 +253,6 @@ const completeSeed = async () => {
 if (require.main === module) {
   completeSeed()
     .then(() => {
-      console.log('Complete seeding finished');
       process.exit(0);
     })
     .catch((error) => {

@@ -22,36 +22,88 @@ const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
 
 // Initialize services
-const { bookingReminderService } = require('./services/bookingReminders');
+require('./services/bookingReminders');
 const { serviceExpiryManager } = require('./services/serviceExpiryManager');
+const { initializeCleanupJob } = require('./utils/cleanupJob');
+const { validateCallPermissions } = require('./utils/callPermissions');
+const { WebRTCPermissionError } = require('./utils/errorTypes');
+const notificationQueue = require('./utils/notificationQueue');
+const { preloadTableCache } = require('./utils/tableCache');
+
+// Initialize memory leak prevention
+const { 
+  ManagedMap, 
+  SocketConnectionManager, 
+  MemoryMonitor,
+  registry,
+  initialize: initializeMemoryLeakPrevention 
+} = require('./utils/memoryLeakPrevention');
+initializeMemoryLeakPrevention();
 
 const app = express();
 
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
-app.use(cors({
-  origin: [
-    'http://localhost:3000', 
-    'http://localhost:8081', 
-    'http://localhost:19006',
-    'http://192.168.1.8:5000',
-    'http://192.168.1.8:5000',
-    'http://192.168.1.8:3000',
-    'http://192.168.1.8:3000',
-    'http://192.168.1.8:8081',
-    'http://192.168.1.8:8081',
-    'http://192.168.1.8:19006',
-    'http://192.168.1.8:19006'
-  ],
+// CORS configuration - Professional production-ready setup
+// Allowed origins are configured via ALLOWED_ORIGINS environment variable
+// Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000,https://app.example.com
+const getAllowedOrigins = () => {
+  if (!process.env.ALLOWED_ORIGINS) {
+    console.error('❌ ERROR: ALLOWED_ORIGINS environment variable is not set.');
+    console.error('   Please set ALLOWED_ORIGINS in your config.env file.');
+    console.error('   Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000');
+    process.exit(1);
+  }
+  
+  // Parse comma-separated origins from environment variable
+  const origins = process.env.ALLOWED_ORIGINS
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(origin => origin.length > 0); // Remove empty strings
+  
+  if (origins.length === 0) {
+    console.error('❌ ERROR: ALLOWED_ORIGINS contains no valid origins.');
+    process.exit(1);
+  }
+  
+  return origins;
+};
+
+const allowedOrigins = getAllowedOrigins();
+
+// CORS configuration with origin validation
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, Postman, curl, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Validate origin against allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      const error = new Error(`CORS: Origin ${origin} is not allowed`);
+      console.warn(`⚠️  CORS blocked: ${origin}`);
+      callback(error);
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400 // 24 hours - cache preflight requests
+};
+
+app.use(cors(corsOptions));
 
 // Compression middleware
 app.use(compression());
+
+// Monitoring middleware (must be before routes)
+const { monitoringMiddleware, errorMonitoringMiddleware } = require('./utils/monitoring');
+app.use(monitoringMiddleware);
 
 // Logging middleware
 app.use(morgan('combined'));
@@ -91,42 +143,13 @@ app.use((req, res, next) => {
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Health check endpoint - ENHANCED WITH DATABASE CHECK
-app.get('/health', async (req, res) => {
-  const health = {
-    status: 'healthy',
-    message: 'BuildXpert API is running',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV,
-    uptime: Math.floor(process.uptime()),
-    memory: {
-      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
-      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB'
-    }
-  };
+// Health check endpoints
+const healthRoutes = require('./routes/health');
+app.use('/health', healthRoutes);
 
-  // Check database connectivity
-  try {
-    const { pool } = require('./database/connection');
-    const result = await pool.query('SELECT NOW() as db_time, version() as db_version');
-    health.database = {
-      status: 'connected',
-      timestamp: result.rows[0].db_time,
-      version: result.rows[0].db_version.split(' ')[0] + ' ' + result.rows[0].db_version.split(' ')[1]
-    };
-    
-    res.status(200).json(health);
-  } catch (error) {
-    health.status = 'unhealthy';
-    health.database = {
-      status: 'disconnected',
-      error: error.message
-    };
-    
-    console.error('❌ Health check failed - database disconnected:', error.message);
-    res.status(503).json(health);
-  }
-});
+// Monitoring endpoints
+const monitoringRoutes = require('./routes/monitoring');
+app.use('/api/monitoring', monitoringRoutes);
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -144,43 +167,24 @@ app.use('/api/push-notifications', require('./routes/pushNotifications'));
 app.use('/api/calls', require('./routes/calls'));
 app.use('/api/test', require('./routes/test-labour'));
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    status: 'error',
-    message: 'Route not found'
-  });
-});
+// Import error handling middleware
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
-// Global error handler
-app.use((err, req, res, next) => {
-  // Error logging handled by logger (already logged above)
-  
-  res.status(err.status || 500).json({
-    status: 'error',
-    message: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
-});
+// 404 handler - must be after all routes
+app.use('*', notFoundHandler);
+
+// Error monitoring middleware (before error handler, must be 4-parameter)
+app.use(errorMonitoringMiddleware);
+
+// Global error handler - must be last middleware
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:3000', 
-      'http://localhost:8081', 
-      'http://localhost:19006',
-      'http://192.168.1.8:5000',
-      'http://192.168.1.8:5000',
-      'http://192.168.1.8:3000',
-      'http://192.168.1.8:3000',
-      'http://192.168.1.8:8081',
-      'http://192.168.1.8:8081',
-      'http://192.168.1.8:19006',
-      'http://192.168.1.8:19006'
-    ],
+    origin: allowedOrigins, // Use same origins as Express CORS configuration
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   },
@@ -188,11 +192,38 @@ const io = new Server(server, {
   allowEIO3: true
 });
 
-// Store active calls
-const activeCalls = new Map();
-const callTimeouts = new Map(); // Store call timeout IDs
+// Store active calls with automatic cleanup
+const activeCalls = new ManagedMap({
+  name: 'activeCalls',
+  ttl: 86400000, // 24 hours max call duration
+  maxSize: 1000,
+  cleanupInterval: 600000, // Clean every 10 minutes
+  trackExpiry: true
+});
+
+const callTimeouts = new ManagedMap({
+  name: 'callTimeouts',
+  ttl: 86400000, // 24 hours
+  maxSize: 1000,
+  cleanupInterval: 600000, // Clean every 10 minutes
+  trackExpiry: false // Don't auto-delete timeouts
+});
+
+// Initialize Socket Connection Manager
+const socketManager = new SocketConnectionManager(io);
+socketManager.startCleanup();
+
+// Initialize Memory Monitor
+const memoryMonitor = new MemoryMonitor({
+  threshold: 500, // 500MB
+  checkInterval: 60000, // Check every minute
+  maxWarnings: 5
+});
+memoryMonitor.start();
 
 io.on('connection', (socket) => {
+  // Register socket connection
+  socketManager.registerConnection(socket);
   // Socket connection logging removed for production
   
   // Join user's personal room
@@ -200,6 +231,8 @@ io.on('connection', (socket) => {
     if (userId) {
       socket.join(userId);
       socket.userId = userId;
+      // Update socket manager with userId
+      socketManager.registerConnection(socket, userId);
       // Socket room joining logging removed for production
     }
   });
@@ -207,45 +240,70 @@ io.on('connection', (socket) => {
   // WebRTC Signaling Events
   
   // Initiate call
-  socket.on('call:initiate', async ({ bookingId, callerId, callerName, receiverId, receiverName }) => {
-    // Call initiation logging removed for production
-    
-    activeCalls.set(bookingId, {
-      callerId,
-      receiverId,
-      startTime: Date.now(),
-      status: 'ringing'
-    });
+  socket.on('call:initiate', async (payload = {}, ack) => {
+    const callerId = socket.userId;
+    const bookingId = payload.bookingId;
 
-    // Set call timeout (30 seconds)
-    const timeoutId = setTimeout(() => {
-      const call = activeCalls.get(bookingId);
-      if (call && call.status === 'ringing') {
-        // Call timeout logging removed for production
-        
-        // Notify caller about timeout
-        io.to(call.callerId).emit('call:ended', { 
-          bookingId, 
-          duration: 0, 
-          endedBy: 'timeout',
-          reason: 'Call timed out - no answer'
-        });
-        
-        // Clean up
-        activeCalls.delete(bookingId);
-        callTimeouts.delete(bookingId);
-      }
-    }, 30000); // 30 seconds timeout
-    
-    callTimeouts.set(bookingId, timeoutId);
+    if (!callerId || !bookingId) {
+      const message = 'Invalid call initiation payload';
+      ack?.({ status: 'error', message, errorCode: 'WEBRTC_INVALID_PAYLOAD' });
+      return;
+    }
 
-    // Notify receiver about incoming call
-    io.to(receiverId).emit('call:incoming', {
-      bookingId,
-      callerId,
-      callerName,
-      socketId: socket.id
-    });
+    try {
+      const { caller, receiver, metadata } = await validateCallPermissions({
+        bookingId,
+        callerId,
+        providedCallerType: payload.callerType
+      });
+
+      activeCalls.set(bookingId, {
+        callerId: caller.id,
+        receiverId: receiver.id,
+        startTime: Date.now(),
+        status: 'ringing'
+      });
+
+      const timeoutId = setTimeout(() => {
+        const call = activeCalls.get(bookingId);
+        if (call && call.status === 'ringing') {
+          io.to(call.callerId).emit('call:ended', {
+            bookingId,
+            duration: 0,
+            endedBy: 'timeout',
+            reason: 'Call timed out - no answer'
+          });
+          activeCalls.delete(bookingId);
+          callTimeouts.delete(bookingId);
+        }
+      }, 30000);
+
+      callTimeouts.set(bookingId, timeoutId);
+
+      io.to(receiver.id).emit('call:incoming', {
+        bookingId,
+        callerId: caller.id,
+        callerName: caller.name,
+        receiverId: receiver.id,
+        receiverName: receiver.name,
+        serviceName: metadata.serviceName,
+        socketId: socket.id
+      });
+
+      ack?.({ status: 'success' });
+    } catch (error) {
+      const message = error.message || 'Failed to initiate call';
+      const errorCode = error.errorCode || 'WEBRTC_ERROR';
+      // logger.error('Socket call initiate failed', { // Original code had this line commented out
+      //   bookingId,
+      //   callerId,
+      //   error: message,
+      //   errorCode
+      // });
+
+      ack?.({ status: 'error', message, errorCode });
+      socket.emit('call:error', { bookingId, message, errorCode });
+    }
   });
 
   // Accept call
@@ -372,7 +430,11 @@ io.on('connection', (socket) => {
     
     // Clean up any active calls for this user
     if (socket.userId) {
-      for (const [bookingId, call] of activeCalls.entries()) {
+      // Convert ManagedMap entries() to array for iteration
+      const callEntries = Array.from(activeCalls.map.entries());
+      
+      for (const [bookingId, callEntry] of callEntries) {
+        const call = callEntry.value; // Extract value from managed entry
         if (call.callerId === socket.userId || call.receiverId === socket.userId) {
           const otherUserId = call.callerId === socket.userId ? call.receiverId : call.callerId;
           // Call cleanup logging removed for production
@@ -380,9 +442,9 @@ io.on('connection', (socket) => {
           io.to(otherUserId).emit('call:ended', { bookingId, reason: 'disconnect' });
           
           // Clear timeout for this call
-          const timeoutId = callTimeouts.get(bookingId);
-          if (timeoutId) {
-            clearTimeout(timeoutId);
+          const timeoutEntry = callTimeouts.get(bookingId);
+          if (timeoutEntry) {
+            clearTimeout(timeoutEntry);
             callTimeouts.delete(bookingId);
           }
           
@@ -390,19 +452,35 @@ io.on('connection', (socket) => {
         }
       }
     }
+    
+    // Unregister socket connection
+    socketManager.unregisterConnection(socket);
+    
+    // Remove all socket event listeners to prevent memory leaks
+    socket.removeAllListeners();
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 BuildXpert API server running on port ${PORT}`);
-  console.log(`📱 Environment: ${process.env.NODE_ENV}`);
+  console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 Network access: http://192.168.0.106:${PORT}/health`);
   console.log(`📊 API Documentation: http://localhost:${PORT}/api`);
+  console.log(`🌐 Allowed CORS origins: ${allowedOrigins.join(', ')}`);
   
   // Start background services
   console.log('🔧 Starting background services...');
   serviceExpiryManager.start();
+  initializeCleanupJob(); // Auth data cleanup (tokens, sessions, security logs)
+  notificationQueue.start();
+  
+  // Preload table cache for admin routes
+  try {
+    await preloadTableCache();
+  } catch (error) {
+    console.warn('⚠️  Failed to preload table cache:', error.message);
+  }
+  
   console.log('✅ All background services started');
 });
 

@@ -78,13 +78,14 @@ interface Booking {
 }
 
 export default function BookingsScreen() {
-  const { user } = useAuth();
-  const { t } = useLanguage();
+  const { user, isLoading: authLoading } = useAuth();
+  const { t, currentLanguage } = useLanguage();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filter, setFilter] = useState<'pending' | 'accepted' | 'completed'| 'all' >('all');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
 
   // Alert Modal State
   const [showAlertModal, setShowAlertModal] = useState(false);
@@ -145,30 +146,34 @@ export default function BookingsScreen() {
 
 
   useEffect(() => {
-    // Only show spinner on first load
-    loadBookings(true);
-    if (!user?.id) return; // Only connect if user id is available
-    const socket = socketIOClient(`${API_BASE_URL}`);
-    socket.on('connect', () => console.log('Socket connected:', socket.id));
-    socket.emit('join', user.id);
-    console.log('Joining room:', user.id);
-    socket.on('booking_created', (data) => {
-      console.log('Received booking_created event', data);
-      if (data && data.booking) {
-        setBookings(prev => [data.booking, ...prev]); // Prepend new booking for instant UI
-      }
-      // Refresh from backend in background (no spinner)
-      loadBookings(false);
-    });
-    socket.on('booking_updated', () => {
-      console.log('Received booking_updated event');
-      loadBookings(false);
-    });
-    socket.on('disconnect', () => console.log('Socket disconnected'));
-    return () => {
-      socket.disconnect();
-    };
-  }, [user?.id]);
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      // Only show spinner on first load
+      loadBookings(true);
+      
+      // Setup socket connection
+      const socket = socketIOClient(`${API_BASE_URL}`);
+      socket.on('connect', () => console.log('Socket connected:', socket.id));
+      socket.emit('join', user.id);
+      socket.on('booking_created', (data) => {
+        if (data && data.booking) {
+          setBookings(prev => [data.booking, ...prev]); // Prepend new booking for instant UI
+        }
+        // Refresh from backend in background (no spinner)
+        loadBookings(false);
+      });
+      socket.on('booking_updated', () => {
+        loadBookings(false);
+      });
+      socket.on('disconnect', () => console.log('Socket disconnected'));
+      return () => {
+        socket.disconnect();
+      };
+    } else if (!authLoading && !user?.id) {
+      // Auth finished loading but no user, set loading to false
+      setIsLoading(false);
+    }
+  }, [user?.id, authLoading]);
 
   // Handle orientation changes for responsive design
   useEffect(() => {
@@ -185,14 +190,14 @@ export default function BookingsScreen() {
     try {
       if (showSpinner) setIsLoading(true);
       setError(null);
+      setErrorKey(null);
       
       const token = await tokenManager.getValidToken();
       if (!token) {
-        setError('No authentication token available');
+        setErrorKey('noToken');
         return;
       }
 
-      console.log('Fetching provider bookings...');
       
       const response = await fetch(`${API_BASE_URL}/api/providers/bookings`, {
         headers: {
@@ -200,14 +205,11 @@ export default function BookingsScreen() {
         }
       });
 
-      console.log('Response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Backend response:', data);
         
         if (data.status === 'success' && data.data.bookings) {
-          console.log('Bookings data received:', data.data.bookings);
           // Debug location data
           data.data.bookings.forEach((booking: any, index: number) => {
             console.log(`Booking ${index + 1} location data:`, {
@@ -218,22 +220,20 @@ export default function BookingsScreen() {
           });
           setBookings(data.data.bookings);
         } else {
-          setError('Invalid response format from server');
+          setErrorKey('invalidResponse');
         }
       } else {
         const errorText = await response.text();
-        console.log('Failed to fetch bookings:', response.status);
-        console.log('Error response:', errorText);
         
         if (response.status === 403) {
-          setError('Access denied. Only providers can view bookings.');
+          setErrorKey('accessDenied');
         } else {
-          setError('Failed to fetch bookings. Please try again.');
+          setErrorKey('fetchFailed');
         }
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
-      setError('Network error. Please check your connection and try again.');
+      setErrorKey('networkError');
     } finally {
       if (showSpinner) setIsLoading(false);
     }
@@ -314,7 +314,6 @@ export default function BookingsScreen() {
     if (isOtherReportReason) reason = customReportOtherReason;
     if (!reason.trim() || !reportBooking) return;
 
-    console.log(`Reporting booking ${reportBooking.id} for reason: ${reason}`);
 
     setReportModalVisible(false);
     setReportBooking(null);
@@ -333,7 +332,6 @@ export default function BookingsScreen() {
   const handleRatingSubmit = async () => {
     if (!ratingBookingId || customerRating === 0) return;
 
-    console.log(`Booking ${ratingBookingId} completed. Customer rated: ${customerRating} stars. Feedback: ${ratingFeedback}`);
 
     await handleBookingAction(ratingBookingId, 'complete');
     setRatingModalVisible(false);
@@ -346,7 +344,6 @@ export default function BookingsScreen() {
   const handleRatingSkip = async () => {
     if (!ratingBookingId) return;
 
-    console.log(`Booking ${ratingBookingId} completed. Rating skipped.`);
     await handleBookingAction(ratingBookingId, 'complete');
     setRatingModalVisible(false);
     setRatingBookingId(null);
@@ -528,42 +525,46 @@ export default function BookingsScreen() {
 
         {/* Action buttons */}
         <View style={styles.actionButtons}>
-          {item.status === 'pending' && (
-            <>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.acceptButton]}
-                onPress={() => handleBookingAction(item.id, 'accept')}
-              >
-                <CheckCircle size={14} color="#FFFFFF" />
-                <Text style={[styles.actionButtonText, styles.acceptButtonText]}>Accept</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.rejectButton]}
-                onPress={() => openRejectModal(item.id)}
-              >
-                <XCircle size={14} color="#FFFFFF" />
-                <Text style={[styles.actionButtonText, styles.rejectButtonText]}>Reject</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          
           {item.status === 'accepted' && (
-            <>
+            <View style={styles.callButtonContainer}>
               <WebRTCCallButton
                 bookingId={item.id}
                 size="small"
                 variant="primary"
                 style={styles.callButton}
               />
+            </View>
+          )}
+          <View style={styles.secondaryActions}>
+            {item.status === 'pending' && (
+              <>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.acceptButton]}
+                  onPress={() => handleBookingAction(item.id, 'accept')}
+                >
+                  <CheckCircle size={14} color="#FFFFFF" />
+                  <Text style={[styles.actionButtonText, styles.acceptButtonText]}>Accept</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.rejectButton]}
+                  onPress={() => openRejectModal(item.id)}
+                >
+                  <XCircle size={14} color="#FFFFFF" />
+                  <Text style={[styles.actionButtonText, styles.rejectButtonText]}>Reject</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            
+            {item.status === 'accepted' && (
               <TouchableOpacity
                 style={[styles.actionButton, styles.completeButton]}
                 onPress={() => openRatingModal(item.id)}
               >
-                <CheckCircle size={14} color="#FFFFFF" />
+                <CheckCircle size={14} color="#2563EB" />
                 <Text style={[styles.actionButtonText, styles.completeButtonText]}>Complete</Text>
               </TouchableOpacity>
-            </>
-          )}
+            )}
+          </View>
         </View>
       </View>
     );
@@ -585,7 +586,7 @@ export default function BookingsScreen() {
     );
   }
 
-  if (error) {
+  if (error || errorKey) {
     return (
       <SafeView backgroundColor="#F8FAFC">
         <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
@@ -594,8 +595,10 @@ export default function BookingsScreen() {
           <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">{t('bookings.subtitle')}</Text>
         </View>
         <View style={styles.errorContainer}>
-          <AlertTriangle size={48} color="#EF4444" />
-          <Text style={styles.errorText}>{error}</Text>
+          <AlertTriangle size={getResponsiveSpacing(40, 48, 56)} color="#EF4444" />
+          <Text style={styles.errorText} numberOfLines={3}>
+            {errorKey ? t(`bookings.errors.${errorKey}`) : (error || t('bookings.errors.fetchFailed'))}
+          </Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => loadBookings(true)}>
             <Text style={styles.retryButtonText}>{t('bookings.retry')}</Text>
           </TouchableOpacity>
@@ -1067,9 +1070,16 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-    gap: getResponsiveSpacing(6, 8, 10),
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: getResponsiveSpacing(10, 12, 14),
+    paddingBottom: getResponsiveSpacing(16, 18, 20),
+  },
+  callButtonContainer: {
+    alignItems: 'center',
+    marginRight: getResponsiveSpacing(12, 14, 16),
+    alignSelf: 'flex-end',
+    position: 'relative',
   },
   actionButton: {
     flexDirection: 'row',
@@ -1103,16 +1113,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   callButton: {
-    backgroundColor: '#3B82F6',
+    // Let the button size itself based on content
   },
-  callButtonText: {
-    color: '#FFFFFF',
+  callButtonLabel: {
+    position: 'absolute',
+    top: '100%',
+    marginTop: 4,
+    fontSize: getResponsiveFontSize(11, 12, 13),
+    fontWeight: '600',
+    color: '#2563EB',
+    textAlign: 'center',
+    width: '100%',
+  },
+  secondaryActions: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    gap: getResponsiveSpacing(6, 8, 10),
   },
   completeButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#EEF2FF',
   },
   completeButtonText: {
-    color: '#FFFFFF',
+    color: '#2563EB',
+    fontWeight: '600',
   },
   reportUserIconBtn: {
     width: getResponsiveSpacing(28, 32, 36),
@@ -1355,13 +1381,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: getResponsiveSpacing(20, 24, 28),
+    paddingVertical: getResponsiveSpacing(40, 50, 60),
+    width: '100%',
   },
   errorText: {
-    fontSize: 17,
+    fontSize: getResponsiveFontSize(15, 16, 17),
     fontFamily: 'Inter-SemiBold',
     color: '#DC2626',
-    marginBottom: 24,
+    marginTop: getResponsiveSpacing(16, 18, 20),
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+    textAlign: 'center',
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    lineHeight: getResponsiveFontSize(22, 24, 26),
+    width: '100%',
+    maxWidth: screenWidth - getResponsiveSpacing(40, 48, 56),
   },
   retryButton: {
     backgroundColor: '#3B82F6',

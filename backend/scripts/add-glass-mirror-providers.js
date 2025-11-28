@@ -4,7 +4,6 @@ require('dotenv').config({ path: './config.env' });
 
 const addGlassMirrorProviders = async () => {
   try {
-    console.log('🔧 Adding Glass & Mirror test providers...');
     
     // Get the glass-mirror service ID
     const glassMirrorService = await getRow('SELECT id FROM services_master WHERE name = $1', ['glass-mirror']);
@@ -13,7 +12,6 @@ const addGlassMirrorProviders = async () => {
     }
     
     const serviceId = glassMirrorService.id;
-    console.log(`✅ Found glass-mirror service with ID: ${serviceId}`);
 
     // Define test providers for glass-mirror service
     const testProviders = [
@@ -114,7 +112,6 @@ const addGlassMirrorProviders = async () => {
       }
     ];
 
-    console.log(`📝 Adding ${testProviders.length} test providers for glass-mirror service...`);
 
     for (const provider of testProviders) {
       try {
@@ -122,7 +119,6 @@ const addGlassMirrorProviders = async () => {
         const existingProvider = await getRow('SELECT id FROM users WHERE phone = $1', [provider.phone]);
         
         if (existingProvider) {
-          console.log(`⏭️  Provider ${provider.full_name} already exists, skipping...`);
           continue;
         }
 
@@ -145,7 +141,6 @@ const addGlassMirrorProviders = async () => {
         ]);
 
         const userId = userResult.rows[0].id;
-        console.log(`✅ Created user: ${provider.full_name} (ID: ${userId})`);
 
         // Insert provider profile
         const profileResult = await query(`
@@ -177,7 +172,6 @@ const addGlassMirrorProviders = async () => {
           'active'
         ]);
 
-        console.log(`✅ Created provider profile for: ${provider.full_name}`);
 
       } catch (error) {
         console.error(`❌ Error adding provider ${provider.full_name}:`, error.message);
@@ -194,9 +188,7 @@ const addGlassMirrorProviders = async () => {
       WHERE sm.name = 'glass-mirror'
     `);
 
-    console.log(`\n🎉 Successfully added ${addedProviders.rows.length} glass-mirror providers:`);
     addedProviders.rows.forEach((provider, index) => {
-      console.log(`${index + 1}. ${provider.full_name} - ${provider.phone} - ₹${provider.service_charge_value}/hr - Experience: ${provider.years_of_experience} years`);
     });
 
   } catch (error) {
@@ -208,7 +200,6 @@ const addGlassMirrorProviders = async () => {
 if (require.main === module) {
   addGlassMirrorProviders()
     .then(() => {
-      console.log('\n🎉 Glass & Mirror test providers addition completed successfully!');
       process.exit(0);
     })
     .catch((error) => {

@@ -123,7 +123,9 @@ node check-table-structure.js
 |---------|---------------|------|-------------|
 | Plumber | `plumber` | Yes | Plumbing services |
 | Mason/Mastri | `mason-mastri` | Yes | Masonry work |
-| Painting & Cleaning | `painting-cleaning` | Yes | Painting and cleaning |
+| Painting | `painting-cleaning` | Yes | Painting services |
+| Cleaning | `cleaning` | Yes | House and office cleaning |
+| Borewell | `borewell` | Yes | Borewell drilling and maintenance |
 | Granite & Tiles | `granite-tiles` | Yes | Granite and tile work |
 | Engineer/Interior | `engineer-interior` | Yes | Interior design |
 | Electrician | `electrician` | Yes | Electrical services |

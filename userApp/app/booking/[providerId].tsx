@@ -326,6 +326,12 @@ export default function BookingScreen() {
         t('serviceOptions.others')
       ],
       'painting-cleaning': [
+        t('serviceOptions.interiorPainting'),
+        t('serviceOptions.exteriorPainting'),
+        t('serviceOptions.wallTexture'),
+        t('serviceOptions.others')
+      ],
+      'cleaning': [
         t('serviceOptions.houseCleaning'),
         t('serviceOptions.officeCleaning'),
         t('serviceOptions.deepCleaning'),
@@ -372,6 +378,12 @@ export default function BookingScreen() {
         t('serviceOptions.glassDoorInstallation'),
         t('serviceOptions.windowGlassReplacement'),
         t('serviceOptions.others')
+      ],
+      'borewell': [
+        t('serviceOptions.borewellDrilling'),
+        t('serviceOptions.submersiblePumpInstallation'),
+        t('serviceOptions.borewellMaintenance'),
+        t('serviceOptions.waterTesting')
       ]
     };
     

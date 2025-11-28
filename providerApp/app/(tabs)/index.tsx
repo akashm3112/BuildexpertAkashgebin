@@ -15,6 +15,7 @@ import {
   StatusBar,
   ScrollView,
   RefreshControl,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MapPin, Search, CheckCircle, Clock } from 'lucide-react-native';
@@ -40,32 +41,35 @@ const getResponsiveSpacing = (small: number, medium: number, large: number) => {
   return large;
 };
 
-const CARD_SIZE = (screenWidth - getResponsiveSpacing(32, 40, 48)) / 3 * 0.95;
-const CARD_HEIGHT = CARD_SIZE * 1.0;
-
-const ServiceCard = ({ item, onPress, isRegistered, getServiceName }: any) => {
+const ServiceCard = ({ item, onPress, isRegistered, getServiceName, itemWidth }: any) => {
   // Add null checks to prevent errors
   if (!item || !item.id) {
     return null;
   }
   
-  
   const serviceName = getServiceName(item.id);
-  const isLongText = serviceName && serviceName.length > 15; // Adjust this threshold as needed
   
   // Get service details from SERVICE_CATEGORIES to check if it's free
   const serviceDetails = SERVICE_CATEGORIES.find(service => service.id === item.id);
   const isFreeService = serviceDetails?.basePrice === 0; // Check if service is free
   
-  
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-      <Image source={typeof item.image === 'string' ? { uri: item.image } : item.image} style={styles.cardImage} />
-      
+    <View style={[styles.categoryWrapper, { width: itemWidth }]}>
+      <TouchableOpacity
+        style={styles.categoryItem}
+        activeOpacity={0.8}
+        onPress={onPress}
+      >
+        <View style={styles.imageContainer}>
+          <Image
+            source={typeof item.image === 'string' ? { uri: item.image } : item.image}
+            style={styles.categoryImage}
+            resizeMode="cover"
+          />
       {/* Registered Checkmark */}
       {isRegistered && (
         <View style={[styles.tickIconBox, isFreeService && styles.tickIconBoxWithFreeBadge]}>
-          <CheckCircle size={18} color="#FFFFFF" />
+              <CheckCircle size={14} color="#FFFFFF" />
         </View>
       )}
       
@@ -75,13 +79,16 @@ const ServiceCard = ({ item, onPress, isRegistered, getServiceName }: any) => {
           <Text style={styles.freeBadgeText}>FREE</Text>
         </View>
       )}
-      
-      <View style={styles.overlay}>
-        <Text style={styles.cardText} numberOfLines={isLongText ? 2 : 1}>
+        </View>
+      </TouchableOpacity>
+      <View style={styles.categoryContent}>
+        <View style={styles.categoryNameContainer}>
+          <Text style={styles.categoryName} numberOfLines={2}>
           {serviceName || 'Unknown Service'}
         </Text>
       </View>
-    </TouchableOpacity>
+      </View>
+    </View>
   );
 };
 
@@ -89,6 +96,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { width: screenWidth } = useWindowDimensions();
   const [search, setSearch] = useState('');
   
   const [searchFocused, setSearchFocused] = useState(false);
@@ -140,7 +148,6 @@ export default function HomeScreen() {
     try {
       return t(`serviceCategories.${serviceId}`);
     } catch (error) {
-      console.log('Error getting service name for:', serviceId, error);
       return 'Unknown Service';
     }
   };
@@ -164,29 +171,23 @@ export default function HomeScreen() {
 
       if (selectedLocationData) {
         const selectedType = JSON.parse(selectedLocationData);
-        console.log('📍 Loading selected location type:', selectedType);
         setSelectedLocation(selectedType);
         
         // Find the selected location and set it as current
         const selectedLoc = locations.find((loc: any) => loc.type === selectedType);
         if (selectedLoc) {
-          console.log('📍 Loading saved location:', selectedLoc.address);
           setLocation(selectedLoc.address);
         } else {
-          console.log('📍 Selected location not found, defaulting to current');
           setSelectedLocation('current');
           setLocation('Current Location');
         }
       } else {
         // Default to current location
-        console.log('📍 No saved location preference, defaulting to current');
         setSelectedLocation('current');
         if (currentLocationData) {
           const currentLoc = JSON.parse(currentLocationData);
-          console.log('📍 Loading current location:', currentLoc);
           setLocation(currentLoc);
         } else {
-          console.log('📍 Setting default current location');
           setLocation('Current Location');
         }
       }
@@ -215,8 +216,7 @@ export default function HomeScreen() {
 
   // Debug selectedLocation changes
   useEffect(() => {
-    console.log('📍 selectedLocation changed to:', selectedLocation);
-    console.log('📍 current location state:', location);
+    
   }, [selectedLocation, location]);
 
   // Handle orientation changes for responsive design
@@ -230,11 +230,13 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (user?.token) {
-      fetchRegisteredServices();
-      
-      // Initial earnings fetch (only once on mount)
-      fetchEarnings();
+    if (user?.id) {
+      // Wait a bit to ensure tokens are loaded
+      const timer = setTimeout(() => {
+        fetchRegisteredServices();
+        // Initial earnings fetch (only once on mount)
+        fetchEarnings();
+      }, 100);
       
       // Setup socket connection for real-time updates
       if (!socketRef.current) {
@@ -250,18 +252,15 @@ export default function HomeScreen() {
         
         // Socket connection events
         socketRef.current.on('connect', () => {
-          console.log('🔌 Socket connected successfully');
           setSocketConnected(true);
         });
 
         socketRef.current.on('disconnect', (reason: string) => {
-          console.log('❌ Socket disconnected:', reason);
           setSocketConnected(false);
           
           // Auto-reconnect for certain disconnect reasons
           if (reason === 'io server disconnect') {
             // Server initiated disconnect, try to reconnect
-            console.log('🔄 Attempting to reconnect...');
             socketRef.current.connect();
           }
         });
@@ -272,12 +271,10 @@ export default function HomeScreen() {
           
           // Show user-friendly error message only for persistent errors
           if (error.type === 'TransportError' || error.message.includes('xhr poll error')) {
-            console.log('🔄 Network error detected, will retry automatically...');
           }
         });
 
         socketRef.current.on('reconnect', (attemptNumber: number) => {
-          console.log('🔄 Socket reconnected after', attemptNumber, 'attempts');
           setSocketConnected(true);
         });
 
@@ -295,7 +292,6 @@ export default function HomeScreen() {
         
         // Listen for real-time earnings updates
         socketRef.current.on('earnings_updated', (data: any) => {
-          console.log('📊 Received real-time earnings update:', data);
           if (data.status === 'success' && data.data.earnings) {
             setEarnings(data.data.earnings);
             setIsLoadingEarnings(false); // Stop loading when we get real-time data
@@ -304,16 +300,24 @@ export default function HomeScreen() {
 
         // Listen for booking updates that might affect earnings
         socketRef.current.on('booking_updated', (data: any) => {
-          console.log('📋 Received booking update:', data);
           // Earnings will be updated via earnings_updated event
         });
       }
+      
+      // Cleanup function
+      return () => {
+        clearTimeout(timer);
+        if (socketRef.current) {
+          socketRef.current.removeAllListeners();
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+      };
     }
-
-    // Cleanup socket on unmount
+    
+    // Cleanup when user is not available
     return () => {
       if (socketRef.current) {
-        console.log('🧹 Cleaning up socket connection...');
         socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -323,7 +327,7 @@ export default function HomeScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      if (user?.token) {
+      if (user?.id) {
         // Only fetch registered services on focus, earnings are handled by sockets
         fetchRegisteredServices();
       }
@@ -342,7 +346,6 @@ export default function HomeScreen() {
         setRecentSearches(JSON.parse(recent));
       }
     } catch (error) {
-      console.log('Error loading recent searches:', error);
     }
   };
 
@@ -355,7 +358,6 @@ export default function HomeScreen() {
       setRecentSearches(updated);
       await AsyncStorage.setItem('recent_searches', JSON.stringify(updated));
     } catch (error) {
-      console.log('Error saving recent search:', error);
     }
   };
 
@@ -390,7 +392,6 @@ export default function HomeScreen() {
         // Filter services based on search
         const filtered = SERVICE_CATEGORIES.filter(category => {
           if (!category || !category.id) {
-            console.log('Filtering out category - no id:', category);
             return false;
           }
           
@@ -401,7 +402,6 @@ export default function HomeScreen() {
             
             return categoryName.includes(searchLower) || categoryId.includes(searchLower);
           } catch (error) {
-            console.log('Error filtering category:', category, error);
             return false;
           }
         });
@@ -411,7 +411,6 @@ export default function HomeScreen() {
         setFilteredServices(SERVICE_CATEGORIES);
       }
     } catch (error) {
-      console.log('Error in handleSearchChange:', error);
       setSearchSuggestions([]);
       setFilteredServices(SERVICE_CATEGORIES);
     }
@@ -465,67 +464,50 @@ export default function HomeScreen() {
       setRecentSearches([]);
       await AsyncStorage.removeItem('recent_searches');
     } catch (error) {
-      console.log('Error clearing recent searches:', error);
     }
   };
 
   const fetchRegisteredServices = async () => {
     try {
       setIsLoadingServices(true);
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
       
-      if (!token) {
-        console.log('No token available');
-        return;
-      }
-
-      console.log('Fetching with token:', token.substring(0, 20) + '...');
+      // Use API client instead of direct fetch - it handles token refresh automatically
+      const { apiGet } = await import('@/utils/apiClient');
       
-      const response = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Backend response:', data);
+      try {
+        const response = await apiGet<{ status: string; data: { registeredServices: any[] } }>('/api/services/my-registrations');
         
-        // Map service names to frontend category IDs
-        const serviceNameToCategoryMap: { [key: string]: string } = {
-          'labors': 'labor',
-          'plumber': 'plumber',
-          'mason-mastri': 'mason-mastri',
-          'painting-cleaning': 'painting-cleaning',
-          'granite-tiles': 'granite-tiles',
-          'engineer-interior': 'engineer-interior',
-          'electrician': 'electrician',
-          'carpenter': 'carpenter',
-          'painter': 'painter',
-          'interiors-building': 'interiors-building',
-          'stainless-steel': 'stainless-steel',
-          'contact-building': 'contact-building',
-          'glass-mirror': 'glass-mirror'
-        };
+        if (response.data.status === 'success' && response.data.data.registeredServices) {
+          // Map service names to frontend category IDs
+          const serviceNameToCategoryMap: { [key: string]: string } = {
+            'labors': 'labor',
+            'plumber': 'plumber',
+            'mason-mastri': 'mason-mastri',
+            'painting-cleaning': 'painting',
+            'painting': 'painting',
+            'cleaning': 'cleaning',
+            'granite-tiles': 'granite-tiles',
+            'engineer-interior': 'engineer-interior',
+            'electrician': 'electrician',
+            'carpenter': 'carpenter',
+            'painter': 'painting',
+            'interiors-building': 'interiors-building',
+            'stainless-steel': 'stainless-steel',
+            'contact-building': 'contact-building',
+            'glass-mirror': 'glass-mirror',
+            'borewell': 'borewell'
+          };
 
-        const registeredCategoryIds = data.data.registeredServices.map((service: any) => {
-          const categoryId = serviceNameToCategoryMap[service.service_name];
-          console.log(`Mapping: ${service.service_name} -> ${categoryId}`);
-          return categoryId;
-        }).filter(Boolean);
+          const registeredCategoryIds = response.data.data.registeredServices.map((service: any) => {
+            const categoryId = serviceNameToCategoryMap[service.service_name];
+            return categoryId;
+          }).filter(Boolean);
 
-        setRegisteredServices(registeredCategoryIds);
-      } else {
-        const errorText = await response.text();
-        console.log('Failed to fetch registered services:', response.status);
-        console.log('Error response:', errorText);
+          setRegisteredServices(registeredCategoryIds);
+        }
+      } catch (apiError: any) {
+        // Handle API errors silently - don't show error for home screen
+        console.error('Error fetching registered services:', apiError);
       }
     } catch (error) {
       console.error('Error fetching registered services:', error);
@@ -537,14 +519,10 @@ export default function HomeScreen() {
   const fetchEarnings = async () => {
     try {
       setIsLoadingEarnings(true);
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       
       if (!token) {
-        console.log('No token available for earnings');
         return;
       }
 
@@ -556,13 +534,11 @@ export default function HomeScreen() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Earnings response:', data);
         
         if (data.status === 'success' && data.data.earnings) {
           setEarnings(data.data.earnings);
         }
       } else {
-        console.log('Failed to fetch earnings:', response.status);
         // Set default values if API fails
         setEarnings({
           thisMonth: '₹0',
@@ -585,7 +561,6 @@ export default function HomeScreen() {
 
   const handleServicePress = (serviceId: string) => {
     if (!serviceId) {
-      console.log('Service ID is undefined or null');
       return;
     }
     
@@ -624,14 +599,12 @@ export default function HomeScreen() {
       let geocode = await Location.reverseGeocodeAsync(loc.coords);
       if (geocode && geocode.length > 0) {
         const addr = `${geocode[0].name || ''} ${geocode[0].street || ''}, ${geocode[0].city || ''}, ${geocode[0].region || ''}`;
-        console.log('📍 Setting current location to:', addr);
         setLocation(addr);
         setSelectedLocation('current');
         const updatedLocations = savedLocations.map(l => l.type === 'current' ? { ...l, address: addr } : l);
         setSavedLocations(updatedLocations);
         await saveLocationPreferences(updatedLocations, 'current', addr);
       } else {
-        console.log('📍 Setting current location to default');
         setLocation('Current Location');
         setSelectedLocation('current');
         await saveLocationPreferences(savedLocations, 'current', 'Current Location');
@@ -664,8 +637,6 @@ export default function HomeScreen() {
     }
     const newLocation = { label: newLocationName, address: newLocationAddress, type: `custom${savedLocations.length}` };
     const updatedLocations = [...savedLocations, newLocation];
-    console.log('📍 Adding new location:', newLocation);
-    console.log('📍 Setting location to:', newLocationAddress);
     
     setSavedLocations(updatedLocations);
     setLocation(newLocationAddress);
@@ -678,9 +649,7 @@ export default function HomeScreen() {
   };
 
   const handleSelectLocation = async (loc: any) => {
-    console.log('📍 Selecting location:', loc);
-    console.log('📍 Setting location to:', loc.address);
-    console.log('📍 Setting selectedLocation to:', loc.type);
+    
     setSelectedLocation(loc.type);
     setLocation(loc.address);
     setModalVisible(false);
@@ -738,7 +707,6 @@ export default function HomeScreen() {
                 const selectedLoc = savedLocations.find(loc => loc.type === selectedLocation);
                 title = selectedLoc?.label || 'Home';
               }
-              console.log('📍 Rendering title:', title, 'for selectedLocation:', selectedLocation);
               return title;
             })()}
           </Text>
@@ -878,22 +846,25 @@ export default function HomeScreen() {
       <View style={{ height: 12 }} />
       {/* Grid */}
       <View style={styles.gridContainer}>
-        {Array.from({ length: Math.ceil(filteredServices.length / 3) }, (_, rowIndex) => {
-          const startIndex = rowIndex * 3;
-          const endIndex = Math.min(startIndex + 3, filteredServices.length);
-          const rowItems = filteredServices.slice(startIndex, endIndex);
-          const isLastRow = rowIndex === Math.ceil(filteredServices.length / 3) - 1;
-          const itemsInRow = rowItems.length;
+        {(() => {
+          const numColumns = 3;
+          const itemWidth = (screenWidth - 40 - (numColumns - 1) * 12) / numColumns;
+          const rows = [];
           
-          return (
+          for (let i = 0; i < filteredServices.length; i += numColumns) {
+            const rowItems = filteredServices.slice(i, i + numColumns);
+            const isLastRow = i + numColumns >= filteredServices.length;
+            const hasSingleItem = isLastRow && rowItems.length === 1;
+          
+            rows.push(
             <View 
-              key={rowIndex} 
+                key={i}
               style={[
-                styles.rowWrapper,
-                isLastRow && itemsInRow < 3 && styles.centeredRow
+                  styles.row,
+                  hasSingleItem && styles.centeredRow
               ]}
             >
-              {rowItems.map((item, itemIndex) => {
+                {rowItems.map((item) => {
                 if (!item || !item.id) return null;
                 
                 const isRegistered = registeredServices.includes(item.id);
@@ -904,12 +875,15 @@ export default function HomeScreen() {
                     onPress={() => handleServicePress(item.id)}
                     isRegistered={isRegistered}
                     getServiceName={getServiceName}
+                      itemWidth={itemWidth}
                   />
                 );
               })}
             </View>
           );
-        })}
+          }
+          return rows;
+        })()}
         {filteredServices.length === 0 && (
           <View style={styles.emptySearchResults}>
             <Search size={48} color="#9CA3AF" />
@@ -1212,58 +1186,69 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   gridContainer: {
-    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingHorizontal: 20,
     paddingBottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  rowWrapper: {
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
-    width: '100%',
+    marginBottom: 12,
   },
   centeredRow: {
     justifyContent: 'center',
-    gap: 16,
   },
-  card: {
-    width: CARD_SIZE,
-    height: CARD_HEIGHT,
-    borderRadius: getResponsiveSpacing(10, 11, 12),
+  categoryWrapper: {
+    alignItems: 'center',
+  },
+  categoryItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#fff',
-    elevation: 2,
+    height: 100,
+    width: '100%',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: '#CBD5E1',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
+        shadowOpacity: 0.1,
         shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
       },
     }),
   },
-  cardImage: {
+  imageContainer: {
+    height: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  categoryImage: {
     width: '100%',
     height: '100%',
   },
-  overlay: {
-    position: 'absolute',
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    width: '100%',
-    paddingVertical: getResponsiveSpacing(4, 5, 6),
-    paddingHorizontal: getResponsiveSpacing(3, 4, 5),
+  categoryContent: {
+    paddingTop: 8,
     alignItems: 'center',
-    minHeight: getResponsiveSpacing(28, 30, 32),
+    justifyContent: 'center',
+    width: '100%',
   },
-  cardText: {
-    color: '#fff',
-    fontSize: getResponsiveSpacing(10, 11, 12),
+  categoryName: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#374151',
     textAlign: 'center',
-    lineHeight: getResponsiveSpacing(14, 15, 16),
-    flexShrink: 1,
+    lineHeight: 16,
+  },
+  categoryNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   sectionTitle: {
     fontSize: getResponsiveSpacing(16, 17, 18),

@@ -6,28 +6,24 @@ const { query } = require('../database/connection');
  */
 const addMissingProviderColumns = async () => {
   try {
-    console.log('🚀 Starting migration to add missing provider_profiles columns...');
 
     // Add state column (used for filtering providers by state)
     await query(`
       ALTER TABLE provider_profiles 
       ADD COLUMN IF NOT EXISTS state TEXT
     `);
-    console.log('✅ Added state column to provider_profiles');
 
     // Add city column (useful for location-based queries)
     await query(`
       ALTER TABLE provider_profiles 
       ADD COLUMN IF NOT EXISTS city TEXT
     `);
-    console.log('✅ Added city column to provider_profiles');
 
     // Add business_name column (used in admin queries)
     await query(`
       ALTER TABLE provider_profiles 
       ADD COLUMN IF NOT EXISTS business_name TEXT
     `);
-    console.log('✅ Added business_name column to provider_profiles');
 
     // Add experience_years column (alias/synonym for years_of_experience, used in admin)
     // Note: We'll keep years_of_experience as the main column, but add experience_years for compatibility
@@ -38,21 +34,18 @@ const addMissingProviderColumns = async () => {
       ALTER TABLE provider_profiles 
       ADD COLUMN IF NOT EXISTS experience_years INT
     `);
-    console.log('✅ Added experience_years column to provider_profiles');
 
     // Add rating column (average rating for the provider)
     await query(`
       ALTER TABLE provider_profiles 
       ADD COLUMN IF NOT EXISTS rating DECIMAL(3,2) DEFAULT 0
     `);
-    console.log('✅ Added rating column to provider_profiles');
 
     // Add total_reviews column (count of reviews)
     await query(`
       ALTER TABLE provider_profiles 
       ADD COLUMN IF NOT EXISTS total_reviews INT DEFAULT 0
     `);
-    console.log('✅ Added total_reviews column to provider_profiles');
 
     // Create indexes for better query performance
     await query(`
@@ -60,7 +53,6 @@ const addMissingProviderColumns = async () => {
       CREATE INDEX IF NOT EXISTS idx_provider_profiles_city ON provider_profiles(city);
       CREATE INDEX IF NOT EXISTS idx_provider_profiles_rating ON provider_profiles(rating);
     `);
-    console.log('✅ Created indexes for new columns');
 
     // Sync experience_years with years_of_experience for existing records
     await query(`
@@ -68,7 +60,6 @@ const addMissingProviderColumns = async () => {
       SET experience_years = years_of_experience 
       WHERE experience_years IS NULL AND years_of_experience IS NOT NULL
     `);
-    console.log('✅ Synced experience_years with years_of_experience');
 
     // Create a function to automatically sync experience_years when years_of_experience changes
     await query(`
@@ -91,9 +82,7 @@ const addMissingProviderColumns = async () => {
       FOR EACH ROW
       EXECUTE FUNCTION sync_provider_experience();
     `);
-    console.log('✅ Created trigger to sync experience_years');
 
-    console.log('🎉 Migration completed successfully!');
     
     return { success: true };
   } catch (error) {
@@ -108,7 +97,6 @@ module.exports = addMissingProviderColumns;
 if (require.main === module) {
   addMissingProviderColumns()
     .then(() => {
-      console.log('✅ Migration completed');
       process.exit(0);
     })
     .catch((error) => {
@@ -116,4 +104,5 @@ if (require.main === module) {
       process.exit(1);
     });
 }
+
 

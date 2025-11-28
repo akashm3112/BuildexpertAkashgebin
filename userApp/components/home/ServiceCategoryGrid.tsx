@@ -24,12 +24,15 @@ const getCategoryColor = (categoryId: string) => {
     'plumber': '#14B8A6',
     'granite-tiles': '#F59E0B',
     'painting-cleaning': '#8B5CF6',
+    'painting': '#8B5CF6',
     'contact-building': '#EC4899',
     'labor': '#EF4444',
     'mason-mastri': '#10B981',
     'interiors-building': '#6366F1',
     'stainless-steel': '#F97316',
+    'cleaning': '#0EA5E9',
     'glass-mirror': '#06B6D4',
+    'borewell': '#A78BFA',
   };
   return colorMap[categoryId] || '#3B82F6';
 };
@@ -41,12 +44,15 @@ const getServiceTranslationKey = (serviceId: string) => {
     'plumber': 'plumbersRegistration',
     'granite-tiles': 'graniteTilesLaying',
     'painting-cleaning': 'paintingAndCleaning',
+    'painting': 'paintingAndCleaning',
     'contact-building': 'contractorAndBuilding',
     'labor': 'labors',
     'mason-mastri': 'masonMistri',
     'interiors-building': 'interiorsDesigners',
     'stainless-steel': 'stainlessSteelMS',
+    'cleaning': 'cleaningServices',
     'glass-mirror': 'glassMirror',
+    'borewell': 'borewellServices',
   };
   return translationMap[serviceId] || serviceId;
 };
@@ -58,12 +64,15 @@ const getServiceRoute = (serviceId: string) => {
     'plumber': 'plumber',
     'granite-tiles': 'marble-provider',
     'painting-cleaning': 'painting-cleaning',
+    'painting': 'painting-cleaning',
     'contact-building': 'contractor',
     'labor': 'laborer',
     'mason-mastri': 'mason',
     'interiors-building': 'interiors',
     'stainless-steel': 'stainless-steel',
+    'cleaning': 'cleaning',
     'glass-mirror': 'glass-mirror',
+    'borewell': 'borewell',
   };
   return routeMap[serviceId] || serviceId;
 };
@@ -95,51 +104,65 @@ const getCategories = (t: any) => [
     id: '4',
     name: t('serviceCategories.paintingAndCleaning'),
     route: 'painting-cleaning',
-    image: 'https://via.placeholder.com/100x100/8B5CF6/FFFFFF?text=PC',
+    image: require('@/assets/images/painting.jpg'),
     color: '#8B5CF6',
   },
   {
     id: '5',
-    name: t('serviceCategories.glassMirror'),
-    route: 'glass-mirror',
-    image: 'https://via.placeholder.com/100x100/06B6D4/FFFFFF?text=GM',
-    color: '#06B6D4',
-  },
-  {
-    id: '6',
     name: t('serviceCategories.contractorAndBuilding'),
     route: 'contractor',
     image: 'https://via.placeholder.com/100x100/EC4899/FFFFFF?text=C',
     color: '#EC4899',
   },
   {
-    id: '7',
+    id: '6',
     name: t('serviceCategories.labors'),
     route: 'laborer', 
     image: 'https://via.placeholder.com/100x100/EF4444/FFFFFF?text=L',
     color: '#EF4444',
   },
   {
-    id: '8',
+    id: '7',
     name: t('serviceCategories.masonMistri'),
     route: 'mason',
     image: 'https://via.placeholder.com/100x100/10B981/FFFFFF?text=M',
     color: '#10B981',
   },
   {
-    id: '9',
+    id: '8',
     name: t('serviceCategories.interiorsDesigners'),
     route: 'interiors',
     image: 'https://via.placeholder.com/100x100/6366F1/FFFFFF?text=I',
     color: '#6366F1',
   },
   {
-    id: '10',
+    id: '9',
     name: t('serviceCategories.stainlessSteelMS'),
     route: 'stainless-steel',
     image: 'https://via.placeholder.com/100x100/F97316/FFFFFF?text=SS',
     color: '#F97316',
-  }
+  },
+  {
+    id: '10',
+    name: t('serviceCategories.cleaningServices'),
+    route: 'cleaning',
+    image: require('@/assets/images/cleaning.jpg'),
+    color: '#0EA5E9',
+  },
+  {
+    id: '11',
+    name: t('serviceCategories.glassMirror'),
+    route: 'glass-mirror',
+    image: 'https://via.placeholder.com/100x100/06B6D4/FFFFFF?text=GM',
+    color: '#06B6D4',
+  },
+  {
+    id: '12',
+    name: t('serviceCategories.borewellServices'),
+    route: 'borewell',
+    image: require('@/assets/images/borewell.jpg'),
+    color: '#A78BFA',
+  },
 ];
 
 interface ServiceCategoryGridProps {
@@ -204,7 +227,9 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
             'mason-mastri': 'mason',
             'interiors-building': 'interiors',
             'stainless-steel': 'stainless-steel',
+            'cleaning': 'cleaning',
             'glass-mirror': 'glass-mirror',
+            'borewell': 'borewell',
           };
           const map: any = {};
           data.data.services.forEach((service: { name: keyof typeof nameToRoute; id: string }) => {
@@ -261,31 +286,33 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
                 }}
               >
                 <View style={[styles.categoryWrapper, { width: itemWidth }]}>
-                  <TouchableOpacity
-                    style={styles.categoryItem}
-                    activeOpacity={0.8}
-                    onPress={() => handleCategoryPress(item)}
-                  >
-                    <View style={styles.imageContainer}>
-                      <Image 
-                        source={typeof item.image === 'string' ? { uri: item.image } : item.image}
-                        style={styles.categoryImage}
-                        resizeMode="cover"
-                      />
-                      {/* Pay ₹99 label on top right corner for labor when no access */}
-                      {item.id === 'labor' && !labourAccessStatus?.hasAccess && (
-                        <View style={styles.payLabelBadge}>
-                          <Text style={styles.payLabelBadgeText}>Pay ₹99</Text>
-                        </View>
-                      )}
-                      {/* Access indicator on top right for labor when access granted */}
-                      {item.id === 'labor' && labourAccessStatus?.hasAccess && (
-                        <View style={styles.accessBadge}>
-                          <CheckCircle size={14} color="#10B981" />
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
+                  <View style={styles.categoryItemContainer}>
+                    <TouchableOpacity
+                      style={styles.categoryItem}
+                      activeOpacity={0.8}
+                      onPress={() => handleCategoryPress(item)}
+                    >
+                      <View style={styles.imageContainer}>
+                        <Image 
+                          source={typeof item.image === 'string' ? { uri: item.image } : item.image}
+                          style={styles.categoryImage}
+                          resizeMode="cover"
+                        />
+                        {/* Pay ₹99 label on top right corner for labor when no access */}
+                        {item.id === 'labor' && !labourAccessStatus?.hasAccess && (
+                          <View style={styles.payLabelBadge}>
+                            <Text style={styles.payLabelBadgeText}>Pay ₹99</Text>
+                          </View>
+                        )}
+                        {/* Access indicator on top right for labor when access granted */}
+                        {item.id === 'labor' && labourAccessStatus?.hasAccess && (
+                          <View style={styles.accessBadge}>
+                            <CheckCircle size={14} color="#10B981" />
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                   <View style={styles.categoryContent}>
                     <View style={styles.categoryNameContainer}>
                       <Text style={styles.categoryName} numberOfLines={2}>
@@ -333,24 +360,29 @@ const styles = StyleSheet.create({
   categoryWrapper: {
     alignItems: 'center',
   },
+  categoryItemContainer: {
+    width: '100%',
+    height: 100,
+    marginBottom: 2,
+  },
   categoryItem: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    overflow: 'hidden',
     height: 100,
     width: '100%',
     ...Platform.select({
       ios: {
-        shadowColor: '#CBD5E1',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
       },
       android: {
-        elevation: 2,
+        elevation: 4,
+        shadowColor: '#3B82F6',
       },
       web: {
-        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
+        boxShadow: '0px 4px 14px rgba(59, 130, 246, 0.2), 0px 2px 6px rgba(59, 130, 246, 0.12)',
       },
     }),
   },

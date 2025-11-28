@@ -1,10 +1,18 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  Alert,
+  Dimensions,
+  StyleProp,
+  ViewStyle,
+  TextStyle,
+} from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
 import { useRouter } from 'expo-router';
 import { useLanguage } from '@/context/LanguageContext';
-import { getResponsiveSpacing, getResponsiveFontSize } from '@/utils/responsive';
 
 interface LogoutButtonProps {
   style?: any;
@@ -34,7 +42,6 @@ export default function LogoutButton({
     try {
       onLogoutStart?.();
       
-      console.log('🚪 Starting complete logout process...');
       
       // Reset notification state first
       resetNotificationState();
@@ -42,17 +49,9 @@ export default function LogoutButton({
       // Perform logout (clears AsyncStorage and user state)
       await logout();
       
-      // Navigate to auth screen with navigation stack reset (production pattern)
-      try {
-        if (router.dismissAll) {
-          router.dismissAll();
-        }
-      } catch (e) {
-        // dismissAll might not be available in all versions
-      }
+      // Navigate to auth screen (router.replace already handles stack reset)
       router.replace('/(auth)/login');
       
-      console.log('✅ Complete logout successful');
       onLogoutComplete?.();
     } catch (error) {
       console.error('❌ Logout error:', error);
@@ -91,38 +90,26 @@ export default function LogoutButton({
     );
   };
 
-  const getButtonStyle = () => {
-    const baseStyle = [styles.button];
-    
+  const getButtonStyle = (): StyleProp<ViewStyle>[] => {
     switch (variant) {
       case 'destructive':
-        baseStyle.push(styles.destructiveButton);
-        break;
+        return [styles.button, styles.destructiveButton];
       case 'outline':
-        baseStyle.push(styles.outlineButton);
-        break;
+        return [styles.button, styles.outlineButton];
       default:
-        baseStyle.push(styles.defaultButton);
+        return [styles.button, styles.defaultButton];
     }
-    
-    return baseStyle;
   };
 
-  const getTextStyle = () => {
-    const baseStyle = [styles.buttonText];
-    
+  const getTextStyle = (): StyleProp<TextStyle>[] => {
     switch (variant) {
       case 'destructive':
-        baseStyle.push(styles.destructiveText);
-        break;
+        return [styles.buttonText, styles.destructiveText];
       case 'outline':
-        baseStyle.push(styles.outlineText);
-        break;
+        return [styles.buttonText, styles.outlineText];
       default:
-        baseStyle.push(styles.defaultText);
+        return [styles.buttonText, styles.defaultText];
     }
-    
-    return baseStyle;
   };
 
   return (
@@ -137,6 +124,20 @@ export default function LogoutButton({
     </TouchableOpacity>
   );
 }
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+const getResponsiveSpacing = (small: number, medium: number, large: number) => {
+  if (SCREEN_WIDTH < 375) return small;
+  if (SCREEN_WIDTH < 768) return medium;
+  return large;
+};
+
+const getResponsiveFontSize = (small: number, medium: number, large: number) => {
+  if (SCREEN_WIDTH < 375) return small;
+  if (SCREEN_WIDTH < 768) return medium;
+  return large;
+};
 
 const styles = StyleSheet.create({
   button: {

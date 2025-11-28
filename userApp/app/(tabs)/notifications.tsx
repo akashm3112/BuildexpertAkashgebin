@@ -39,26 +39,41 @@ declare interface Notification {
   relative_time?: string;
 }
 
-const getNotificationIcon = (type: string) => {
+type NotificationVariant = 'success' | 'error' | 'info';
+
+const getNotificationIcon = (type: string, variant: NotificationVariant = 'info') => {
+  const variantColor =
+    variant === 'error' ? '#EF4444' : variant === 'success' ? '#10B981' : undefined;
+
   switch (type) {
     case 'booking':
-      return <Calendar size={24} color="#3B82F6" />;
+      return <Calendar size={24} color={variantColor || '#3B82F6'} />;
     case 'payment':
-      return <CreditCard size={24} color="#10B981" />;
+      return <CreditCard size={24} color={variantColor || '#10B981'} />;
     case 'service':
-      return <CheckCircle size={24} color="#10B981" />;
+      return <CheckCircle size={24} color={variantColor || '#10B981'} />;
     case 'message':
-      return <MessageCircle size={24} color="#3B82F6" />;
+      return <MessageCircle size={24} color={variantColor || '#3B82F6'} />;
     case 'reminder':
-      return <Clock size={24} color="#F59E0B" />;
+      return <Clock size={24} color={variantColor || '#F59E0B'} />;
     case 'offer':
-      return <Gift size={24} color="#EF4444" />;
+      return <Gift size={24} color={variantColor || '#EF4444'} />;
     default:
-      return <Bell size={24} color="#64748B" />;
+      return <Bell size={24} color={variantColor || '#64748B'} />;
   }
 };
 
-const getNotificationColor = (type: string) => {
+const getNotificationColor = (
+  type: string,
+  variant: NotificationVariant = 'info'
+) => {
+  if (variant === 'success') {
+    return '#ECFDF5';
+  }
+  if (variant === 'error') {
+    return '#FEE2E2';
+  }
+
   switch (type) {
     case 'booking':
       return '#EFF6FF';
@@ -75,6 +90,65 @@ const getNotificationColor = (type: string) => {
     default:
       return '#F8FAFC';
   }
+};
+
+const classifyNotification = (title: string, message: string) => {
+  const lowerTitle = (title || '').toLowerCase();
+  const lowerMessage = (message || '').toLowerCase();
+  const combined = `${lowerTitle} ${lowerMessage}`;
+
+  let category = 'service';
+  if (combined.includes('payment')) {
+    category = 'payment';
+  } else if (combined.includes('booking')) {
+    category = 'booking';
+  } else if (combined.includes('reminder')) {
+    category = 'reminder';
+  } else if (combined.includes('offer') || combined.includes('discount')) {
+    category = 'offer';
+  } else if (
+    combined.includes('message') ||
+    combined.includes('chat') ||
+    combined.includes('support')
+  ) {
+    category = 'message';
+  }
+
+  const dangerKeywords = [
+    'fail',
+    'failed',
+    'failure',
+    'declined',
+    'rejected',
+    'unsuccess',
+    'error',
+    'issue',
+    'problem',
+    'cancel',
+    'report',
+  ];
+
+  const successKeywords = [
+    'welcome',
+    'completed',
+    'accepted',
+    'success',
+    'successful',
+    'activated',
+    'approved',
+    'confirmed',
+    'payment received',
+  ];
+
+  let variant: NotificationVariant = 'info';
+
+  if (dangerKeywords.some(keyword => combined.includes(keyword))) {
+    variant = 'error';
+  } else if (successKeywords.some(keyword => combined.includes(keyword))) {
+    variant = 'success';
+  }
+
+  return { category, variant };
 };
 
 export default function NotificationsScreen() {
@@ -163,10 +237,7 @@ export default function NotificationsScreen() {
   };
 
   // Debug logging
-  console.log('🔔 NotificationsScreen - Current notifications:', notifications);
-  console.log('🔔 NotificationsScreen - Notifications count:', notifications.length);
-  console.log('🔔 NotificationsScreen - First notification details:', notifications[0]);
-  console.log('🔔 NotificationsScreen - Is first notification read?', notifications[0]?.is_read);
+  
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -224,36 +295,21 @@ export default function NotificationsScreen() {
 
   const renderNotification = ({ item }: any) => {
     // Determine notification type based on title or message content
-    const getNotificationType = (title: string, message: string) => {
-      const lowerTitle = title.toLowerCase();
-      const lowerMessage = message.toLowerCase();
-      
-      if (lowerTitle.includes('booking') || lowerMessage.includes('booking')) {
-        return 'booking';
-      } else if (lowerTitle.includes('welcome') || lowerMessage.includes('welcome')) {
-        return 'service';
-      } else if (lowerTitle.includes('report') || lowerMessage.includes('report')) {
-        return 'service';
-      } else if (lowerTitle.includes('rating') || lowerMessage.includes('rating')) {
-        return 'service';
-      } else {
-        return 'service'; // default
-      }
-    };
-
-    const notificationType = getNotificationType(item.title, item.message);
+    const { category, variant } = classifyNotification(item.title, item.message);
     
     return (
       <TouchableOpacity
         style={[
           responsiveStyles.notificationCard,
-          { backgroundColor: getNotificationColor(notificationType) },
+          { backgroundColor: getNotificationColor(category, variant) },
           !item.is_read && styles.unreadNotificationCard,
         ]}
         activeOpacity={0.85}
         onPress={() => handleMarkAsRead(item.id)}
       >
-        <View style={responsiveStyles.notificationIcon}>{getNotificationIcon(notificationType)}</View>
+        <View style={responsiveStyles.notificationIcon}>
+          {getNotificationIcon(category, variant)}
+        </View>
         <View style={styles.notificationContent}>
           <View style={styles.notificationHeaderRow}>
             <Text style={styles.notificationTitle}>{item.title}</Text>

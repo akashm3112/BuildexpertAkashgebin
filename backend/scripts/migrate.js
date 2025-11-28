@@ -3,11 +3,9 @@ require('dotenv').config({ path: './config.env' });
 
 const createTables = async () => {
   try {
-    console.log('🚀 Starting database migration...');
 
     // Set timezone to IST for the session
     await query(`SET timezone = 'Asia/Kolkata';`);
-    console.log('✅ Timezone set to IST (Asia/Kolkata)');
 
     // 1. Create users table
     await query(`
@@ -23,7 +21,6 @@ const createTables = async () => {
         is_verified BOOLEAN DEFAULT FALSE
       );
     `);
-    console.log('✅ Users table created');
 
     // 2. Create addresses table
     await query(`
@@ -36,7 +33,6 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Addresses table created');
 
     // 3. Create services_master table
     await query(`
@@ -47,7 +43,6 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Services master table created');
 
     // 4. Create provider_profiles table
     await query(`
@@ -61,7 +56,6 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Provider profiles table created');
 
     // 5. Create provider_services table
     await query(`
@@ -78,7 +72,6 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Provider services table created');
 
     // 6. Create bookings table
     await query(`
@@ -97,7 +90,6 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Bookings table created');
 
     // 6.1. Add missing columns to bookings table if not present
     await query(`
@@ -111,7 +103,6 @@ const createTables = async () => {
         END IF;
       END$$;
     `);
-    console.log('✅ Bookings table columns checked/added');
 
     // 7. Create ratings table
     await query(`
@@ -123,7 +114,6 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Ratings table created');
 
     // 8. Create notifications table
     await query(`
@@ -136,7 +126,6 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Notifications table created');
 
     // 9. Create payments table
     await query(`
@@ -151,7 +140,6 @@ const createTables = async () => {
         next_due_date DATE
       );
     `);
-    console.log('✅ Payments table created');
 
     // 10. Create provider_reports table
     await query(`
@@ -168,7 +156,6 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Provider reports table created');
 
     // Create indexes for better performance
     await query(`CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);`);
@@ -181,14 +168,12 @@ const createTables = async () => {
     await query(`CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);`);
     await query(`CREATE INDEX IF NOT EXISTS idx_provider_reports_provider_id ON provider_reports(provider_id);`);
 
-    console.log('✅ Database indexes created');
     
     // Seed services into services_master table
-    console.log('🌱 Seeding services...');
     const services = [
       { name: 'plumber', is_paid: true },
       { name: 'mason-mastri', is_paid: true },
-      { name: 'painting-cleaning', is_paid: true },
+      { name: 'painting', is_paid: true },
       { name: 'granite-tiles', is_paid: true },
       { name: 'engineer-interior', is_paid: true },
       { name: 'electrician', is_paid: true },
@@ -198,7 +183,9 @@ const createTables = async () => {
       { name: 'interiors-building', is_paid: true },
       { name: 'stainless-steel', is_paid: true },
       { name: 'contact-building', is_paid: true },
-      { name: 'glass-mirror', is_paid: true }
+      { name: 'glass-mirror', is_paid: true },
+      { name: 'cleaning', is_paid: true },
+      { name: 'borewell', is_paid: true }
     ];
 
     for (const service of services) {
@@ -208,15 +195,12 @@ const createTables = async () => {
         ON CONFLICT (name) DO NOTHING
       `, [service.name, service.is_paid]);
     }
-    console.log('✅ Services seeded successfully');
     
-    console.log('🎉 Database migration completed successfully!');
 
     // Drop the old unique constraint on phone
     await query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_phone_key;`);
     // Add a new unique constraint on (phone, role)
     await query(`ALTER TABLE users ADD CONSTRAINT users_phone_role_key UNIQUE (phone, role);`);
-    console.log('Migration successful: Unique constraint on (phone, role) applied.');
 
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -228,7 +212,6 @@ const createTables = async () => {
 if (require.main === module) {
   createTables()
     .then(() => {
-      console.log('Migration completed');
       process.exit(0);
     })
     .catch((error) => {

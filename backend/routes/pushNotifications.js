@@ -4,6 +4,8 @@ const { auth } = require('../middleware/auth');
 const { pushNotificationService, NotificationTemplates } = require('../utils/pushNotifications');
 const { query, getRow, getRows } = require('../database/connection');
 const logger = require('../utils/logger');
+const { asyncHandler } = require('../middleware/errorHandler');
+const { ValidationError, AuthorizationError } = require('../utils/errorTypes');
 
 const router = express.Router();
 
@@ -18,41 +20,26 @@ router.use(auth);
 router.post('/register-token', [
   body('pushToken').notEmpty().withMessage('Push token is required'),
   body('deviceInfo').optional().isObject().withMessage('Device info must be an object')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const { pushToken, deviceInfo = {} } = req.body;
-    const userId = req.user.id;
-
-    const result = await pushNotificationService.registerPushToken(userId, pushToken, deviceInfo);
-    
-    if (result.success) {
-      res.json({
-        status: 'success',
-        message: 'Push token registered successfully'
-      });
-    } else {
-      res.status(400).json({
-        status: 'error',
-        message: result.error
-      });
-    }
-  } catch (error) {
-    logger.error('Error registering push token', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new ValidationError('Validation failed', { errors: errors.array() });
   }
-});
+
+  const { pushToken, deviceInfo = {} } = req.body;
+  const userId = req.user.id;
+
+  const result = await pushNotificationService.registerPushToken(userId, pushToken, deviceInfo);
+  
+  if (result.success) {
+    res.json({
+      status: 'success',
+      message: 'Push token registered successfully'
+    });
+  } else {
+    throw new ValidationError(result.error);
+  }
+}));
 
 /**
  * @route   POST /api/push-notifications/send-test
@@ -63,29 +50,21 @@ router.post('/send-test', [
   body('title').notEmpty().withMessage('Title is required'),
   body('body').notEmpty().withMessage('Body is required'),
   body('data').optional().isObject().withMessage('Data must be an object')
-], async (req, res) => {
-  try {
-    // Only allow in development
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Test notifications not allowed in production'
-      });
-    }
+], asyncHandler(async (req, res) => {
+  // Only allow in development
+  if (process.env.NODE_ENV === 'production') {
+    throw new AuthorizationError('Test notifications not allowed in production');
+  }
 
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new ValidationError('Validation failed', { errors: errors.array() });
+  }
 
-    const { title, body, data = {} } = req.body;
-    const userId = req.user.id;
+  const { title, body, data = {} } = req.body;
+  const userId = req.user.id;
 
-    const notification = {
+  const notification = {
       title,
       body,
       data: { ...data, type: 'test' },
@@ -93,39 +72,28 @@ router.post('/send-test', [
       priority: 'high'
     };
 
-    const result = await pushNotificationService.sendToUser(userId, notification);
-    
-    if (result.success) {
-      res.json({
-        status: 'success',
-        message: 'Test notification sent successfully'
-      });
-    } else {
-      res.status(400).json({
-        status: 'error',
-        message: result.error
-      });
-    }
-  } catch (error) {
-    logger.error('Error sending test notification', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
+  const result = await pushNotificationService.sendToUser(userId, notification);
+  
+  if (result.success) {
+    res.json({
+      status: 'success',
+      message: 'Test notification sent successfully'
     });
+  } else {
+    throw new ValidationError(result.error);
   }
-});
+}));
 
 /**
  * @route   GET /api/push-notifications/settings
  * @desc    Get user notification settings
  * @access  Private
  */
-router.get('/settings', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    
-    // Get user notification preferences (if table exists)
-    let settings = {
+router.get('/settings', asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  // Get user notification preferences (if table exists)
+  let settings = {
       booking_updates: true,
       reminders: true,
       promotional: false,
@@ -150,14 +118,7 @@ router.get('/settings', async (req, res) => {
       status: 'success',
       data: { settings }
     });
-  } catch (error) {
-    logger.error('Error getting notification settings', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+}));
 
 /**
  * @route   PUT /api/push-notifications/settings
@@ -166,21 +127,16 @@ router.get('/settings', async (req, res) => {
  */
 router.put('/settings', [
   body('settings').isObject().withMessage('Settings must be an object')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new ValidationError('Validation failed', { errors: errors.array() });
+  }
 
-    const { settings } = req.body;
-    const userId = req.user.id;
+  const { settings } = req.body;
+  const userId = req.user.id;
 
-    // Create table if it doesn't exist
+  // Create table if it doesn't exist
     try {
       await query(`
         CREATE TABLE IF NOT EXISTS user_notification_settings (
@@ -207,27 +163,19 @@ router.put('/settings', [
       status: 'success',
       message: 'Notification settings updated successfully'
     });
-  } catch (error) {
-    logger.error('Error updating notification settings', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+}));
 
 /**
  * @route   GET /api/push-notifications/history
  * @desc    Get notification history for user
  * @access  Private
  */
-router.get('/history', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
+router.get('/history', asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const { page = 1, limit = 20 } = req.query;
+  const offset = (page - 1) * limit;
 
-    const notifications = await getRows(`
+  const notifications = await getRows(`
       SELECT 
         notification_type,
         title,
@@ -262,14 +210,7 @@ router.get('/history', async (req, res) => {
         }
       }
     });
-  } catch (error) {
-    logger.error('Error getting notification history', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+}));
 
 /**
  * @route   DELETE /api/push-notifications/token
@@ -278,12 +219,11 @@ router.get('/history', async (req, res) => {
  */
 router.delete('/token', [
   body('pushToken').optional().notEmpty().withMessage('Push token cannot be empty')
-], async (req, res) => {
-  try {
-    const { pushToken } = req.body;
-    const userId = req.user.id;
+], asyncHandler(async (req, res) => {
+  const { pushToken } = req.body;
+  const userId = req.user.id;
 
-    if (pushToken) {
+  if (pushToken) {
       // Remove specific token
       await query(
         'UPDATE user_push_tokens SET is_active = false WHERE user_id = $1 AND push_token = $2',
@@ -301,13 +241,6 @@ router.delete('/token', [
       status: 'success',
       message: 'Push token(s) removed successfully'
     });
-  } catch (error) {
-    logger.error('Error removing push token', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+}));
 
 module.exports = router;

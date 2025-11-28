@@ -6,6 +6,29 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type CallStatus = 'idle' | 'calling' | 'ringing' | 'connecting' | 'connected' | 'ended';
 
+const CALL_ERROR_MESSAGES: Record<string, string> = {
+  CALL_BOOKING_NOT_FOUND: 'Unable to find that booking or you no longer have access to it.',
+  CALL_STATUS_NOT_ALLOWED: 'Calls are only available for bookings that are in progress.',
+  CALLER_NOT_VERIFIED: 'Please verify your account before placing calls.',
+  CALLER_PHONE_MISSING: 'Add a valid phone number to your profile before placing calls.',
+  RECEIVER_NOT_VERIFIED: 'The other participant must verify their account before calling.',
+  RECEIVER_PHONE_MISSING: 'The other participant has not added a phone number yet.',
+  PROVIDER_CALLS_DISABLED: 'The service provider is currently unavailable for calls.',
+  CALLER_ROLE_MISMATCH: 'Invalid caller information supplied for this booking.',
+  CALL_SELF_NOT_ALLOWED: 'You cannot initiate a call with yourself.',
+  CALL_HISTORY_ACCESS_DENIED: 'You do not have permission to view this call history.',
+  WEBRTC_PERMISSION_DENIED: 'You do not have permission to start this call.',
+  WEBRTC_INVALID_PAYLOAD: 'Unsupported call request. Please update the app and try again.',
+  WEBRTC_ERROR: 'An unexpected call error occurred. Please try again.',
+};
+
+const mapCallError = (errorCode?: string, fallback?: string) => {
+  if (!errorCode) {
+    return fallback || 'Failed to initiate call';
+  }
+  return CALL_ERROR_MESSAGES[errorCode] || fallback || 'Failed to initiate call';
+};
+
 export const useWebRTCCall = () => {
   const { user } = useAuth();
   const [callStatus, setCallStatus] = useState<CallStatus>('idle');
@@ -97,7 +120,7 @@ export const useWebRTCCall = () => {
   }, []);
 
   const handleError = useCallback((errorMsg: string) => {
-    setError(errorMsg);
+    setError(mapCallError(undefined, errorMsg));
     setCallStatus('ended');
     
     setTimeout(() => {
@@ -143,11 +166,15 @@ export const useWebRTCCall = () => {
         setCurrentCall(callData);
         await webRTCService.startCall(callData);
       } else {
-        throw new Error(data.message || 'Failed to initiate call');
+        const message = mapCallError(data.errorCode, data.message);
+        const error = new Error(message);
+        (error as any).code = data.errorCode;
+        throw error;
       }
     } catch (err: any) {
       console.error('Error initiating call:', err);
-      setError(err.message || 'Failed to initiate call');
+      const message = mapCallError(err.code, err.message);
+      setError(message);
       setCallStatus('idle');
     }
   }, []);

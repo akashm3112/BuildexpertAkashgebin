@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Linking, BackHandler, Image, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, UserPlus, Eye, EyeOff, ArrowRight, User, Mail, Phone, Lock, Camera, X } from 'lucide-react-native';
+import { ArrowLeft, UserPlus, Eye, EyeOff, ArrowRight, User, Mail, Phone, Lock, Camera, X, AlertCircle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
@@ -37,6 +37,10 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({
+    phone: '',
+    password: '',
+  });
   const [modalVisible, setModalVisible] = useState(false);
   const [profileImage, setProfileImage] = useState<string>('');
   const [imageLoading, setImageLoading] = useState(false);
@@ -79,6 +83,42 @@ export default function SignUpScreen() {
     setModalVisible(true);
   };
 
+  const validatePhone = (phoneNumber: string) => {
+    // Allow admin phone number (9999999999) and regular Indian mobile numbers (6-9)
+    const phoneRegex = /^(9999999999|[6-9]\d{9})$/;
+    return phoneRegex.test(phoneNumber);
+  };
+
+  const validateField = (field: 'phone' | 'password', value: string) => {
+    let error = '';
+    switch (field) {
+      case 'phone':
+        if (value.length > 0 && !validatePhone(value)) {
+          error = 'Please enter a valid 10-digit mobile number';
+        }
+        break;
+      case 'password':
+        if (value.length > 0 && value.length < 6) {
+          error = 'Password must contain 6 characters';
+        }
+        break;
+    }
+    setErrors(prev => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
+  const handlePhoneChange = (value: string) => {
+    // Only allow numeric input and limit to 10 digits
+    const numericValue = value.replace(/\D/g, '').slice(0, 10);
+    setPhone(numericValue);
+    validateField('phone', numericValue);
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    validateField('password', value);
+  };
+
   const handleImagePicker = async () => {
     showModal(
       'Profile Picture',
@@ -105,7 +145,6 @@ export default function SignUpScreen() {
               });
 
               if (!result.canceled && result.assets[0]) {
-                console.log('📸 Camera photo selected:', result.assets[0].uri);
                 // Convert file URI to base64 for backend processing
                 try {
                   const base64 = await convertUriToBase64(result.assets[0].uri);
@@ -116,7 +155,6 @@ export default function SignUpScreen() {
                   setProfileImage(result.assets[0].uri);
                 }
               } else {
-                console.log('📸 Camera photo selection canceled');
               }
             } catch (error) {
               console.error('Error taking photo:', error);
@@ -147,7 +185,6 @@ export default function SignUpScreen() {
               });
 
               if (!result.canceled && result.assets[0]) {
-                console.log('🖼️ Gallery photo selected:', result.assets[0].uri);
                 // Convert file URI to base64 for backend processing
                 try {
                   const base64 = await convertUriToBase64(result.assets[0].uri);
@@ -158,7 +195,6 @@ export default function SignUpScreen() {
                   setProfileImage(result.assets[0].uri);
                 }
               } else {
-                console.log('🖼️ Gallery photo selection canceled');
               }
             } catch (error) {
               console.error('Error choosing from gallery:', error);
@@ -222,11 +258,13 @@ export default function SignUpScreen() {
       showModal('Password Mismatch', 'Passwords do not match. Please try again.', 'error');
       return;
     }
+    if (!profileImage) {
+      showModal('Profile Picture Required', 'Please upload a profile picture before continuing.', 'error');
+      return;
+    }
     setIsLoading(true);
     try {
-      console.log('📤 Starting signup process...');
-      console.log('🖼️ Profile image being sent:', profileImage ? profileImage.substring(0, 50) + '...' : 'No image');
-      console.log('🌐 API Base URL:', API_BASE_URL);
+      
       
       const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
         method: 'POST',
@@ -240,10 +278,29 @@ export default function SignUpScreen() {
           profilePicUrl: profileImage
         })
       });
-      const data = await response.json();
+      
+      let data;
+      try {
+        const text = await response.text();
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        setIsLoading(false);
+        showModal('Signup Failed', 'Invalid response from server. Please try again.', 'error');
+        return;
+      }
+      
       setIsLoading(false);
       if (!response.ok) {
-        showModal('Signup Failed', data.message || 'An error occurred.', 'error');
+        // Show detailed error message
+        const errorMessage = data.message || data.errors?.[0]?.msg || `An error occurred (Status: ${response.status}). Please try again.`;
+        console.error('Signup error:', {
+          status: response.status,
+          message: errorMessage,
+          errors: data.errors,
+          data: data
+        });
+        showModal('Signup Failed', errorMessage, 'error');
         return;
       }
       // On success, navigate to OTP screen
@@ -251,9 +308,11 @@ export default function SignUpScreen() {
         pathname: '/auth/otp',
         params: { phone, isNewUser: 'true' }
       });
-    } catch (error) {
+    } catch (error: any) {
       setIsLoading(false);
-      showModal('Network Error', 'Could not connect to server.', 'error');
+      console.error('Signup network error:', error);
+      const errorMessage = error.message || 'Could not connect to server. Please check your internet connection and try again.';
+      showModal('Network Error', errorMessage, 'error');
     }
   };
 
@@ -377,12 +436,12 @@ export default function SignUpScreen() {
 
             {/* Phone */}
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, errors.phone && styles.inputError]}>
                 <Phone size={20} color="#64748B" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={handlePhoneChange}
                   placeholder="Mobile Number"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="numeric"
@@ -390,16 +449,22 @@ export default function SignUpScreen() {
                   returnKeyType="next"
                 />
               </View>
+              {errors.phone && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle size={14} color="#EF4444" />
+                  <Text style={styles.errorText}>{errors.phone}</Text>
+                </View>
+              )}
             </View>
 
             {/* Password */}
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
+              <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
                 <Lock size={20} color="#64748B" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={handlePasswordChange}
                   placeholder="Password"
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showPassword}
@@ -416,6 +481,12 @@ export default function SignUpScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+              {errors.password && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle size={14} color="#EF4444" />
+                  <Text style={styles.errorText}>{errors.password}</Text>
+                </View>
+              )}
             </View>
 
             {/* Confirm Password */}
@@ -541,6 +612,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  inputError: {
+    borderColor: '#EF4444',
+  },
   inputIcon: {
     marginRight: 12,
   },
@@ -612,6 +686,17 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginLeft: 4,
   },
 });
 

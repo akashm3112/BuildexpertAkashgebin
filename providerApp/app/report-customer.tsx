@@ -137,13 +137,13 @@ export default function ReportCustomerScreen() {
 
     try {
       // Get authentication token
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         throw new Error('No authentication token found');
       }
 
-      console.log('🔍 API_BASE_URL:', API_BASE_URL);
-      console.log('🔍 User token exists:', !!token);
+     
       console.log('Submitting report with data:', {
         customerName: formData.customerName,
         incidentDate: convertedDate,
@@ -153,44 +153,55 @@ export default function ReportCustomerScreen() {
         evidence: formData.evidence,
       });
 
-      // Send report to backend API
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      // Use unified error handling
+      const { safeApiCall } = await import('@/utils/errorHandler');
       
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/providers/report-customer`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            customerName: formData.customerName,
-            incidentDate: convertedDate,
-            incidentTime: formData.incidentTime || null,
-            incidentType: formData.incidentType,
-            description: formData.description,
-            evidence: formData.evidence,
-          }),
-          signal: controller.signal,
-        });
-        
-                clearTimeout(timeoutId);
-
-        console.log('Response status:', response.status);
-        const data = await response.json();
-        console.log('Response data:', data);
-
-        if (!response.ok) {
-          console.error('❌ API Error:', {
-            status: response.status,
-            statusText: response.statusText,
-            data: data
-          });
-          throw new Error(data.message || `Failed to submit report (${response.status})`);
+      const result = await safeApiCall(
+        async () => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/providers/report-customer`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                customerName: formData.customerName,
+                incidentDate: convertedDate,
+                incidentTime: formData.incidentTime || null,
+                incidentType: formData.incidentType,
+                description: formData.description,
+                evidence: formData.evidence,
+              }),
+              signal: controller.signal,
+            });
+            
+            clearTimeout(timeoutId);
+            return response;
+          } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if ((fetchError as Error).name === 'AbortError') {
+              throw new Error('Request timeout: Please check your internet connection and try again.');
+            }
+            throw fetchError;
+          }
+        },
+        {
+          showAlert: false, // Use custom alert
+          onError: (errorInfo) => {
+            showAlert('Error', errorInfo.userMessage, 'error', [
+              { text: 'OK', onPress: () => {
+                setShowAlertModal(false);
+              }, style: 'primary' }
+            ]);
+          }
         }
+      );
 
-        console.log('✅ Report submitted successfully!');
+      if (result.success) {
         showAlert(
           'Report Submitted',
           'Your customer report has been submitted successfully. Our team will review it and take appropriate action.',
@@ -206,37 +217,7 @@ export default function ReportCustomerScreen() {
             }
           ]
         );
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        if ((fetchError as Error).name === 'AbortError') {
-          throw new Error('Request timeout: Please check your internet connection and try again.');
-        }
-        throw fetchError;
       }
-    } catch (error) {
-      console.error('❌ Report submission error:', error);
-      console.error('❌ Error details:', {
-        message: (error as Error).message,
-        stack: (error as Error).stack,
-        name: (error as Error).name
-      });
-      
-      let errorMessage = 'Failed to submit report. Please try again.';
-      if ((error as Error).message.includes('Network request failed')) {
-        errorMessage = 'Network error: Please check your internet connection and try again.';
-      } else if ((error as Error).message.includes('401')) {
-        errorMessage = 'Authentication error: Please log in again.';
-      } else if ((error as Error).message.includes('404')) {
-        errorMessage = 'Server error: Report endpoint not found.';
-      } else if ((error as Error).message.includes('500')) {
-        errorMessage = 'Server error: Please try again later.';
-      }
-      
-      showAlert('Error', errorMessage, 'error', [
-        { text: 'OK', onPress: () => {
-          setShowAlertModal(false);
-        }, style: 'primary' }
-      ]);
     } finally {
       setIsLoading(false);
     }

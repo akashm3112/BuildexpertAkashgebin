@@ -212,34 +212,82 @@ export default function LoginScreen() {
     setLoading(true);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Import network retry utility
+      const { fetchWithRetry, getNetworkErrorMessage, checkNetworkConnectivity } = await import('@/utils/networkRetry');
+      
+      // Check network connectivity first
+      const hasNetwork = await checkNetworkConnectivity();
+      if (!hasNetwork) {
+        Toast.show({
+          type: 'error',
+          text1: 'No Internet Connection',
+          text2: 'Please check your network and try again',
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Make login request with retry mechanism
+      const response = await fetchWithRetry(
+        `${API_BASE_URL}/api/auth/login`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            phone: formData.phone,
+            password: formData.password,
+            role: 'user',
+          }),
         },
-        body: JSON.stringify({
-          phone: formData.phone,
-          password: formData.password,
-          role: 'user',
-        }),
-      });
+        {
+          maxRetries: 3,
+          retryDelay: 1000,
+          exponentialBackoff: true,
+          timeout: 30000,
+          onRetry: (attempt, error) => {
+            console.log(`Login retry attempt ${attempt}/${3}`);
+          },
+        }
+      );
 
       const data = await response.json();
 
       if (response.ok) {
-        // Save user data to context
-        await login({
-          ...data.data.user,
-          token: data.data.token,
-        });
+        try {
+          // Store tokens using TokenManager with retry
+          const { tokenManager } = await import('@/utils/tokenManager');
+          if (data.data.accessToken && data.data.refreshToken) {
+            await tokenManager.storeTokenPair(
+              data.data.accessToken,
+              data.data.refreshToken,
+              data.data.accessTokenExpiresAt,
+              data.data.refreshTokenExpiresAt
+            );
+          }
 
-        Toast.show({
-          type: 'success',
-          text1: 'Welcome Back!',
-          text2: 'Successfully logged in',
-        });
+          // Save user data to context (keep token for backward compatibility)
+          await login({
+            ...data.data.user,
+            token: data.data.accessToken, // Keep for backward compatibility
+          });
 
-        router.replace('/(tabs)');
+          Toast.show({
+            type: 'success',
+            text1: 'Welcome Back!',
+            text2: 'Successfully logged in',
+          });
+
+          router.replace('/(tabs)');
+        } catch (storageError) {
+          console.error('Storage error during login:', storageError);
+          Toast.show({
+            type: 'error',
+            text1: 'Storage Error',
+            text2: 'Failed to save login data. Please try again.',
+          });
+        }
       } else {
         Toast.show({
           type: 'error',
@@ -249,10 +297,13 @@ export default function LoginScreen() {
       }
     } catch (error) {
       console.error('Login error:', error);
+      const { getNetworkErrorMessage } = await import('@/utils/networkRetry');
+      const errorMessage = getNetworkErrorMessage(error);
+      
       Toast.show({
         type: 'error',
-        text1: 'Network Error',
-        text2: 'Please check your connection and try again',
+        text1: 'Login Failed',
+        text2: errorMessage,
       });
     } finally {
       setLoading(false);

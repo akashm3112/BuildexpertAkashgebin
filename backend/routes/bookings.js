@@ -9,30 +9,69 @@ const { pushNotificationService, NotificationTemplates } = require('../utils/pus
 const DatabaseOptimizer = require('../utils/databaseOptimization');
 const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
+const { bookingCreationLimiter, standardLimiter } = require('../middleware/rateLimiting');
+const { sanitizeBody } = require('../middleware/inputSanitization');
+const { createQueuedRateLimiter } = require('../utils/rateLimiterQueue');
+const { ServiceUnavailableError, DatabaseConnectionError, RateLimitError } = require('../utils/errorTypes');
+const { asyncHandler } = require('../middleware/errorHandler');
+const { ValidationError, NotFoundError } = require('../utils/errorTypes');
+
+const bookingTrafficShaper = createQueuedRateLimiter({
+  windowMs: 60 * 1000, // 1 minute burst window
+  maxRequests: 8,
+  concurrency: 2,
+  queueLimit: 25,
+  metricName: 'booking-creation',
+  keyGenerator: (req) => req.user?.id?.toString() || req.ip,
+  onQueue: (req, queueLength, meta) => {
+    logger.warn('Booking request queued due to burst rate', {
+      service: 'buildxpert-api',
+      userId: req.user?.id,
+      ip: req.ip,
+      queueLength,
+      inProgress: meta.inProgress,
+      tokensRemaining: meta.tokens
+    });
+  },
+  onReject: (req, res) => {
+    logger.error('Booking queue saturated', {
+      service: 'buildxpert-api',
+      userId: req.user?.id,
+      ip: req.ip
+    });
+    // Rate limiter middleware must respond directly, but use error type for consistency
+    const error = new RateLimitError('Booking demand is very high right now. Please wait a moment and try again.');
+    return res.status(429).json({
+      status: 'error',
+      message: error.message,
+      errorCode: error.errorCode
+    });
+  }
+});
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(auth);
 
+// Apply input sanitization to all routes
+router.use(sanitizeBody());
+
 // @route   POST /api/bookings
 // @desc    Create a new booking
 // @access  Private
 router.post('/', [
+  bookingTrafficShaper,
+  bookingCreationLimiter,
   body('providerServiceId').isUUID().withMessage('Valid provider service ID is required'),
   body('selectedService').notEmpty().withMessage('Selected service is required'),
   body('appointmentDate').isDate().withMessage('Valid appointment date is required'),
   body('appointmentTime').notEmpty().withMessage('Appointment time is required')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new ValidationError('Validation failed', { errors: errors.array() });
+  }
 
     const { providerServiceId, selectedService, appointmentDate, appointmentTime } = req.body;
 
@@ -46,37 +85,31 @@ router.post('/', [
       WHERE ps.id = $1 AND ps.payment_status = 'active'
     `, [providerServiceId]);
 
-    if (!providerService) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Provider service not found or inactive'
-      });
-    }
+  if (!providerService) {
+    throw new NotFoundError('Provider service not found or inactive');
+  }
 
-    // Check if appointment date is in the future
-    // Debug logging removed for production
-    const appointmentDateTime = new Date(`${appointmentDate} ${appointmentTime}`);
-    if (appointmentDateTime <= new Date()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Appointment date and time must be in the future'
-      });
-    }
+  // Check if appointment date is in the future
+  // Debug logging removed for production
+  const appointmentDateTime = new Date(`${appointmentDate} ${appointmentTime}`);
+  if (appointmentDateTime <= new Date()) {
+    throw new ValidationError('Appointment date and time must be in the future');
+  }
 
-    // Create booking
-    const result = await query(`
+  // Create booking
+  const result = await query(`
       INSERT INTO bookings (user_id, provider_service_id, selected_service, appointment_date, appointment_time)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `, [req.user.id, providerServiceId, selectedService, appointmentDate, appointmentTime]);
 
-    const newBooking = result.rows[0];
+  const newBooking = result.rows[0];
 
-    // Emit real-time event to both the provider's and customer's userId rooms
-    const providerUserId = providerService.provider_user_id;
-    const customerUserId = req.user.id;
-    
-    if (providerUserId) {
+  // Emit real-time event to both the provider's and customer's userId rooms
+  const providerUserId = providerService.provider_user_id;
+  const customerUserId = req.user.id;
+  
+  if (providerUserId) {
       getIO().to(providerUserId).emit('booking_created', {
         booking: {
           ...newBooking,
@@ -100,21 +133,21 @@ router.post('/', [
       logger.booking('Push notification sent to provider', {
         bookingId: newBooking.id,
         providerId: providerUserId
-      });
-    }
-    
-    if (customerUserId) {
-      getIO().to(customerUserId).emit('booking_created', {
-        booking: {
-          ...newBooking,
-          providerName: providerService.provider_name,
-          serviceName: providerService.service_name
-        }
-      });
-    }
+    });
+  }
+  
+  if (customerUserId) {
+    getIO().to(customerUserId).emit('booking_created', {
+      booking: {
+        ...newBooking,
+        providerName: providerService.provider_name,
+        serviceName: providerService.service_name
+      }
+    });
+  }
 
-    // Format appointment date and time for better display
-    const formatAppointmentDateTime = (dateStr, timeStr) => {
+  // Format appointment date and time for better display
+  const formatAppointmentDateTime = (dateStr, timeStr) => {
       try {
         const date = new Date(dateStr);
         const formattedDate = date.toLocaleDateString('en-IN', {
@@ -142,14 +175,14 @@ router.post('/', [
         return { formattedDate, formattedTime };
       } catch (error) {
         logger.error('Error formatting appointment date/time', { error: error.message });
-        return { formattedDate: dateStr, formattedTime: timeStr };
-      }
-    };
-    
-    const { formattedDate, formattedTime } = formatAppointmentDateTime(appointmentDate, appointmentTime);
+      return { formattedDate: dateStr, formattedTime: timeStr };
+    }
+  };
+  
+  const { formattedDate, formattedTime } = formatAppointmentDateTime(appointmentDate, appointmentTime);
 
-    // Notify provider
-    const providerNotification = await sendNotification(
+  // Notify provider
+  const providerNotification = await sendNotification(
       providerService.provider_user_id,
       'New Booking',
       `You have a new booking for ${providerService.service_name} on ${formattedDate} at ${formattedTime}`,
@@ -161,70 +194,52 @@ router.post('/', [
       req.user.id,
       'Booking Confirmed',
       `Your booking for ${providerService.service_name} on ${formattedDate} at ${formattedTime} has been confirmed.`,
-      'user'
-    );
+    'user'
+  );
 
-    res.status(201).json({
-      status: 'success',
-      message: 'Booking created successfully',
-      data: {
-        booking: {
-          ...newBooking,
-          providerName: providerService.provider_name,
-          serviceName: providerService.service_name
-        }
+  res.status(201).json({
+    status: 'success',
+    message: 'Booking created successfully',
+    data: {
+      booking: {
+        ...newBooking,
+        providerName: providerService.provider_name,
+        serviceName: providerService.service_name
       }
-    });
-
-  } catch (error) {
-    logger.error('Create booking error', { error: error.message, stack: error.stack });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+    }
+  });
+}));
 
 // @route   GET /api/bookings
 // @desc    Get user's bookings
 // @access  Private
-router.get('/', async (req, res) => {
-  try {
-    const { status, page = 1, limit = 10 } = req.query;
+router.get('/', asyncHandler(async (req, res) => {
+  const { status, page = 1, limit = 10 } = req.query;
 
-    // Use optimized database query
-    const result = await DatabaseOptimizer.getBookingsWithDetails(req.user.id, {
-      status,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      userType: 'user'
-    });
+  // Use optimized database query
+  const result = await DatabaseOptimizer.getBookingsWithDetails(req.user.id, {
+    status,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    userType: 'user'
+  });
 
-    res.json({
-      status: 'success',
-      data: {
-        bookings: result.bookings,
-        pagination: result.pagination
-      }
-    });
-
-  } catch (error) {
-    logger.error('Get bookings error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+  res.json({
+    status: 'success',
+    data: {
+      bookings: result.bookings,
+      pagination: result.pagination
+    }
+  });
+}));
 
 // @route   GET /api/bookings/:id
 // @desc    Get booking details
 // @access  Private
-router.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
+router.get('/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-    const booking = await getRow(`
+  const booking = await getRow(`
       SELECT 
         b.*,
         u.full_name as provider_name,
@@ -242,102 +257,80 @@ router.get('/:id', async (req, res) => {
       WHERE b.id = $1 AND b.user_id = $2
     `, [id, req.user.id]);
 
-    if (!booking) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Booking not found'
-      });
-    }
-
-    // Get rating if exists
-    const rating = await getRow('SELECT * FROM ratings WHERE booking_id = $1', [id]);
-
-    res.json({
-      status: 'success',
-      data: {
-        booking: {
-          ...booking,
-          rating: rating || null
-        }
-      }
-    });
-
-  } catch (error) {
-    logger.error('Get booking details error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  if (!booking) {
+    throw new NotFoundError('Booking not found');
   }
-});
+
+  // Get rating if exists
+  const rating = await getRow('SELECT * FROM ratings WHERE booking_id = $1', [id]);
+
+  res.json({
+    status: 'success',
+    data: {
+      booking: {
+        ...booking,
+        rating: rating || null
+      }
+    }
+  });
+}));
 
 // @route   PUT /api/bookings/:id/cancel
 // @desc    Cancel booking
 // @access  Private
 router.put('/:id/cancel', [
   body('cancellationReason').optional().notEmpty().withMessage('Cancellation reason cannot be empty')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new ValidationError('Validation failed', { errors: errors.array() });
+  }
 
-    const { id } = req.params;
-    const { cancellationReason } = req.body;
+  const { id } = req.params;
+  const { cancellationReason } = req.body;
 
-    // Check if booking belongs to user
-    const booking = await getRow('SELECT * FROM bookings WHERE id = $1 AND user_id = $2', [id, req.user.id]);
-    if (!booking) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Booking not found'
-      });
-    }
+  // Check if booking belongs to user
+  const booking = await getRow('SELECT * FROM bookings WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+  if (!booking) {
+    throw new NotFoundError('Booking not found');
+  }
 
-    // Check if booking can be cancelled
-    if (['completed', 'cancelled', 'confirmed', 'accepted'].includes(booking.status)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Cannot cancel completed, confirmed, accepted, or already cancelled booking'
-      });
-    }
+  // Check if booking can be cancelled
+  if (['completed', 'cancelled', 'confirmed', 'accepted'].includes(booking.status)) {
+    throw new ValidationError('Cannot cancel completed, confirmed, accepted, or already cancelled booking');
+  }
 
-    // Update booking status
-    const updateFields = ['status = $1'];
-    const updateValues = ['cancelled'];
-    let paramCount = 2;
+  // Update booking status
+  const updateFields = ['status = $1'];
+  const updateValues = ['cancelled'];
+  let paramCount = 2;
 
-    if (cancellationReason) {
-      updateFields.push(`cancellation_reason = $${paramCount}`);
-      updateValues.push(cancellationReason);
-      paramCount++;
-    }
+  if (cancellationReason) {
+    updateFields.push(`cancellation_reason = $${paramCount}`);
+    updateValues.push(cancellationReason);
+    paramCount++;
+  }
 
-    updateValues.push(id);
-    const result = await query(`
+  updateValues.push(id);
+  const result = await query(`
       UPDATE bookings 
       SET ${updateFields.join(', ')}
       WHERE id = $${paramCount}
       RETURNING *
     `, updateValues);
 
-    const updatedBooking = result.rows[0];
+  const updatedBooking = result.rows[0];
 
-    // Fetch provider's user_id for socket event
-    const providerService = await getRow('SELECT ps.*, pp.user_id as provider_user_id FROM provider_services ps JOIN provider_profiles pp ON ps.provider_id = pp.id WHERE ps.id = $1', [updatedBooking.provider_service_id]);
-    if (providerService && providerService.provider_user_id) {
-      getIO().to(providerService.provider_user_id).emit('booking_updated', {
-        booking: updatedBooking
-      });
-    }
+  // Fetch provider's user_id for socket event
+  const providerService = await getRow('SELECT ps.*, pp.user_id as provider_user_id FROM provider_services ps JOIN provider_profiles pp ON ps.provider_id = pp.id WHERE ps.id = $1', [updatedBooking.provider_service_id]);
+  if (providerService && providerService.provider_user_id) {
+    getIO().to(providerService.provider_user_id).emit('booking_updated', {
+      booking: updatedBooking
+    });
+  }
 
-    // Get booking details for notifications
-    const bookingDetails = await getRow(`
+  // Get booking details for notifications
+  const bookingDetails = await getRow(`
       SELECT b.*, sm.name as service_name
       FROM bookings b
       JOIN provider_services ps ON b.provider_service_id = ps.id
@@ -345,16 +338,16 @@ router.put('/:id/cancel', [
       WHERE b.id = $1
     `, [id]);
 
-    // Notify user
-    const userNotification = await sendNotification(
-      req.user.id,
-      'Booking Cancelled',
-      `Your booking has been cancelled.`,
-      'user'
-    );
+  // Notify user
+  const userNotification = await sendNotification(
+    req.user.id,
+    'Booking Cancelled',
+    `Your booking has been cancelled.`,
+    'user'
+  );
 
-    // Send push notification to user
-    if (bookingDetails) {
+  // Send push notification to user
+  if (bookingDetails) {
       const userPushNotification = {
         ...NotificationTemplates.BOOKING_CANCELLED,
         body: `Your ${bookingDetails.service_name} booking has been cancelled`,
@@ -367,21 +360,21 @@ router.put('/:id/cancel', [
       await pushNotificationService.sendToUser(req.user.id, userPushNotification);
       logger.booking('Push notification sent to user for cancellation', {
         bookingId: id
-      });
-    }
+    });
+  }
 
-    // Notify provider about the cancellation
-    if (providerService && providerService.provider_user_id) {
-      const providerNotification = await sendNotification(
+  // Notify provider about the cancellation
+  if (providerService && providerService.provider_user_id) {
+    const providerNotification = await sendNotification(
         providerService.provider_user_id,
         'Booking Cancelled by Customer',
         `A customer has cancelled their booking for ${providerService.service_name}.`,
         'provider'
       );
 
-      // Send push notification to provider
-      if (bookingDetails) {
-        const providerPushNotification = {
+    // Send push notification to provider
+    if (bookingDetails) {
+      const providerPushNotification = {
           title: '📋 Booking Cancelled',
           body: `A ${bookingDetails.service_name} booking was cancelled by the customer`,
           sound: 'default',
@@ -395,27 +388,19 @@ router.put('/:id/cancel', [
         await pushNotificationService.sendToUser(providerService.provider_user_id, providerPushNotification);
         logger.booking('Push notification sent to provider for cancellation', {
           bookingId: id
-        });
-      }
-
-      // Emit earnings update to provider when booking is cancelled
-      await emitEarningsUpdate(providerService.provider_user_id);
+      });
     }
 
-    res.json({
-      status: 'success',
-      message: 'Booking cancelled successfully',
-      data: { booking: updatedBooking }
-    });
-
-  } catch (error) {
-    logger.error('Cancel booking error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+    // Emit earnings update to provider when booking is cancelled
+    await emitEarningsUpdate(providerService.provider_user_id);
   }
-});
+
+  res.json({
+    status: 'success',
+    message: 'Booking cancelled successfully',
+    data: { booking: updatedBooking }
+  });
+}));
 
 // @route   POST /api/bookings/:id/rate
 // @desc    Rate a completed booking
@@ -423,67 +408,53 @@ router.put('/:id/cancel', [
 router.post('/:id/rate', [
   body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
   body('review').optional().isLength({ max: 500 }).withMessage('Review must be less than 500 characters')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new ValidationError('Validation failed', { errors: errors.array() });
+  }
 
-    const { id } = req.params;
-    const { rating, review } = req.body;
+  const { id } = req.params;
+  const { rating, review } = req.body;
 
-    // Check if booking belongs to user and is completed
-    const booking = await getRow('SELECT * FROM bookings WHERE id = $1 AND user_id = $2', [id, req.user.id]);
-    if (!booking) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Booking not found'
-      });
-    }
+  // Check if booking belongs to user and is completed
+  const booking = await getRow('SELECT * FROM bookings WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+  if (!booking) {
+    throw new NotFoundError('Booking not found');
+  }
 
-    if (booking.status !== 'completed') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Can only rate completed bookings'
-      });
-    }
+  if (booking.status !== 'completed') {
+    throw new ValidationError('Can only rate completed bookings');
+  }
 
-    // Check if already rated
-    const existingRating = await getRow('SELECT * FROM ratings WHERE booking_id = $1', [id]);
-    if (existingRating) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Booking already rated'
-      });
-    }
+  // Check if already rated
+  const existingRating = await getRow('SELECT * FROM ratings WHERE booking_id = $1', [id]);
+  if (existingRating) {
+    throw new ValidationError('Booking already rated');
+  }
 
-    // Create rating
-    const result = await query(`
-      INSERT INTO ratings (booking_id, rating, review)
-      VALUES ($1, $2, $3)
-      RETURNING *
-    `, [id, rating, review]);
+  // Create rating
+  const result = await query(`
+    INSERT INTO ratings (booking_id, rating, review)
+    VALUES ($1, $2, $3)
+    RETURNING *
+  `, [id, rating, review]);
 
-    const newRating = result.rows[0];
+  const newRating = result.rows[0];
 
-    // Fetch provider user_id and service_name
-    const ratingBooking = await getRow(`
+  // Fetch provider user_id and service_name
+  const ratingBooking = await getRow(`
       SELECT ps.provider_id, sm.name as service_name, ps.id as provider_service_id
       FROM bookings b
       JOIN provider_services ps ON b.provider_service_id = ps.id
       JOIN services_master sm ON ps.service_id = sm.id
       WHERE b.id = $1
     `, [id]);
-    if (ratingBooking) {
-      // Get provider's user_id
-      const providerProfile = await getRow('SELECT user_id FROM provider_profiles WHERE id = $1', [ratingBooking.provider_id]);
-      if (providerProfile) {
-        const ratingNotification = await sendNotification(
+  if (ratingBooking) {
+    // Get provider's user_id
+    const providerProfile = await getRow('SELECT user_id FROM provider_profiles WHERE id = $1', [ratingBooking.provider_id]);
+    if (providerProfile) {
+      const ratingNotification = await sendNotification(
           providerProfile.user_id,
           'New Rating',
           `You received a new rating for ${ratingBooking.service_name}`,
@@ -495,140 +466,114 @@ router.post('/:id/rate', [
           req.user.id,
           'Rating Submitted',
           `Thank you for rating your experience with ${ratingBooking.service_name}.`,
-          'user'
-        );
-        // Emit booking_updated event to provider
-        // Fetch updated booking for event
-        const updatedBooking = await getRow('SELECT * FROM bookings WHERE id = $1', [id]);
-        if (updatedBooking) {
-          getIO().to(providerProfile.user_id).emit('booking_updated', {
-            booking: updatedBooking
-          });
-        }
+        'user'
+      );
+      // Emit booking_updated event to provider
+      // Fetch updated booking for event
+      const updatedBooking = await getRow('SELECT * FROM bookings WHERE id = $1', [id]);
+      if (updatedBooking) {
+        getIO().to(providerProfile.user_id).emit('booking_updated', {
+          booking: updatedBooking
+        });
       }
     }
-
-    res.status(201).json({
-      status: 'success',
-      message: 'Rating submitted successfully',
-      data: { rating: newRating }
-    });
-
-  } catch (error) {
-    logger.error('Rate booking error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
   }
-});
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Rating submitted successfully',
+    data: { rating: newRating }
+  });
+}));
 
 // @route   POST /api/bookings/:id/report
 // @desc    Report a booking
 // @access  Private
 router.post('/:id/report', [
+  require('../middleware/rateLimiting').reportLimiter,
   body('reportReason').notEmpty().withMessage('Report reason is required'),
   body('reportDescription').notEmpty().withMessage('Report description is required')
-], async (req, res) => {
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new ValidationError('Validation failed', { errors: errors.array() });
+  }
+
+  const { id } = req.params;
+  const { reportReason, reportDescription } = req.body;
+
+  // Check if booking belongs to user
+  const booking = await getRow('SELECT * FROM bookings WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+  if (!booking) {
+    throw new NotFoundError('Booking not found');
+  }
+
+  // Check if booking has already been reported
+  if (booking.report_reason) {
+    throw new ValidationError('This booking has already been reported');
+  }
+
+  // Update booking with report
+  const result = await query(`
+    UPDATE bookings 
+    SET report_reason = $1, report_description = $2
+    WHERE id = $3
+    RETURNING *
+  `, [reportReason, reportDescription, id]);
+
+  const updatedBooking = result.rows[0];
+
+  // Also create an entry in user_reports_providers table for admin dashboard
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const { id } = req.params;
-    const { reportReason, reportDescription } = req.body;
-
-    // Check if booking belongs to user
-    const booking = await getRow('SELECT * FROM bookings WHERE id = $1 AND user_id = $2', [id, req.user.id]);
-    if (!booking) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Booking not found'
-      });
-    }
-
-    // Check if booking has already been reported
-    if (booking.report_reason) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'This booking has already been reported'
-      });
-    }
-
-    // Update booking with report
-    const result = await query(`
-      UPDATE bookings 
-      SET report_reason = $1, report_description = $2
-      WHERE id = $3
-      RETURNING *
-    `, [reportReason, reportDescription, id]);
-
-    const updatedBooking = result.rows[0];
-
-    // Also create an entry in user_reports_providers table for admin dashboard
-    try {
-      // Get provider ID from the booking
-      const providerService = await getRow(`
+    // Get provider ID from the booking
+    const providerService = await getRow(`
         SELECT provider_id FROM provider_services WHERE id = $1
       `, [booking.provider_service_id]);
       
-      if (providerService) {
-        // Get the provider's user ID
-        const providerProfile = await getRow(`
-          SELECT user_id FROM provider_profiles WHERE id = $1
-        `, [providerService.provider_id]);
+    if (providerService) {
+      // Get the provider's user ID
+      const providerProfile = await getRow(`
+        SELECT user_id FROM provider_profiles WHERE id = $1
+      `, [providerService.provider_id]);
+      
+      if (providerProfile) {
+        // Get booking date for incident_date
+        const bookingDate = booking.appointment_date || new Date().toISOString().split('T')[0];
         
-        if (providerProfile) {
-          // Get booking date for incident_date
-          const bookingDate = booking.appointment_date || new Date().toISOString().split('T')[0];
-          
-          await query(`
-            INSERT INTO user_reports_providers 
-            (reported_by_user_id, reported_provider_id, incident_date, incident_type, description, status)
-            VALUES ($1, $2, $3, $4, $5, $6)
-          `, [
-            req.user.id,
-            providerProfile.user_id,
-            bookingDate,
-            reportReason || 'other', // incident_type (required)
-            reportDescription,
-            'open'
-          ]);
-        }
+        await query(`
+          INSERT INTO user_reports_providers 
+          (reported_by_user_id, reported_provider_id, incident_date, incident_type, description, status)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [
+          req.user.id,
+          providerProfile.user_id,
+          bookingDate,
+          reportReason || 'other', // incident_type (required)
+          reportDescription,
+          'open'
+        ]);
       }
-    } catch (reportError) {
-      // Log error but don't fail the request
-      logger.error('Failed to create user_reports_providers entry', { error: reportError.message });
     }
-
-    // Note: Provider notification removed - providers will not be notified when they are reported
-
-    // Also notify the user that their report was submitted
-    const userNotification = await sendNotification(
-      req.user.id,
-      'Report Submitted',
-      `Your report has been submitted successfully. We will review it and take appropriate action.`,
-      'user'
-    );
-
-    res.json({
-      status: 'success',
-      message: 'Booking reported successfully',
-      data: { booking: updatedBooking }
-    });
-
-  } catch (error) {
-    logger.error('Report booking error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
+  } catch (reportError) {
+    // Log error but don't fail the request
+    logger.error('Failed to create user_reports_providers entry', { error: reportError.message });
   }
-});
+
+  // Note: Provider notification removed - providers will not be notified when they are reported
+
+  // Also notify the user that their report was submitted
+  const userNotification = await sendNotification(
+    req.user.id,
+    'Report Submitted',
+    `Your report has been submitted successfully. We will review it and take appropriate action.`,
+    'user'
+  );
+
+  res.json({
+    status: 'success',
+    message: 'Booking reported successfully',
+    data: { booking: updatedBooking }
+  });
+}));
 
 module.exports = router;

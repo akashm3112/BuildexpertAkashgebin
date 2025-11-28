@@ -26,12 +26,10 @@ class ExpoGoNotificationService {
    * Initialize notification service for Expo Go
    */
   async initialize(): Promise<boolean> {
-    console.log('📱 Initializing Expo Go notification service...');
     
     // Register device info (without push token)
     await this.registerDevice();
     
-    console.log('✅ Expo Go notification service initialized');
     return true;
   }
 
@@ -61,7 +59,6 @@ class ExpoGoNotificationService {
         }),
       });
 
-      console.log('✅ Device registered for Expo Go notifications');
     } catch (error) {
       console.error('❌ Error registering device:', error);
     }
@@ -105,7 +102,6 @@ class ExpoGoNotificationService {
 
         if (newNotifications.length > 0) {
           await AsyncStorage.setItem('last_notification_check', Date.now().toString());
-          console.log(`📱 Found ${newNotifications.length} missed notifications`);
         }
       }
     } catch (error) {
@@ -150,7 +146,6 @@ class ExpoGoNotificationService {
       // Trigger all callbacks
       this.notificationCallbacks.forEach(callback => callback(testNotification));
       
-      console.log('📱 Test notification triggered');
       return true;
     } catch (error) {
       console.error('❌ Error sending test notification:', error);
@@ -166,7 +161,6 @@ class ExpoGoNotificationService {
       this.appStateSubscription.remove();
     }
     this.notificationCallbacks = [];
-    console.log('✅ Expo Go notification service cleaned up');
   }
 }
 

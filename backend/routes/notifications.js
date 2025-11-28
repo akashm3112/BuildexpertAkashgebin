@@ -7,143 +7,120 @@ const { pushNotificationService } = require('../utils/pushNotifications');
 const DatabaseOptimizer = require('../utils/databaseOptimization');
 const logger = require('../utils/logger');
 const getIO = () => require('../server').io;
+const { notificationLimiter, standardLimiter } = require('../middleware/rateLimiting');
+const { sanitizeQuery } = require('../middleware/inputSanitization');
+const { asyncHandler } = require('../middleware/errorHandler');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(auth);
 
+// Apply rate limiting and input sanitization
+router.use(notificationLimiter);
+router.use(sanitizeQuery());
+
 // @route   GET /api/notifications
 // @desc    Get all notifications for the logged-in user with pagination
 // @access  Private
-router.get('/', async (req, res) => {
-  try {
-    const { page = 1, limit = 20, type } = req.query;
+router.get('/', asyncHandler(async (req, res) => {
+  const { page = 1, limit = 20, type } = req.query;
 
-    // Use optimized database query
-    const result = await DatabaseOptimizer.getNotificationsWithPagination(
-      req.user.id, 
-      req.user.role, 
-      { page: parseInt(page), limit: parseInt(limit), type }
-    );
+  // Use optimized database query
+  const result = await DatabaseOptimizer.getNotificationsWithPagination(
+    req.user.id, 
+    req.user.role, 
+    { page: parseInt(page), limit: parseInt(limit), type }
+  );
 
-    // Format timestamps to IST and add relative time
-    const formattedNotifications = result.notifications.map(notification => {
-      try {
-        const timestampData = formatNotificationTimestamp(notification.created_at);
-        
-        return {
-          ...notification,
-          ...timestampData
-        };
-      } catch (error) {
-        logger.error('Error formatting timestamp for notification', {
-          notificationId: notification.id,
-          error: error.message
-        });
-        // Fallback formatting
-        const date = new Date(notification.created_at);
-        return {
-          ...notification,
-          formatted_date: date.toLocaleDateString('en-IN'),
-          formatted_time: date.toLocaleTimeString('en-IN', { 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            hour12: true,
-            timeZone: undefined // Remove timezone information
-          }),
-          relative_time: 'Recently'
-        };
-      }
-    });
+  // Format timestamps to IST and add relative time
+  const formattedNotifications = result.notifications.map(notification => {
+    try {
+      const timestampData = formatNotificationTimestamp(notification.created_at);
+      
+      return {
+        ...notification,
+        ...timestampData
+      };
+    } catch (error) {
+      logger.error('Error formatting timestamp for notification', {
+        notificationId: notification.id,
+        error: error.message
+      });
+      // Fallback formatting
+      const date = new Date(notification.created_at);
+      return {
+        ...notification,
+        formatted_date: date.toLocaleDateString('en-IN'),
+        formatted_time: date.toLocaleTimeString('en-IN', { 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          hour12: true,
+          timeZone: undefined // Remove timezone information
+        }),
+        relative_time: 'Recently'
+      };
+    }
+  });
 
-    res.json({
-      status: 'success',
-      data: { 
-        notifications: formattedNotifications,
-        pagination: result.pagination
-      }
-    });
-  } catch (error) {
-    logger.error('Get notifications error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+  res.json({
+    status: 'success',
+    data: { 
+      notifications: formattedNotifications,
+      pagination: result.pagination
+    }
+  });
+}));
 
 // @route   GET /api/notifications/unread-count
 // @desc    Get unread notification count for the logged-in user
 // @access  Private
-router.get('/unread-count', async (req, res) => {
-  try {
-    const result = await getRows(
-      `SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND role = $2 AND is_read = FALSE`,
-      [req.user.id, req.user.role]
-    );
+router.get('/unread-count', asyncHandler(async (req, res) => {
+  const result = await getRows(
+    `SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND role = $2 AND is_read = FALSE`,
+    [req.user.id, req.user.role]
+  );
 
-    const unreadCount = parseInt(result[0]?.count || 0);
+  const unreadCount = parseInt(result[0]?.count || 0);
 
-    res.json({
-      status: 'success',
-      data: { unreadCount }
-    });
-  } catch (error) {
-    logger.error('Get unread count error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+  res.json({
+    status: 'success',
+    data: { unreadCount }
+  });
+}));
 
 // @route   PUT /api/notifications/:id/mark-read
 // @desc    Mark a specific notification as read
 // @access  Private
-router.put('/:id/mark-read', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    await require('../database/connection').query(
-      `UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2 AND role = $3`,
-      [id, req.user.id, req.user.role]
-    );
+router.put('/:id/mark-read', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  
+  await require('../database/connection').query(
+    `UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2 AND role = $3`,
+    [id, req.user.id, req.user.role]
+  );
 
-    res.json({ 
-      status: 'success', 
-      message: 'Notification marked as read' 
-    });
-  } catch (error) {
-    logger.error('Mark notification as read error', { error: error.message });
-    res.status(500).json({ 
-      status: 'error', 
-      message: 'Internal server error' 
-    });
-  }
-});
+  res.json({ 
+    status: 'success', 
+    message: 'Notification marked as read' 
+  });
+}));
 
 // @route   PUT /api/notifications/mark-all-read
 // @desc    Mark all notifications as read for the logged-in user
 // @access  Private
-router.put('/mark-all-read', async (req, res) => {
-  try {
-    await require('../database/connection').query(
-      `UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND role = $2`,
-      [req.user.id, req.user.role]
-    );
-    res.json({ status: 'success', message: 'All notifications marked as read' });
-  } catch (error) {
-    logger.error('Mark all notifications as read error', { error: error.message });
-    res.status(500).json({ status: 'error', message: 'Internal server error' });
-  }
-});
+router.put('/mark-all-read', asyncHandler(async (req, res) => {
+  await require('../database/connection').query(
+    `UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND role = $2`,
+    [req.user.id, req.user.role]
+  );
+  res.json({ status: 'success', message: 'All notifications marked as read' });
+}));
 
 // @route   GET /api/notifications/history
 // @desc    Get notification history with advanced filtering
 // @access  Private
-router.get('/history', async (req, res) => {
-  try {
+router.get('/history', asyncHandler(async (req, res) => {
     const { page = 1, limit = 50, type, dateFrom, dateTo, readStatus } = req.query;
     const offset = (page - 1) * limit;
     
@@ -249,20 +226,12 @@ router.get('/history', async (req, res) => {
         statistics: statsResult[0]
       }
     });
-  } catch (error) {
-    logger.error('Get notification history error', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+}));
 
 // @route   GET /api/notifications/recent
 // @desc    Get recent notifications since timestamp (for polling)
 // @access  Private
-router.get('/recent', async (req, res) => {
-  try {
+router.get('/recent', asyncHandler(async (req, res) => {
     const { since = 0 } = req.query;
     const sinceTimestamp = new Date(parseInt(since));
     
@@ -299,13 +268,6 @@ router.get('/recent', async (req, res) => {
         since: since
       }
     });
-  } catch (error) {
-    logger.error('Error fetching recent notifications', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Internal server error'
-    });
-  }
-});
+}));
 
 module.exports = router; 

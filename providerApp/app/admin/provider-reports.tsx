@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar, Animated, Platform, Alert, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar, Animated, Platform, Alert, TextInput, RefreshControl, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { ArrowLeft, UserCheck, Phone, Mail, Calendar, MapPin, Briefcase, UserX, Search, Filter, MoreVertical, Trash2, Shield, Eye, Star } from 'lucide-react-native';
@@ -48,7 +48,7 @@ interface Provider {
 
 export default function ProviderReportsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,8 +62,25 @@ export default function ProviderReportsScreen() {
   const filterAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    loadProviders();
-    // Start entrance animations
+    if (user && user.role !== 'admin') {
+      router.replace('/(tabs)');
+      return;
+    }
+
+    // Prevent back navigation to provider screens
+    // Always navigate to admin dashboard instead
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Always navigate to dashboard to prevent going back to provider screens
+      router.replace('/admin/dashboard');
+      return true;
+    });
+
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      loadProviders();
+    } else if (!authLoading && !user?.id) {
+      setIsLoading(false);
+    }
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -76,7 +93,9 @@ export default function ProviderReportsScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+
+    return () => backHandler.remove();
+  }, [user?.role]);
 
   useEffect(() => {
     // Filter animation
@@ -89,9 +108,12 @@ export default function ProviderReportsScreen() {
 
   const loadProviders = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         console.error('No authentication token found');
+        setIsLoading(false);
+        setRefreshing(false);
         return;
       }
 
@@ -104,13 +126,37 @@ export default function ProviderReportsScreen() {
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'success') {
-          setProviders(data.data.providers);
+          setProviders(data.data.providers || []);
+        } else {
+          console.error('API returned error status:', data.message || 'Unknown error');
+          setProviders([]);
+        }
+      } else if (response.status === 429) {
+        // Rate limit exceeded - wait and retry once
+        console.warn('Rate limit exceeded, retrying after delay...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const retryResponse = await fetch(`${API_BASE_URL}/api/admin/all-providers`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          if (retryData.status === 'success') {
+            setProviders(retryData.data.providers || []);
+          }
+        } else {
+          console.error('Failed to fetch providers after retry:', retryResponse.status);
+          setProviders([]);
         }
       } else {
-        console.error('Failed to fetch providers:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to fetch providers:', response.status, errorData.message || '');
+        setProviders([]);
       }
     } catch (error) {
       console.error('Error fetching providers:', error);
+      setProviders([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -133,7 +179,8 @@ export default function ProviderReportsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('token');
+              const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
               const response = await fetch(`${API_BASE_URL}/api/admin/providers/${providerId}`, {
                 method: 'DELETE',
                 headers: {
@@ -341,7 +388,7 @@ export default function ProviderReportsScreen() {
           }
         ]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.replace('/admin/dashboard')} style={styles.backButton}>
           <ArrowLeft size={getResponsiveValue(20, 22, 24)} color="#374151" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>

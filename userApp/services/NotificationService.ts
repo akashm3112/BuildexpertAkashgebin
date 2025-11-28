@@ -32,11 +32,9 @@ class NotificationService {
   async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
-        console.log('📱 Notification service already initialized');
         return true;
       }
 
-      console.log('📱 Initializing notification service...');
 
       // Configure notification behavior
       await this.configureNotifications();
@@ -44,7 +42,6 @@ class NotificationService {
       // Request permissions
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
-        console.log('❌ Notification permissions denied');
         return false;
       }
 
@@ -54,7 +51,6 @@ class NotificationService {
         this.pushToken = token;
         await this.registerTokenWithBackend(token);
         this.isInitialized = true;
-        console.log('✅ Notification service initialized successfully');
         return true;
       }
 
@@ -115,7 +111,6 @@ class NotificationService {
   private async requestPermissions(): Promise<boolean> {
     try {
       if (!Device.isDevice) {
-        console.log('📱 Push notifications only work on physical devices');
         return false;
       }
 
@@ -128,11 +123,9 @@ class NotificationService {
       }
 
       if (finalStatus !== 'granted') {
-        console.log('❌ Notification permission not granted');
         return false;
       }
 
-      console.log('✅ Notification permissions granted');
       return true;
     } catch (error) {
       console.error('❌ Error requesting permissions:', error);
@@ -146,7 +139,6 @@ class NotificationService {
   private async registerForPushNotifications(): Promise<string | null> {
     try {
       if (!Device.isDevice) {
-        console.log('📱 Must use physical device for push notifications');
         return null;
       }
 
@@ -156,7 +148,6 @@ class NotificationService {
       });
 
       const token = tokenData.data;
-      console.log('📱 Got Expo push token:', token);
 
       // Store token locally
       await AsyncStorage.setItem('expo_push_token', token);
@@ -175,7 +166,6 @@ class NotificationService {
     try {
       const authToken = await AsyncStorage.getItem('token');
       if (!authToken) {
-        console.log('❌ No auth token found, skipping backend registration');
         return false;
       }
 
@@ -201,7 +191,6 @@ class NotificationService {
       });
 
       if (response.ok) {
-        console.log('✅ Push token registered with backend');
         return true;
       } else {
         const data = await response.json();
@@ -220,13 +209,11 @@ class NotificationService {
   private setupNotificationHandlers() {
     // Handle notification received while app is in foreground
     Notifications.addNotificationReceivedListener((notification) => {
-      console.log('📱 Notification received:', notification);
       // You can add custom handling here (e.g., update badge, show custom UI)
     });
 
     // Handle notification tapped/opened
     Notifications.addNotificationResponseReceivedListener((response) => {
-      console.log('📱 Notification tapped:', response);
       this.handleNotificationTap(response.notification);
     });
   }
@@ -240,7 +227,6 @@ class NotificationService {
       
       if (data?.screen) {
         // Navigate to specific screen
-        console.log('🧭 Navigating to screen:', data.screen);
         
         // Navigate to specific screen based on notification data
         switch (data.screen) {
@@ -354,7 +340,6 @@ class NotificationService {
    */
   async cleanup(): Promise<void> {
     try {
-      console.log('🧹 Cleaning up notification service...');
       
       if (this.pushToken) {
         // Deactivate token on backend
@@ -376,7 +361,6 @@ class NotificationService {
       this.pushToken = null;
       this.isInitialized = false;
 
-      console.log('✅ Notification service cleanup completed');
     } catch (error) {
       console.error('❌ Error during notification cleanup:', error);
     }

@@ -8,11 +8,6 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Log configuration for debugging
-console.log('Cloudinary Configuration:');
-console.log('Cloud Name:', process.env.CLOUDINARY_CLOUD_NAME);
-console.log('API Key:', process.env.CLOUDINARY_API_KEY ? 'Set' : 'Not set');
-console.log('API Secret:', process.env.CLOUDINARY_API_SECRET ? 'Set' : 'Not set');
 
 // Check if Cloudinary credentials are valid
 const isCloudinaryConfigured = () => {
@@ -38,17 +33,19 @@ const generateMockUrl = (folder = 'buildxpert') => {
   return `https://res.cloudinary.com/mock-cloud/image/upload/v${timestamp}/${folder}/mock-image-${randomId}.jpg`;
 };
 
-// Upload image to Cloudinary
+// Upload image to Cloudinary with circuit breaker and retry logic
 const uploadImage = async (imageFile, folder = 'buildxpert') => {
+  const { breakers } = require('./circuitBreaker');
+  const { withUploadRetry } = require('./retryLogic');
+  const { CloudinaryError, FileUploadError } = require('./errorTypes');
+  
   try {
     // Check if Cloudinary is properly configured
     const configured = isCloudinaryConfigured();
     console.log('🔍 Cloudinary configuration status:', configured);
     
     if (!configured) {
-      console.log('⚠️ Cloudinary not properly configured, using mock URL for development');
       const mockUrl = generateMockUrl(folder);
-      console.log('Generated mock URL:', mockUrl);
       
       return {
         success: true,
@@ -61,64 +58,83 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
         isMock: true
       };
     }
-
-    console.log('Attempting to upload image to Cloudinary...');
-    console.log('Folder:', folder);
     
     // Convert base64 to buffer if needed
     let uploadData;
     
     if (imageFile.startsWith('data:image')) {
-      // Handle base64 image
       uploadData = imageFile;
       console.log('Processing base64 image...');
     } else if (imageFile.startsWith('file://')) {
-      // Handle local file URI (for mobile apps)
-      // For now, we'll handle this as base64 conversion
-      // In a real implementation, you'd need to convert file URI to base64
       uploadData = imageFile;
       console.log('Processing file URI...');
     } else {
-      // Handle buffer or file path
       uploadData = imageFile;
       console.log('Processing file path or buffer...');
     }
 
-    const result = await cloudinary.uploader.upload(uploadData, {
-      folder: folder,
-      resource_type: 'auto',
-      transformation: [
-        { quality: 'auto:good' },
-        { fetch_format: 'auto' }
-      ]
-    });
-
-    console.log('Upload successful:', result.secure_url);
-
-    return {
-      success: true,
-      url: result.secure_url,
-      public_id: result.public_id,
-      width: result.width,
-      height: result.height,
-      format: result.format,
-      size: result.bytes,
-      isMock: false
+    // Upload with circuit breaker and retry logic
+    const uploadWithProtection = async () => {
+      return await breakers.cloudinary.execute(
+        async () => {
+          const result = await cloudinary.uploader.upload(uploadData, {
+            folder: folder,
+            resource_type: 'auto',
+            transformation: [
+              { width: 1280, crop: 'limit' },
+              { quality: 'auto:good' },
+              { fetch_format: 'auto' }
+            ],
+            timeout: 60000 // 60 second timeout
+          });
+          
+          console.log('Upload successful:', result.secure_url);
+          
+          return {
+            success: true,
+            url: result.secure_url,
+            public_id: result.public_id,
+            width: result.width,
+            height: result.height,
+            format: result.format,
+            size: result.bytes,
+            isMock: false
+          };
+        },
+        // Fallback: return mock URL
+        async () => {
+          console.log('⚠️ Using fallback mock URL (circuit breaker open)');
+          const mockUrl = generateMockUrl(folder);
+          return {
+            success: true,
+            url: mockUrl,
+            public_id: `mock-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
+            width: 800,
+            height: 600,
+            format: 'jpg',
+            size: 102400,
+            isMock: true,
+            fallback: true
+          };
+        }
+      );
     };
+    
+    // Execute with retry logic
+    return await withUploadRetry(uploadWithProtection, `upload to Cloudinary (${folder})`);
+    
   } catch (error) {
-    console.error('Cloudinary upload error:', error);
     console.error('Error details:', {
       message: error.message,
       http_code: error.http_code,
       name: error.name
     });
     
-    // Fallback to mock URL if Cloudinary fails
-    console.log('⚠️ Cloudinary upload failed, using mock URL as fallback');
+    // Final fallback to mock URL
     const mockUrl = generateMockUrl(folder);
     
     return {
-      success: true, // Return success with mock URL
+      success: true, // Return success with mock URL (graceful degradation)
       url: mockUrl,
       public_id: `mock-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
       width: 800,
@@ -190,8 +206,6 @@ const deleteImage = async (publicId) => {
         isMock: true
       };
     }
-
-    console.log('Attempting to delete image from Cloudinary:', publicId);
     
     const result = await cloudinary.uploader.destroy(publicId);
     console.log('Delete result:', result);

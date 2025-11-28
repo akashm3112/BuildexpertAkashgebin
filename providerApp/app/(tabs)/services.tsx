@@ -50,7 +50,7 @@ interface ServiceStatus {
 
 export default function ServicesScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { t } = useLanguage();
   const [registeredServices, setRegisteredServices] = useState<RegisteredService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,13 +72,22 @@ export default function ServicesScreen() {
   };
 
   useEffect(() => {
-    fetchRegisteredServices();
-  }, [user]);
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      fetchRegisteredServices();
+    } else if (!authLoading && !user?.id) {
+      // Auth finished loading but no user, set loading to false
+      setIsLoading(false);
+    }
+  }, [user, authLoading]);
 
   useFocusEffect(
     React.useCallback(() => {
-      fetchRegisteredServices();
-    }, [user])
+      // Wait for auth to finish loading before fetching data
+      if (!authLoading && user?.id) {
+        fetchRegisteredServices();
+      }
+    }, [user, authLoading])
   );
 
   // Handle orientation changes for responsive design
@@ -102,45 +111,31 @@ export default function ServicesScreen() {
       setIsLoading(true);
       setError(null);
       
-      const token = await tokenManager.getValidToken();
-      if (!token) {
-        setError('No authentication token available');
-        return;
-      }
-
-      console.log('Fetching registered services...');
+      // Use API client instead of direct fetch - it handles token refresh automatically
+      const { apiGet } = await import('@/utils/apiClient');
       
-      const response = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      console.log('Response status:', response.status);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Backend response:', data);
+      try {
+        const response = await apiGet<{ status: string; data: { registeredServices: RegisteredService[] } }>('/api/services/my-registrations');
         
-        if (data.status === 'success' && data.data.registeredServices) {
-          setRegisteredServices(data.data.registeredServices);
+        if (response.data.status === 'success' && response.data.data.registeredServices) {
+          setRegisteredServices(response.data.data.registeredServices);
         } else {
           setError('Invalid response format from server');
         }
-      } else {
-        const errorText = await response.text();
-        console.log('Failed to fetch registered services:', response.status);
-        console.log('Error response:', errorText);
-        
-        if (response.status === 403) {
+      } catch (apiError: any) {
+        // Handle API errors
+        if (apiError.status === 403) {
           setError('Access denied. Only providers can view registered services.');
+        } else if (apiError.status === 401) {
+          // Token refresh failed - user needs to login again
+          setError('Session expired. Please log in again.');
         } else {
-          setError('Failed to fetch registered services. Please try again.');
+          setError(apiError.message || 'Failed to fetch registered services. Please try again.');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching registered services:', error);
-      setError('Network error. Please check your connection and try again.');
+      setError(error.message || 'Network error. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -208,15 +203,18 @@ export default function ServicesScreen() {
       'labors': { id: 'labor', name: 'Labor', description: 'Skilled and unskilled labor services', icon: '👷' },
       'plumber': { id: 'plumber', name: 'Plumber', description: 'Plumbing and water system services', icon: '🔧' },
       'mason-mastri': { id: 'mason-mastri', name: 'Mason/Mastri', description: 'Masonry and construction work', icon: '🧱' },
-      'painting-cleaning': { id: 'painting-cleaning', name: 'Painting & Cleaning', description: 'Interior and exterior painting services', icon: '🎨' },
+      'painting-cleaning': { id: 'painting', name: 'Painting', description: 'Interior and exterior painting services', icon: '🎨' },
+      'painting': { id: 'painting', name: 'Painting', description: 'Interior and exterior painting services', icon: '🎨' },
       'granite-tiles': { id: 'granite-tiles', name: 'Granite & Tiles', description: 'Granite and tile installation services', icon: '🏗️' },
       'engineer-interior': { id: 'engineer-interior', name: 'Engineer & Interior', description: 'Engineering and interior design services', icon: '🏛️' },
       'electrician': { id: 'electrician', name: 'Electrician', description: 'Electrical installation and repair services', icon: '⚡' },
       'carpenter': { id: 'carpenter', name: 'Carpenter', description: 'Woodwork and carpentry services', icon: '🔨' },
-      'painter': { id: 'painter', name: 'Painter', description: 'Professional painting services', icon: '🎨' },
+      'painter': { id: 'painting', name: 'Painter', description: 'Professional painting services', icon: '🎨' },
       'interiors-building': { id: 'interiors-building', name: 'Interiors & Building', description: 'Interior design and building services', icon: '🏠' },
       'stainless-steel': { id: 'stainless-steel', name: 'Stainless Steel', description: 'Stainless steel fabrication services', icon: '🔩' },
-      'contact-building': { id: 'contact-building', name: 'Contact Building', description: 'General building and construction services', icon: '🏗️' }
+      'contact-building': { id: 'contact-building', name: 'Contact Building', description: 'General building and construction services', icon: '🏗️' },
+      'cleaning': { id: 'cleaning', name: 'Cleaning', description: 'Professional cleaning services', icon: '🧹' },
+      'borewell': { id: 'borewell', name: 'Borewell', description: 'Borewell drilling and maintenance services', icon: '💧' }
     };
 
     return serviceNameToCategoryMap[serviceName] || { 
@@ -245,11 +243,7 @@ export default function ServicesScreen() {
           onPress: async () => {
             try {
               setShowAlertModal(false);
-              let token = user?.token;
-              if (!token) {
-                const storedToken = await AsyncStorage.getItem('token');
-                token = storedToken || undefined;
-              }
+              const token = await tokenManager.getValidToken();
 
               if (!token) {
                 showAlert(t('alerts.error'), t('alerts.noAuthTokenAvailable'), 'error', [

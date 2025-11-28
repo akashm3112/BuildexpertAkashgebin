@@ -7,16 +7,149 @@ const expo = new Expo({
   accessToken: process.env.EXPO_ACCESS_TOKEN, // Optional: for better rate limiting
 });
 
-/**
- * Production-grade push notification service
- * Handles token management, message queuing, retry logic, and scheduling
- */
+const RETRYABLE_RECEIPT_ERRORS = new Set([
+  'MessageRateExceeded',
+  'ProviderError',
+  'PushServiceError',
+  'UnknownError',
+  'InternalServerError',
+]);
+
+const RETRYABLE_TICKET_ERRORS = new Set([
+  'MessageRateExceeded',
+  'ProviderError',
+  'PushServiceError',
+  'RetryAfterSpecified',
+  'UnknownError',
+]);
+
 class PushNotificationService {
   constructor() {
-    this.messageQueue = [];
-    this.retryQueue = [];
     this.isProcessing = false;
+    this.isProcessingReceipts = false;
+    this.backoffMinutes = attempts => Math.min(Math.pow(attempts, 2) * 5, 60); // capped exponential backoff
+    this.schemaReady = false;
+    this.schemaReadyPromise = null;
+
     this.setupScheduledTasks();
+    // bootstrap any pending work on startup
+    this.bootstrapPendingWork().catch(error => {
+      console.error('❌ Error bootstrapping push notification queues:', error);
+    });
+  }
+
+  async bootstrapPendingWork() {
+    await this.ensureSchema();
+    await this.processMessageQueue();
+    await this.processPendingReceipts();
+    await this.flushAllPendingPush();
+  }
+
+  async ensureSchema(force = false) {
+    if (this.schemaReady && !force) {
+      return;
+    }
+
+    if (!this.schemaReadyPromise || force) {
+      this.schemaReadyPromise = (async () => {
+        try {
+
+          await query(`
+            ALTER TABLE notification_queue
+            DROP CONSTRAINT IF EXISTS notification_queue_status_check;
+          `);
+
+          await query(`
+            ALTER TABLE notification_receipts
+            DROP CONSTRAINT IF EXISTS notification_receipts_status_check;
+          `);
+
+          await query(`
+            ALTER TABLE notification_queue
+            ADD COLUMN IF NOT EXISTS push_token TEXT,
+            ADD COLUMN IF NOT EXISTS last_error_code TEXT,
+            ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMP,
+            ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP,
+            ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+          `);
+
+          await query(`
+            UPDATE notification_queue
+            SET metadata = '{}'::jsonb
+            WHERE metadata IS NULL;
+          `);
+
+          await query(`
+            ALTER TABLE notification_queue
+            ADD CONSTRAINT notification_queue_status_check
+            CHECK (status IN (
+              'pending',
+              'sending',
+              'waiting_receipt',
+              'delivered',
+              'failed',
+              'retry'
+            ));
+          `);
+
+          await query(`
+            ALTER TABLE notification_receipts
+            ADD COLUMN IF NOT EXISTS queue_id UUID REFERENCES notification_queue(id) ON DELETE CASCADE,
+            ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '{}'::jsonb,
+            ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+          `);
+
+          await query(`
+            UPDATE notification_receipts
+            SET details = '{}'::jsonb,
+                updated_at = COALESCE(updated_at, NOW())
+            WHERE details IS NULL;
+          `);
+
+          await query(`
+            ALTER TABLE notification_receipts
+            ADD CONSTRAINT notification_receipts_status_check
+            CHECK (status IN ('pending', 'delivered', 'failed', 'sent'));
+          `);
+
+          await query(`
+            CREATE INDEX IF NOT EXISTS idx_notification_queue_push_token ON notification_queue(push_token);
+            CREATE INDEX IF NOT EXISTS idx_notification_queue_status_next_attempt ON notification_queue(status, next_attempt_at);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_receipts_receipt_id ON notification_receipts(receipt_id);
+            CREATE INDEX IF NOT EXISTS idx_notification_receipts_queue_id ON notification_receipts(queue_id);
+          `);
+
+          await query(`
+            UPDATE notification_queue
+            SET status = 'pending',
+                updated_at = NOW()
+            WHERE status = 'processing';
+
+            UPDATE notification_queue
+            SET status = 'delivered',
+                delivered_at = COALESCE(delivered_at, updated_at, created_at)
+            WHERE status = 'sent';
+
+            UPDATE notification_receipts
+            SET status = CASE WHEN status = 'sent' THEN 'pending' ELSE status END,
+                updated_at = NOW()
+            WHERE status IN ('sent', 'pending');
+          `);
+
+          this.schemaReady = true;
+        } catch (error) {
+          console.error('❌ Failed to ensure push notification schema:', error);
+          throw error;
+        }
+      })();
+    }
+
+    return this.schemaReadyPromise;
+  }
+
+  async waitForSchema() {
+    if (this.schemaReady) return;
+    await this.ensureSchema();
   }
 
   /**
@@ -24,8 +157,7 @@ class PushNotificationService {
    */
   async registerPushToken(userId, pushToken, deviceInfo = {}) {
     try {
-      console.log('📱 Registering push token for user:', userId);
-      
+
       // Validate the push token
       if (!Expo.isExpoPushToken(pushToken)) {
         console.error('❌ Invalid Expo push token:', pushToken);
@@ -39,27 +171,24 @@ class PushNotificationService {
       );
 
       if (existingToken) {
-        // Update last seen
         await query(
           'UPDATE user_push_tokens SET last_seen = NOW(), is_active = true WHERE id = $1',
           [existingToken.id]
         );
-        console.log('✅ Updated existing push token');
       } else {
-        // Deactivate old tokens for this user
         await query(
           'UPDATE user_push_tokens SET is_active = false WHERE user_id = $1',
           [userId]
         );
 
-        // Insert new token
         await query(`
           INSERT INTO user_push_tokens (user_id, push_token, device_info, is_active, created_at, last_seen)
           VALUES ($1, $2, $3, true, NOW(), NOW())
         `, [userId, pushToken, JSON.stringify(deviceInfo)]);
-        
-        console.log('✅ Registered new push token');
+
       }
+
+      await this.deliverPendingForUser(userId);
 
       return { success: true };
     } catch (error) {
@@ -84,6 +213,76 @@ class PushNotificationService {
     }
   }
 
+  buildMessagePayload(notification) {
+    return {
+      sound: notification.sound || 'default',
+      title: notification.title,
+      body: notification.body,
+      data: notification.data || {},
+      badge: notification.badge,
+      priority: notification.priority || 'high',
+      ttl: notification.ttl || 3600, // 1 hour default
+      expiration: notification.expiration || null,
+      channelId: notification.channelId || 'default',
+    };
+  }
+
+  /**
+   * Persist messages and trigger processing
+   */
+  async enqueueMessages({ tokens, notification, userId = null, meta = {} }) {
+    await this.waitForSchema();
+
+    if (!tokens || tokens.length === 0) {
+      return { success: false, error: 'No tokens provided' };
+    }
+
+    const payload = this.buildMessagePayload(notification);
+    const insertedIds = [];
+
+    for (const pushToken of tokens) {
+      try {
+        const result = await query(`
+          INSERT INTO notification_queue (
+            user_id,
+            push_token,
+            notification_data,
+            attempts,
+            max_attempts,
+            next_attempt_at,
+            status,
+            error_message,
+            last_error_code,
+            created_at,
+            updated_at,
+            last_attempt_at,
+            delivered_at,
+            metadata
+          )
+          VALUES ($1, $2, $3::jsonb, 0, 5, NOW(), 'pending', NULL, NULL, NOW(), NOW(), NULL, NULL, $4::jsonb)
+          RETURNING id
+        `, [
+          userId,
+          pushToken,
+          JSON.stringify({ ...payload, meta }),
+          JSON.stringify(meta || {}),
+        ]);
+
+        if (result && result.rows && result.rows[0]) {
+          insertedIds.push(result.rows[0].id);
+        }
+      } catch (error) {
+        console.error('❌ Failed to enqueue notification:', error);
+      }
+    }
+
+    if (insertedIds.length > 0) {
+      await this.processMessageQueue();
+    }
+
+    return { success: insertedIds.length > 0, enqueued: insertedIds.length, queueIds: insertedIds };
+  }
+
   /**
    * Send push notification to specific user
    */
@@ -91,11 +290,11 @@ class PushNotificationService {
     try {
       const tokens = await this.getUserPushTokens(userId);
       if (tokens.length === 0) {
-        console.log('📱 No active push tokens for user:', userId);
-        return { success: false, error: 'No active push tokens' };
+        await this.storePendingNotification(userId, notification);
+        return { success: false, error: 'No active push tokens. Notification queued until device registers.' };
       }
 
-      return await this.sendToTokens(tokens, notification);
+      return await this.sendToTokens(tokens, notification, { userId });
     } catch (error) {
       console.error('❌ Error sending notification to user:', error);
       return { success: false, error: error.message };
@@ -105,141 +304,517 @@ class PushNotificationService {
   /**
    * Send push notification to multiple tokens
    */
-  async sendToTokens(tokens, notification) {
+  async sendToTokens(tokens, notification, context = {}) {
     try {
-      const messages = tokens.map(token => ({
-        to: token,
-        sound: notification.sound || 'default',
-        title: notification.title,
-        body: notification.body,
-        data: notification.data || {},
-        badge: notification.badge,
-        priority: notification.priority || 'high',
-        ttl: notification.ttl || 3600, // 1 hour default
-        expiration: notification.expiration,
-        channelId: notification.channelId || 'default',
-      }));
+      const result = await this.enqueueMessages({
+        tokens,
+        notification,
+        userId: context.userId ?? null,
+        meta: context.meta ?? {},
+      });
 
-      // Add to queue for batch processing
-      this.messageQueue.push(...messages);
-      
-      // Process queue if not already processing
-      if (!this.isProcessing) {
-        this.processMessageQueue();
-      }
-
-      return { success: true, messageCount: messages.length };
+      return {
+        success: result.success,
+        messageCount: result.enqueued || 0,
+        queueIds: result.queueIds || [],
+      };
     } catch (error) {
-      console.error('❌ Error preparing messages:', error);
+      console.error('❌ Error enqueueing notifications:', error);
       return { success: false, error: error.message };
     }
   }
 
+  async storePendingNotification(userId, notification, meta = {}) {
+    try {
+      await query(
+        `
+          INSERT INTO pending_push_notifications (user_id, notification_payload, metadata)
+          VALUES ($1, $2::jsonb, $3::jsonb)
+        `,
+        [userId, JSON.stringify(notification), JSON.stringify(meta)]
+      );
+    } catch (error) {
+      console.error('❌ Error storing pending push notification:', error);
+    }
+  }
+
+  async deliverPendingForUser(userId) {
+    try {
+      const tokens = await this.getUserPushTokens(userId);
+      if (!tokens.length) {
+        return;
+      }
+
+      const pending = await getRows(
+        `
+          SELECT id, notification_payload, metadata, created_at
+          FROM pending_push_notifications
+          WHERE user_id = $1
+          ORDER BY created_at ASC
+          LIMIT 50
+        `,
+        [userId]
+      );
+
+      if (!pending.length) {
+        return;
+      }
+
+      for (const record of pending) {
+        const notification = record.notification_payload;
+        const context = record.metadata || {};
+        const result = await this.sendToTokens(tokens, notification, { userId, meta: context });
+
+        if (result.success) {
+          await query('DELETE FROM pending_push_notifications WHERE id = $1', [record.id]);
+        } else {
+          console.warn('⚠️ Failed to deliver pending push notification, will retry later', {
+            userId,
+            pendingId: record.id
+          });
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error delivering pending push notifications:', error);
+    }
+  }
+
+  async flushAllPendingPush(limit = 200) {
+    try {
+      const usersWithPending = await getRows(
+        `
+          SELECT DISTINCT ON (user_id) user_id
+          FROM pending_push_notifications
+          ORDER BY user_id, created_at ASC
+          LIMIT $1
+        `,
+        [limit]
+      );
+
+      for (const row of usersWithPending) {
+        await this.deliverPendingForUser(row.user_id);
+      }
+    } catch (error) {
+      console.error('❌ Failed to flush pending push notifications:', error);
+    }
+  }
+
   /**
-   * Process message queue with batching and retry logic
+   * Process persisted queue with batching and retry logic
    */
   async processMessageQueue() {
-    if (this.isProcessing || this.messageQueue.length === 0) {
+    await this.waitForSchema();
+
+    if (this.isProcessing) {
       return;
     }
 
     this.isProcessing = true;
-    console.log('📤 Processing push notification queue:', this.messageQueue.length, 'messages');
 
     try {
-      // Process in batches of 100 (Expo recommendation)
-      const batchSize = 100;
-      while (this.messageQueue.length > 0) {
-        const batch = this.messageQueue.splice(0, batchSize);
-        await this.sendBatch(batch);
-        
-        // Small delay between batches to avoid rate limiting
-        if (this.messageQueue.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+      while (true) {
+        const queueItems = await getRows(`
+          SELECT 
+            id,
+            user_id,
+            push_token,
+            notification_data,
+            attempts,
+            max_attempts,
+            next_attempt_at,
+            status,
+            error_message,
+            last_error_code,
+            metadata
+          FROM notification_queue
+          WHERE status IN ('pending', 'retry')
+            AND next_attempt_at <= NOW()
+          ORDER BY created_at ASC
+          LIMIT 100
+        `);
+
+        if (!queueItems.length) {
+          break;
         }
+
+        await this.sendBatch(queueItems);
       }
     } catch (error) {
-      console.error('❌ Error processing message queue:', error);
+      console.error('❌ Error processing notification queue:', error);
     } finally {
       this.isProcessing = false;
     }
   }
 
   /**
-   * Send a batch of messages
+   * Send a batch of stored queue messages
    */
-  async sendBatch(messages) {
-    try {
-      const chunks = expo.chunkPushNotifications(messages);
-      const tickets = [];
+  async sendBatch(queueItems) {
+    const queueIds = queueItems.map(item => item.id);
 
-      for (const chunk of chunks) {
+    try {
+      const updatedAttempts = await query(
+        `UPDATE notification_queue
+         SET status = 'sending',
+             attempts = attempts + 1,
+             last_attempt_at = NOW(),
+             updated_at = NOW()
+         WHERE id = ANY($1::uuid[])
+         RETURNING id, attempts, max_attempts`,
+        [queueIds]
+      );
+
+      const attemptsMap = new Map(
+        updatedAttempts.rows.map(row => [row.id, { attempts: row.attempts, maxAttempts: row.max_attempts }])
+      );
+
+      const itemsWithAttempts = queueItems.map(item => {
+        const attemptInfo = attemptsMap.get(item.id) || { attempts: item.attempts + 1, maxAttempts: item.max_attempts || 3 };
+        return {
+          ...item,
+          attempts: attemptInfo.attempts,
+          max_attempts: attemptInfo.maxAttempts,
+          payload: typeof item.notification_data === 'object'
+            ? item.notification_data
+            : JSON.parse(item.notification_data),
+        };
+      });
+
+      const chunkSize = 100;
+      for (let i = 0; i < itemsWithAttempts.length; i += chunkSize) {
+        const chunkItems = itemsWithAttempts.slice(i, i + chunkSize);
+
+        const validItems = [];
+        for (const entry of chunkItems) {
+          if (!entry.push_token) {
+            await this.failMessage(entry, 'Missing push token for notification', 'MissingPushToken');
+            continue;
+          }
+          validItems.push(entry);
+        }
+
+        if (!validItems.length) {
+          continue;
+        }
+
+        const messages = validItems.map(entry => ({
+          to: entry.push_token,
+          sound: entry.payload.sound,
+          title: entry.payload.title,
+          body: entry.payload.body,
+          data: entry.payload.data || {},
+          badge: entry.payload.badge,
+          priority: entry.payload.priority || 'high',
+          ttl: entry.payload.ttl || 3600,
+          expiration: entry.payload.expiration || null,
+          channelId: entry.payload.channelId || 'default',
+        }));
+
         try {
-          const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-          tickets.push(...ticketChunk);
-          console.log('✅ Sent batch of', chunk.length, 'notifications');
+          const ticketChunk = await expo.sendPushNotificationsAsync(messages);
+          await this.handleTicketChunk(validItems, ticketChunk);
         } catch (error) {
-          console.error('❌ Error sending batch:', error);
-          // Add failed messages to retry queue
-          this.retryQueue.push(...chunk.map(msg => ({ message: msg, attempts: 1 })));
+          console.error('❌ Error sending notification chunk:', error);
+          await this.markChunkForRetry(validItems, error);
+        }
+
+        if (i + chunkSize < itemsWithAttempts.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
-
-      // Handle receipts after a delay
-      setTimeout(() => this.handleReceipts(tickets), 15 * 60 * 1000); // 15 minutes
-
     } catch (error) {
       console.error('❌ Error in sendBatch:', error);
+      await this.markChunkForRetry(queueItems, error);
     }
   }
 
-  /**
-   * Handle push notification receipts
-   */
-  async handleReceipts(tickets) {
-    try {
-      const receiptIds = tickets.map(ticket => ticket.id).filter(id => id);
-      if (receiptIds.length === 0) return;
+  async handleTicketChunk(chunkItems, tickets) {
+    for (let index = 0; index < chunkItems.length; index++) {
+      const queueItem = chunkItems[index];
+      const ticket = tickets[index];
 
-      const receiptIdChunks = expo.chunkPushNotificationReceiptIds(receiptIds);
-      
+      if (!ticket) {
+        await this.markMessageForRetry(queueItem, 'Missing ticket response', 'MissingTicket');
+        continue;
+      }
+
+      if (ticket.status === 'ok') {
+        if (ticket.id) {
+          await this.storePendingReceipt(queueItem, ticket);
+        } else {
+          await this.markMessageDelivered(queueItem.id);
+        }
+        continue;
+      }
+
+      const errorCode = ticket.details?.error || ticket.message || 'UnknownError';
+      const isRetryable = RETRYABLE_TICKET_ERRORS.has(errorCode);
+
+      if (errorCode === 'DeviceNotRegistered') {
+        await this.deactivateToken(queueItem.push_token);
+      }
+
+      if (isRetryable && queueItem.attempts < (queueItem.max_attempts || 3)) {
+        await this.markMessageForRetry(queueItem, ticket.message || errorCode, errorCode, { retry: true });
+      } else {
+        await this.failMessage(queueItem, ticket.message || errorCode, errorCode);
+      }
+    }
+  }
+
+  async storePendingReceipt(queueItem, ticket) {
+    try {
+      await query(`
+        INSERT INTO notification_receipts (queue_id, push_token, receipt_id, status, error_code, error_message, details, created_at, updated_at)
+        VALUES ($1, $2, $3, 'pending', NULL, NULL, $4::jsonb, NOW(), NOW())
+        ON CONFLICT (receipt_id) DO UPDATE SET
+          queue_id = EXCLUDED.queue_id,
+          push_token = EXCLUDED.push_token,
+          status = 'pending',
+          error_code = NULL,
+          error_message = NULL,
+          details = EXCLUDED.details,
+          updated_at = NOW()
+      `, [
+        queueItem.id,
+        queueItem.push_token,
+        ticket.id,
+        JSON.stringify(ticket),
+      ]);
+
+      await query(
+        `UPDATE notification_queue
+         SET status = 'waiting_receipt',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [queueItem.id]
+      );
+    } catch (error) {
+      console.error('❌ Error storing pending receipt:', error);
+      await this.markMessageForRetry(queueItem, error.message, 'ReceiptPersistError');
+    }
+  }
+
+  async markChunkForRetry(chunkItems, error) {
+    for (const item of chunkItems) {
+      await this.markMessageForRetry(item, error.message || 'Chunk send failure', error.code || 'ChunkError');
+    }
+  }
+
+  async markMessageForRetry(queueItem, errorMessage, errorCode, options = {}) {
+    const attempts = queueItem.attempts || 0;
+    const maxAttempts = queueItem.max_attempts || 3;
+
+    if (attempts >= maxAttempts || options.forceFail) {
+      await this.failMessage(queueItem, errorMessage, errorCode);
+      return;
+    }
+
+    const delayMinutes = this.backoffMinutes(attempts + 1);
+    const nextAttempt = new Date(Date.now() + delayMinutes * 60 * 1000);
+
+    await query(
+      `UPDATE notification_queue
+       SET status = 'retry',
+           next_attempt_at = $2,
+           error_message = $3,
+           last_error_code = $4,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [queueItem.id, nextAttempt, errorMessage, errorCode]
+    );
+  }
+
+  async failMessage(queueItem, errorMessage, errorCode) {
+    await query(
+      `UPDATE notification_queue
+       SET status = 'failed',
+           error_message = $2,
+           last_error_code = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [queueItem.id, errorMessage, errorCode]
+    );
+
+    await query(
+      `UPDATE notification_receipts
+       SET status = 'failed',
+           error_code = $3,
+           error_message = $2,
+           updated_at = NOW()
+       WHERE queue_id = $1`,
+      [queueItem.id, errorMessage, errorCode]
+    );
+  }
+
+  async markMessageDelivered(queueId) {
+    await query(
+      `UPDATE notification_queue
+       SET status = 'delivered',
+           delivered_at = NOW(),
+           updated_at = NOW(),
+           error_message = NULL,
+           last_error_code = NULL
+       WHERE id = $1`,
+      [queueId]
+    );
+
+    await query(
+      `UPDATE notification_receipts
+       SET status = 'delivered',
+           updated_at = NOW(),
+           error_code = NULL,
+           error_message = NULL
+       WHERE queue_id = $1`,
+      [queueId]
+    );
+  }
+
+  /**
+   * Process pending receipts from database (persists across restarts)
+   */
+  async processPendingReceipts() {
+    await this.waitForSchema();
+
+    if (this.isProcessingReceipts) {
+      return;
+    }
+
+    this.isProcessingReceipts = true;
+
+    try {
+      const pendingReceipts = await getRows(`
+        SELECT id, queue_id, receipt_id, push_token
+        FROM notification_receipts
+        WHERE status = 'pending'
+          AND receipt_id IS NOT NULL
+        ORDER BY created_at ASC
+        LIMIT 300
+      `);
+
+      if (!pendingReceipts.length) {
+        return;
+      }
+
+      const receiptIdChunks = expo.chunkPushNotificationReceiptIds(
+        pendingReceipts.map(r => r.receipt_id)
+      );
+
       for (const chunk of receiptIdChunks) {
         try {
           const receipts = await expo.getPushNotificationReceiptsAsync(chunk);
-          
-          for (const receiptId in receipts) {
-            const receipt = receipts[receiptId];
-            
-            if (receipt.status === 'error') {
-              console.error('❌ Push notification error:', receipt.message);
-              
-              // Handle invalid tokens
-              if (receipt.details && receipt.details.error === 'DeviceNotRegistered') {
-                await this.deactivateToken(receiptId);
-              }
-            } else if (receipt.status === 'ok') {
-              console.log('✅ Push notification delivered successfully');
-            }
-          }
+          await this.handleReceiptResults(receipts, pendingReceipts);
         } catch (error) {
-          console.error('❌ Error handling receipts:', error);
+          console.error('❌ Error fetching receipt chunk:', error);
         }
       }
     } catch (error) {
-      console.error('❌ Error in handleReceipts:', error);
+      console.error('❌ Error processing pending receipts:', error);
+    } finally {
+      this.isProcessingReceipts = false;
     }
+  }
+
+  async handleReceiptResults(receipts, pendingReceipts) {
+    for (const receiptId in receipts) {
+      const receipt = receipts[receiptId];
+      const ticketRecord = pendingReceipts.find(r => r.receipt_id === receiptId);
+
+      if (!ticketRecord) {
+        continue;
+      }
+
+      if (receipt.status === 'ok') {
+        await this.markMessageDelivered(ticketRecord.queue_id);
+        continue;
+      }
+
+      const errorCode = receipt.details?.error || receipt.message || 'UnknownError';
+
+      if (errorCode === 'DeviceNotRegistered') {
+        await this.deactivateToken(ticketRecord.push_token);
+        await this.failReceipt(ticketRecord, receipt, errorCode);
+        continue;
+      }
+
+      if (RETRYABLE_RECEIPT_ERRORS.has(errorCode)) {
+        await this.requeueFromReceipt(ticketRecord, receipt, errorCode);
+      } else {
+        await this.failReceipt(ticketRecord, receipt, errorCode);
+      }
+    }
+  }
+
+  async requeueFromReceipt(ticketRecord, receipt, errorCode) {
+    const queueItem = await getRow(
+      `SELECT id, attempts, max_attempts
+       FROM notification_queue
+       WHERE id = $1`,
+      [ticketRecord.queue_id]
+    );
+
+    if (!queueItem) {
+      return;
+    }
+
+    await query(
+      `UPDATE notification_queue
+       SET status = 'retry',
+           next_attempt_at = NOW() + INTERVAL '10 minutes',
+           error_message = $2,
+           last_error_code = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [queueItem.id, receipt.message || errorCode, errorCode]
+    );
+
+    await query(
+      `UPDATE notification_receipts
+       SET status = 'failed',
+           error_code = $3,
+           error_message = $2,
+           details = $4::jsonb,
+           updated_at = NOW()
+       WHERE receipt_id = $1`,
+      [ticketRecord.receipt_id, receipt.message || errorCode, errorCode, JSON.stringify(receipt)]
+    );
+  }
+
+  async failReceipt(ticketRecord, receipt, errorCode) {
+    await query(
+      `UPDATE notification_queue
+       SET status = 'failed',
+           error_message = $2,
+           last_error_code = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [ticketRecord.queue_id, receipt.message || errorCode, errorCode]
+    );
+
+    await query(
+      `UPDATE notification_receipts
+       SET status = 'failed',
+           error_code = $3,
+           error_message = $2,
+           details = $4::jsonb,
+           updated_at = NOW()
+       WHERE receipt_id = $1`,
+      [ticketRecord.receipt_id, receipt.message || errorCode, errorCode, JSON.stringify(receipt)]
+    );
   }
 
   /**
    * Deactivate invalid push tokens
    */
-  async deactivateToken(tokenOrReceiptId) {
+  async deactivateToken(pushToken) {
+    if (!pushToken) return;
+
     try {
       await query(
-        'UPDATE user_push_tokens SET is_active = false WHERE push_token = $1',
-        [tokenOrReceiptId]
+        'UPDATE user_push_tokens SET is_active = false, last_seen = NOW() WHERE push_token = $1',
+        [pushToken]
       );
-      console.log('🗑️ Deactivated invalid push token');
     } catch (error) {
       console.error('❌ Error deactivating token:', error);
     }
@@ -249,13 +824,14 @@ class PushNotificationService {
    * Schedule notification for later delivery
    */
   async scheduleNotification(userId, notification, scheduledTime) {
+    await this.waitForSchema();
+
     try {
       await query(`
         INSERT INTO scheduled_notifications (user_id, notification_data, scheduled_time, created_at)
         VALUES ($1, $2, $3, NOW())
       `, [userId, JSON.stringify(notification), scheduledTime]);
-      
-      console.log('⏰ Scheduled notification for:', scheduledTime);
+
       return { success: true };
     } catch (error) {
       console.error('❌ Error scheduling notification:', error);
@@ -264,34 +840,34 @@ class PushNotificationService {
   }
 
   /**
-   * Setup scheduled tasks (reminders, cleanup, etc.)
+   * Setup scheduled tasks (reminders, cleanup, retry processing)
    */
   setupScheduledTasks() {
-    // Process scheduled notifications every minute
     cron.schedule('* * * * *', async () => {
       await this.processScheduledNotifications();
+      await this.processMessageQueue();
+      await this.flushAllPendingPush(50);
     });
 
-    // Process retry queue every 5 minutes
-    cron.schedule('*/5 * * * *', async () => {
-      await this.processRetryQueue();
+    cron.schedule('*/10 * * * *', async () => {
+      await this.processPendingReceipts();
     });
 
-    // Clean up old tokens and notifications daily at 2 AM
     cron.schedule('0 2 * * *', async () => {
       await this.cleanup();
     });
 
-    console.log('⏰ Scheduled tasks initialized');
   }
 
   /**
    * Process scheduled notifications
    */
   async processScheduledNotifications() {
+    await this.waitForSchema();
+
     try {
       const scheduledNotifications = await getRows(`
-        SELECT * FROM scheduled_notifications 
+        SELECT * FROM scheduled_notifications
         WHERE scheduled_time <= NOW() AND sent = false
         ORDER BY scheduled_time ASC
         LIMIT 100
@@ -301,14 +877,12 @@ class PushNotificationService {
         try {
           const notification = JSON.parse(scheduled.notification_data);
           await this.sendToUser(scheduled.user_id, notification);
-          
-          // Mark as sent
+
           await query(
             'UPDATE scheduled_notifications SET sent = true, sent_at = NOW() WHERE id = $1',
             [scheduled.id]
           );
-          
-          console.log('📤 Sent scheduled notification:', scheduled.id);
+
         } catch (error) {
           console.error('❌ Error sending scheduled notification:', error);
         }
@@ -319,48 +893,33 @@ class PushNotificationService {
   }
 
   /**
-   * Process retry queue
-   */
-  async processRetryQueue() {
-    if (this.retryQueue.length === 0) return;
-
-    console.log('🔄 Processing retry queue:', this.retryQueue.length, 'messages');
-    
-    const retryMessages = this.retryQueue.splice(0, 50); // Process 50 at a time
-    
-    for (const item of retryMessages) {
-      if (item.attempts < 3) {
-        try {
-          const ticket = await expo.sendPushNotificationsAsync([item.message]);
-          console.log('✅ Retry successful for message');
-        } catch (error) {
-          console.error('❌ Retry failed:', error);
-          if (item.attempts < 3) {
-            this.retryQueue.push({ ...item, attempts: item.attempts + 1 });
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * Cleanup old data
+   * Cleanup stale data
    */
   async cleanup() {
     try {
-      console.log('🧹 Starting notification cleanup...');
-      
-      // Remove inactive tokens older than 30 days
+
       await query(
         'DELETE FROM user_push_tokens WHERE is_active = false AND last_seen < NOW() - INTERVAL \'30 days\''
       );
-      
-      // Remove old scheduled notifications
+
       await query(
         'DELETE FROM scheduled_notifications WHERE sent = true AND sent_at < NOW() - INTERVAL \'7 days\''
       );
-      
-      console.log('✅ Notification cleanup completed');
+
+      await query(`
+        UPDATE notification_queue
+        SET status = 'retry',
+            next_attempt_at = NOW() + INTERVAL '10 minutes',
+            error_message = 'Stale sending record auto-requeued',
+            last_error_code = 'StaleSending',
+            updated_at = NOW()
+        WHERE status = 'sending' AND updated_at < NOW() - INTERVAL '30 minutes'
+      `);
+
+      await query(
+        'DELETE FROM notification_receipts WHERE status IN (\'delivered\', \'failed\') AND updated_at < NOW() - INTERVAL \'30 days\''
+      );
+
     } catch (error) {
       console.error('❌ Error in cleanup:', error);
     }

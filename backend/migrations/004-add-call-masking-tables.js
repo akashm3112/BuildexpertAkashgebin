@@ -6,7 +6,6 @@ const { query } = require('../database/connection');
  */
 const addCallMaskingTables = async () => {
   try {
-    console.log('📞 Creating call masking tables...');
 
     // 1. Create call_sessions table
     await query(`
@@ -24,7 +23,6 @@ const addCallMaskingTables = async () => {
         ended_at TIMESTAMP
       );
     `);
-    console.log('✅ call_sessions table created');
 
     // 2. Create call_logs table with enhanced fields
     await query(`
@@ -47,7 +45,6 @@ const addCallMaskingTables = async () => {
         updated_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ call_logs table created');
 
     // 3. Create call_events table for detailed call event tracking
     await query(`
@@ -59,7 +56,6 @@ const addCallMaskingTables = async () => {
         timestamp TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ call_events table created');
 
     // 4. Create call_recordings table (optional)
     await query(`
@@ -74,7 +70,6 @@ const addCallMaskingTables = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ call_recordings table created');
 
     // 5. Create comprehensive indexes for better performance
     await query(`
@@ -93,9 +88,7 @@ const addCallMaskingTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_call_events_timestamp ON call_events(timestamp);
       CREATE INDEX IF NOT EXISTS idx_call_recordings_call_log_id ON call_recordings(call_log_id);
     `);
-    console.log('✅ Call masking indexes created');
 
-    console.log('🎉 Call masking tables setup completed!');
     return { success: true };
   } catch (error) {
     console.error('❌ Error creating call masking tables:', error);
@@ -110,7 +103,6 @@ if (require.main === module) {
   addCallMaskingTables()
     .then(result => {
       if (result.success) {
-        console.log('✅ Migration completed successfully');
         process.exit(0);
       } else {
         console.error('❌ Migration failed:', result.error);

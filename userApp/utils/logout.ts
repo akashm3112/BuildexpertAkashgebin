@@ -7,7 +7,6 @@ import { router } from 'expo-router';
  */
 export const performCompleteLogout = async () => {
   try {
-    console.log('🚪 Starting complete logout process...');
     
     // Clear all AsyncStorage data except language preferences
     const allKeys = await AsyncStorage.getAllKeys();
@@ -15,14 +14,12 @@ export const performCompleteLogout = async () => {
     const keysToRemove = allKeys.filter(key => !keysToKeep.includes(key));
     
     if (keysToRemove.length > 0) {
-      console.log('🧹 Clearing all app data:', keysToRemove.length, 'keys');
       await AsyncStorage.multiRemove(keysToRemove);
     }
     
     // Navigate to auth screen
     router.replace('/(auth)/login');
     
-    console.log('✅ Complete logout successful');
     
     // Return success
     return { success: true };
@@ -46,7 +43,6 @@ export const performCompleteLogout = async () => {
  */
 export const performEmergencyLogout = async () => {
   try {
-    console.log('🚨 Performing emergency logout...');
     
     // Clear everything from AsyncStorage
     await AsyncStorage.clear();
@@ -54,7 +50,6 @@ export const performEmergencyLogout = async () => {
     // Force navigation to auth
     router.replace('/(auth)/login');
     
-    console.log('✅ Emergency logout completed');
     return { success: true };
   } catch (error) {
     console.error('❌ Emergency logout error:', error);

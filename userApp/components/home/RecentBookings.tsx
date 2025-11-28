@@ -28,7 +28,7 @@ const getResponsiveValue = (width: number, small: number, medium: number, large:
 };
 
 export default function RecentBookings() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,26 +43,62 @@ export default function RecentBookings() {
   const captionFontSize = getResponsiveValue(screenWidth, 11, 12, 13);
 
   useEffect(() => {
+    // Wait for auth to finish loading before fetching data
+    if (authLoading || !user?.id) {
+      if (!authLoading && !user?.id) {
+        setBookings([]);
+        setLoading(false);
+      }
+      return;
+    }
+
     const fetchBookings = async () => {
       setLoading(true);
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken === null ? undefined : storedToken;
-      }
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         setBookings([]);
         setLoading(false);
         return;
       }
       try {
-        const response = await fetch(`${API_BASE_URL}/api/bookings`, {
+        let response = await fetch(`${API_BASE_URL}/api/bookings`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         
+        // Handle 401 errors - try to refresh token first
+        if (response.status === 401) {
+          const refreshedToken = await tokenManager.forceRefreshToken();
+          if (refreshedToken) {
+            // Retry with new token
+            response = await fetch(`${API_BASE_URL}/api/bookings`, {
+              headers: { 'Authorization': `Bearer ${refreshedToken}` },
+            });
+            // If retry still fails with 401, refresh token expired (30 days)
+            if (response.status === 401) {
+              setBookings([]);
+              setLoading(false);
+              return;
+            }
+          } else {
+            // Refresh token expired (30 days) - silently fail
+            setBookings([]);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        if (!response.ok) {
+          // Handle other non-OK responses
+          const errorData = await response.json().catch(() => ({ message: 'Failed to fetch bookings' }));
+          console.error('❌ RecentBookings: API error:', response.status, errorData.message);
+          setBookings([]);
+          return;
+        }
+        
         const data = await response.json();
         
-        if (response.ok && data.status === 'success') {
+        if (data.status === 'success') {
           const rawBookings = data.data.bookings || [];
           
           setBookings(rawBookings.slice(0, 3).map((b: any) => {
@@ -130,15 +166,26 @@ export default function RecentBookings() {
         } else {
           setBookings([]);
         }
-      } catch (err) {
-        console.error('❌ RecentBookings: Fetch error:', err);
+      } catch (err: any) {
+        // Check if it's a network error
+        const isNetworkError = err instanceof TypeError && 
+          (err.message?.includes('Network request failed') || 
+           err.message?.includes('Failed to fetch') ||
+           err.message?.includes('NetworkError'));
+        
+        if (isNetworkError) {
+          console.error('❌ RecentBookings: Network error - Cannot reach server at', API_BASE_URL);
+          console.error('   Make sure the backend server is running and accessible');
+        } else {
+          console.error('❌ RecentBookings: Fetch error:', err);
+        }
         setBookings([]);
       } finally {
         setLoading(false);
       }
     };
     fetchBookings();
-  }, [user]);
+  }, [user, authLoading]);
 
   if (loading) {
     return (

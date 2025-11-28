@@ -2,16 +2,15 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database/connection');
 const { auth } = require('../middleware/auth');
+const { asyncHandler } = require('../middleware/errorHandler');
 
 // Test route to grant labour access directly
-router.post('/grant-labour-access', auth, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const startDate = new Date();
+router.post('/grant-labour-access', auth, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const startDate = new Date();
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + 7); // 7 days from now
 
-    console.log(`Granting labour access to user ${userId} from ${startDate} to ${endDate}`);
 
     // Update user's labour access status
     const updateQuery = `
@@ -48,7 +47,6 @@ router.post('/grant-labour-access', auth, async (req, res) => {
       transactionId
     ]);
 
-    console.log(`✅ Labour access granted successfully for user ${userId}`);
 
     res.json({
       status: 'success',
@@ -61,23 +59,13 @@ router.post('/grant-labour-access', auth, async (req, res) => {
         transactionId
       }
     });
-
-  } catch (error) {
-    console.error('Error granting labour access:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to grant labour access',
-      error: error.message
-    });
-  }
-});
+}));
 
 // Test route to check labour access status
-router.get('/labour-access-status', auth, async (req, res) => {
-  try {
-    const userId = req.user.id;
+router.get('/labour-access-status', auth, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
 
-    const query = `
+  const query = `
       SELECT 
         labour_access_status,
         labour_access_start_date,
@@ -137,15 +125,6 @@ router.get('/labour-access-status', auth, async (req, res) => {
         daysRemaining: user.days_remaining
       }
     });
-
-  } catch (error) {
-    console.error('Error checking labour access status:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to check labour access status',
-      error: error.message
-    });
-  }
-});
+}));
 
 module.exports = router;

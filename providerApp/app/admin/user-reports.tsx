@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar, Animated, Platform, Alert, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar, Animated, Platform, Alert, TextInput, RefreshControl, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { ArrowLeft, Users, Phone, Mail, Calendar, UserCheck, UserX, Search, Filter, MoreVertical, Trash2, Shield, Eye } from 'lucide-react-native';
@@ -43,7 +43,7 @@ interface User {
 
 export default function UserReportsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,8 +57,25 @@ export default function UserReportsScreen() {
   const filterAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    loadUsers();
-    // Start entrance animations
+    if (user && user.role !== 'admin') {
+      router.replace('/(tabs)');
+      return;
+    }
+
+    // Prevent back navigation to provider screens
+    // Always navigate to admin dashboard instead
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Always navigate to dashboard to prevent going back to provider screens
+      router.replace('/admin/dashboard');
+      return true;
+    });
+
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      loadUsers();
+    } else if (!authLoading && !user?.id) {
+      setIsLoading(false);
+    }
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -71,7 +88,9 @@ export default function UserReportsScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+
+    return () => backHandler.remove();
+  }, [user?.role]);
 
   useEffect(() => {
     // Filter animation
@@ -84,7 +103,8 @@ export default function UserReportsScreen() {
 
   const loadUsers = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       if (!token) {
         console.error('No authentication token found');
         return;
@@ -128,7 +148,8 @@ export default function UserReportsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('token');
+              const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
               const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
                 method: 'DELETE',
                 headers: {
@@ -294,7 +315,7 @@ export default function UserReportsScreen() {
           }
         ]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.replace('/admin/dashboard')} style={styles.backButton}>
           <ArrowLeft size={getResponsiveValue(20, 22, 24)} color="#374151" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>

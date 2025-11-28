@@ -50,7 +50,6 @@ export default function ProviderDetailScreen() {
         // Use EXPO_PUBLIC_API_URL if set, otherwise default to localhost
         // If testing on a physical device, replace 'localhost' with your computer's LAN IP (e.g., 'http://192.168.1.5:5000')
         apiUrl = `${API_BASE_URL}/api/public/provider-service/${id}`;
-        console.log('Fetching provider details from:', apiUrl);
         const res = await fetch(apiUrl);
         const contentType = res.headers.get('content-type');
         if (!res.ok) {
@@ -114,12 +113,10 @@ export default function ProviderDetailScreen() {
 
   const handleCall = () => {
     // In a real app, you would use Linking.openURL(`tel:${provider.phone}`)
-    console.log('Calling:', provider.phone);
   };
 
   const handleMessage = () => {
     // Navigate to chat or messaging screen
-    console.log('Opening chat with:', provider.full_name);
   };
 
   // Parse working proof images (portfolio)

@@ -3,7 +3,6 @@ require('dotenv').config({ path: './config.env' });
 
 const addProviderSpecificServices = async () => {
   try {
-    console.log('🚀 Adding Provider Specific Services table...');
 
     // Create provider_specific_services table
     await query(`
@@ -16,14 +15,11 @@ const addProviderSpecificServices = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    console.log('✅ Provider specific services table created');
 
     // Create index for better performance
     await query(`CREATE INDEX IF NOT EXISTS idx_provider_specific_services_provider_service_id ON provider_specific_services(provider_service_id);`);
-    console.log('✅ Index created for provider specific services');
 
     // Seed some default service options for different service categories
-    console.log('🌱 Seeding default service options...');
     
     // Get all active provider services
     const providerServices = await query(`
@@ -95,7 +91,31 @@ const addProviderSpecificServices = async () => {
         'Paint Repair',
         'Other Painting Work'
       ],
-      'painting-cleaning': [
+      'painting': [
+        'Interior Painting',
+        'Exterior Painting',
+        'Wall Texture',
+        'Wallpaper Installation',
+        'Wood Painting',
+        'Metal Painting',
+        'Waterproofing',
+        'Color Consultation',
+        'Paint Repair',
+        'Other Painting Work'
+      ],
+      'painting-cleaning': [ // Backward compatibility
+        'Interior Painting',
+        'Exterior Painting',
+        'Wall Texture',
+        'Wallpaper Installation',
+        'Wood Painting',
+        'Metal Painting',
+        'Waterproofing',
+        'Color Consultation',
+        'Paint Repair',
+        'Other Painting Work'
+      ],
+      'cleaning': [
         'House Cleaning',
         'Office Cleaning',
         'Deep Cleaning',
@@ -178,6 +198,18 @@ const addProviderSpecificServices = async () => {
         'Building Maintenance',
         'Construction Consultation',
         'Other Building Work'
+      ],
+      'borewell': [
+        'Borewell Drilling',
+        'Submersible Pump Installation',
+        'Casing Pipe Installation',
+        'Borewell Flushing & Cleaning',
+        'Pipeline Extension',
+        'Motor Repair & Maintenance',
+        'Water Quality Testing',
+        'Yield Testing',
+        'Annual Maintenance Contracts',
+        'Other Borewell Work'
       ]
     };
 
@@ -202,8 +234,7 @@ const addProviderSpecificServices = async () => {
       }
     }
 
-    console.log('✅ Default service options seeded successfully');
-    console.log('🎉 Provider specific services setup completed!');
+    
 
   } catch (error) {
     console.error('❌ Setup failed:', error);
@@ -215,7 +246,6 @@ const addProviderSpecificServices = async () => {
 if (require.main === module) {
   addProviderSpecificServices()
     .then(() => {
-      console.log('Setup completed');
       process.exit(0);
     })
     .catch((error) => {

@@ -1,7 +1,3 @@
-/**
- * Payment Security Utilities
- * Critical security measures for payment processing
- */
 
 const crypto = require('crypto');
 const { getRow, query } = require('../database/connection');
@@ -43,9 +39,19 @@ class PaymentSecurity {
   /**
    * Validate payment amount against expected service price
    */
-  static async validatePaymentAmount(providerServiceId, amount) {
+  static async validatePaymentAmount(providerServiceId, amount, options = {}) {
+    const { pricingPlanId = null, currency = null } = options;
+
     const service = await getRow(`
-      SELECT ps.*, sm.base_price, sm.name as service_name
+      SELECT 
+        ps.id AS provider_service_id,
+        ps.provider_id,
+        ps.service_id,
+        sm.name AS service_name,
+        sm.base_price,
+        sm.currency_code,
+        sm.default_pricing_plan_id,
+        sm.is_paid
       FROM provider_services ps
       JOIN services_master sm ON ps.service_id = sm.id
       WHERE ps.id = $1
@@ -55,21 +61,93 @@ class PaymentSecurity {
       return { valid: false, message: 'Service not found' };
     }
 
-    // Allow some tolerance for price variations (e.g., 1% for rounding)
-    const expectedAmount = parseFloat(service.base_price);
+    const resolvedCurrency = (currency || service.currency_code || 'INR').toUpperCase();
+
+    let pricingPlan = null;
+
+    if (pricingPlanId) {
+      pricingPlan = await getRow(`
+        SELECT *
+        FROM service_pricing
+        WHERE id = $1
+          AND service_id = $2
+          AND is_active = TRUE
+          AND (effective_from IS NULL OR effective_from <= NOW())
+          AND (effective_to IS NULL OR effective_to >= NOW())
+      `, [pricingPlanId, service.service_id]);
+
+      if (!pricingPlan) {
+        return {
+          valid: false,
+          message: 'Invalid or inactive pricing plan selected'
+        };
+      }
+    } else {
+      pricingPlan = await getRow(`
+        SELECT *
+        FROM service_pricing
+        WHERE service_id = $1
+          AND is_active = TRUE
+          AND (effective_from IS NULL OR effective_from <= NOW())
+          AND (effective_to IS NULL OR effective_to >= NOW())
+        ORDER BY 
+          (CASE WHEN id = $2 THEN 0 ELSE 1 END),
+          priority DESC,
+          effective_from DESC NULLS LAST
+        LIMIT 1
+      `, [service.service_id, service.default_pricing_plan_id]);
+    }
+
+    const expectedAmount = pricingPlan
+      ? parseFloat(pricingPlan.price)
+      : parseFloat(service.base_price);
+
+    const expectedCurrency = (pricingPlan
+      ? pricingPlan.currency_code
+      : service.currency_code || resolvedCurrency).toUpperCase();
+
+    if (expectedAmount === null || Number.isNaN(expectedAmount)) {
+      return {
+        valid: false,
+        message: 'Pricing configuration incomplete for this service'
+      };
+    }
+
     const actualAmount = parseFloat(amount);
-    const tolerance = expectedAmount * 0.01; // 1% tolerance
+    if (Number.isNaN(actualAmount)) {
+      return { valid: false, message: 'Invalid amount' };
+    }
+
+    if (expectedCurrency && expectedCurrency.toUpperCase() !== resolvedCurrency) {
+      return {
+        valid: false,
+        message: `Invalid currency. Expected ${expectedCurrency}, received ${resolvedCurrency}`,
+        expectedCurrency,
+        receivedCurrency: resolvedCurrency,
+        expected: expectedAmount
+      };
+    }
+
+    // Allow 1% tolerance
+    const tolerance = expectedAmount * 0.01;
 
     if (Math.abs(actualAmount - expectedAmount) > tolerance) {
       return {
         valid: false,
-        message: 'Payment amount does not match service price',
+        message: 'Payment amount does not match pricing plan',
         expected: expectedAmount,
+        expectedCurrency: expectedCurrency,
         received: actualAmount
       };
     }
 
-    return { valid: true, service };
+    return {
+      valid: true,
+      service,
+      pricingPlan,
+      expectedAmount,
+      currency: expectedCurrency || resolvedCurrency
+    };
   }
 
   /**

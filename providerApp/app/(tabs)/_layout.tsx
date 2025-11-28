@@ -1,4 +1,4 @@
-import { Tabs, useRouter, useSegments } from 'expo-router';
+import { Tabs, useRouter, useSegments, usePathname } from 'expo-router';
 import { Home, User, FileText, Calendar, Bell } from 'lucide-react-native';
 import { View, Text, StyleSheet, BackHandler } from 'react-native';
 import { useNotifications } from '@/context/NotificationContext';
@@ -10,15 +10,44 @@ export default function TabLayout() {
   const { t } = useLanguage();
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
 
   // Handle back button press - navigate to home tab when on other tabs
+  // Only intercept if we're actually on a tab screen, not on nested screens
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Check if we're on a nested screen (not a tab) - allow normal back navigation
+      // Nested screens like edit-profile, booking details, etc. should use normal back navigation
+      // These screens have their own BackHandler that should handle navigation
+      const isNestedScreen = pathname?.includes('/edit-profile') ||
+                            pathname?.includes('/booking/') ||
+                            pathname?.includes('/service/') ||
+                            pathname?.includes('/admin/') ||
+                            pathname?.includes('/auth/') ||
+                            pathname?.includes('/payment');
+      
+      if (isNestedScreen) {
+        // Allow normal back navigation for nested screens - don't intercept
+        return false;
+      }
+      
+      // Only handle back navigation if we're actually on a tab screen
+      // Check both pathname and segments to be sure
+      const isOnTabScreen = pathname?.startsWith('/(tabs)') || 
+                           pathname === '/(tabs)' ||
+                           pathname === '/(tabs)/' ||
+                           segments[0] === '(tabs)';
+      
+      if (!isOnTabScreen) {
+        // Not on a tab screen, allow normal back navigation
+        return false;
+      }
+      
       // Get current route segments
       const currentRoute = segments.join('/');
       
       // If we're on home tab, prevent back navigation (exit app)
-      if (currentRoute === '(tabs)' || currentRoute === '(tabs)/index') {
+      if (currentRoute === '(tabs)' || currentRoute === '(tabs)/index' || pathname === '/(tabs)' || pathname === '/(tabs)/') {
         return true; // Prevent back navigation, let Android handle app exit
       }
       
@@ -28,7 +57,7 @@ export default function TabLayout() {
     });
 
     return () => backHandler.remove();
-  }, [segments, router]);
+  }, [segments, router, pathname]);
   
   return (
     <Tabs

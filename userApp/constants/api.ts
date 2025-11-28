@@ -1,1 +1,1 @@
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.105:5000'; 
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.103:5000'; 

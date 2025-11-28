@@ -44,13 +44,15 @@ export default {
     engineers: 'ಎಂಜಿನಿಯರ್',
     plumbersRegistration: 'ಪ್ಲಂಬರ್',
     graniteTilesLaying: 'ಗ್ರಾನೈಟ್ ಮತ್ತು ಟೈಲ್ಸ್ ಹಾಕುವುದು',
-    paintingAndCleaning: 'ಬಣ್ಣ ಮತ್ತು ಸ್ವಚ್ಛತೆ',
+    paintingAndCleaning: 'ಬಣ್ಣ ಹಚ್ಚುವಿಕೆ',
     contractorAndBuilding: 'ಠೇಕುದಾರ ಮತ್ತು ಕಟ್ಟಡ ನಿರ್ಮಾಣ',
     labors: 'ಕಾರ್ಮಿಕರು',
     masonMistri: 'ಕುಶಲಕರ್ಮಿ/ಮಿಸ್ತ್ರಿ',
     interiorsDesigners: 'ಒಳಾಂಗಣ ವಿನ್ಯಾಸಕಾರರು',
     stainlessSteelMS: 'ಸ್ಟೇನ್ಲೆಸ್ ಸ್ಟೀಲ್ ಎಂ.ಎಸ್',
+    cleaningServices: 'ಕ್ಲೀನಿಂಗ್',
     glassMirror: 'ಗಾಜು ಮತ್ತು ಕನ್ನಡಿ',
+    borewellServices: 'ಬೋರ್‌ವೆಲ್',
   },
   
   // Bookings Screen
@@ -166,7 +168,7 @@ export default {
   
   // Profile Screen
   profile: {
-    editProfile: 'ಪ್ರೊಫೈಲ್ ಸಂಪಾದಿಸಿ',
+    editProfile: 'ಪ್ರೊಫೈಲ್ ನಿರ್ವಹಿಸಿ',
     updatePersonalInfo: 'ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ನವೀಕರಿಸಿ',
     language: 'ಭಾಷೆ',
     currentLanguage: 'ಪ್ರಸ್ತುತ: {language}',
@@ -207,6 +209,60 @@ export default {
       takePhoto: 'ಫೋಟೋ ತೆಗೆಯಿರಿ',
       chooseGallery: 'ಗ್ಯಾಲರಿಯಿಂದ ಆಯ್ಕೆಮಾಡಿ',
     },
+  },
+  referFriendsModal: {
+    title: 'BuildXpert ಅನ್ನು ಹಂಚಿಕೊಳ್ಳಿ',
+    subtitle: 'ಸ್ನೇಹಿತರನ್ನು ಮತ್ತು ಕುಟುಂಬವನ್ನು ಆಹ್ವಾನಿಸಿ',
+    description: 'ನೀವು ಕಾಳಜಿ ವಹಿಸುವ ಜನರೊಂದಿಗೆ BuildXpert ಅನ್ನು ಹಂಚಿಕೊಳ್ಳಿ ಮತ್ತು ಅವರಿಗೆ ವಿಶ್ವಾಸಾರ್ಹ ತಜ್ಞರನ್ನು ಕಂಡುಹಿಡಿಯಲು ಸಹಾಯ ಮಾಡಿ.',
+    linkLabel: 'ಅಧಿಕೃತ ಪ್ಲೇ ಸ್ಟೋರ್ ಲಿಂಕ್',
+    linkHint: 'ಸ್ಟೋರ್ ಪಟ್ಟಿಯನ್ನು ತೆರೆಯಲು ಅಥವಾ ಯಾರೊಂದಿಗೆ ಬೇಕಾದರೂ ಹಂಚಿಕೊಳ್ಳಲು ಟ್ಯಾಪ್ ಮಾಡಿ.',
+    shareVia: 'ಇದರ ಮೂಲಕ ಹಂಚಿಕೊಳ್ಳಿ',
+    shareGeneric: 'ಯಾವುದೇ ಅಪ್ಲಿಕೇಶನ್‌ನಲ್ಲಿ ಹಂಚಿಕೊಳ್ಳಿ',
+    shareWhatsApp: 'ವಾಟ್ಸಪ್',
+    shareInstagram: 'ಇನ್‌ಸ್ಟಾಗ್ರಾಮ್',
+    shareSms: 'ಸಂದೇಶಗಳು / SMS',
+    shareMessage: 'ಹಾಯ್! ನಾನು ವಿಶ್ವಾಸಾರ್ಹ ಮನೆ ಸೇವೆಗಳಿಗೆ BuildXpert ಅನ್ನು ಬಳಸುತ್ತಿದ್ದೇನೆ. ಇದನ್ನು ಇಲ್ಲಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ: {link}',
+    shareError: 'ಈಗ ಶೇರ್ ಶೀಟ್ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗುತ್ತಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+    linkError: 'ಈ ಸಾಧನದಲ್ಲಿ ಪ್ಲೇ ಸ್ಟೋರ್ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.',
+    tipTitle: 'ಉಪಯುಕ್ತ ಸಲಹೆ',
+    tipDescription: 'ಒಂದೇ ಬಾರಿ ಹಲವಾರು ಸ್ನೇಹಿತರಿಗೆ ಲಿಂಕ್ ಕಳುಹಿಸಿ ಅಥವಾ ಹೆಚ್ಚಿನವರು BuildXpert ಅನ್ನು ಕಂಡುಹಿಡಿಯಲು ನಿಮ್ಮ ಸಾಮಾಜಿಕ ಕಥೆಗಳಲ್ಲಿ ಪೋಸ್ಟ್ ಮಾಡಿ.',
+    openStore: 'ಪ್ಲೇ ಸ್ಟೋರ್ ಪಟ್ಟಿಯನ್ನು ತೆರೆಯಿರಿ',
+  },
+  rateAppModal: {
+    title: 'BuildXpert ಗೆ ರೇಟಿಂಗ್ ನೀಡಿ',
+    subtitle: 'ನಿಮ್ಮ ಅನುಭವವನ್ನು ಹಂಚಿಕೊಳ್ಳಿ',
+    description: 'ನಿಮ್ಮ ಪ್ರತಿಕ್ರಿಯೆ ಅಪ್ಲಿಕೇಶನ್ ಅನ್ನು ಸುಧಾರಿಸಲು ನಮಗೆ ಸಹಾಯ ಮಾಡುತ್ತದೆ ಮತ್ತು ಹೊಸ ಬಳಕೆದಾರರಿಗೆ BuildXpert ಅನ್ನು ನಂಬಲು ವಿಶ್ವಾಸ ನೀಡುತ್ತದೆ.',
+    stepsTitle: 'ಪ್ಲೇ ಸ್ಟೋರ್‌ನಲ್ಲಿ ಹೇಗೆ ರೇಟಿಂಗ್ ನೀಡುವುದು',
+    steps: {
+      one: 'ಕೆಳಗಿನ ಬಟನ್ ಒತ್ತುವ ಮೂಲಕ ಅಧಿಕೃತ ಪ್ಲೇ ಸ್ಟೋರ್ ಪಟ್ಟಿಯನ್ನು ತೆರೆಯಿರಿ.',
+      two: 'ರೇಟಿಂಗ್ ವಿಭಾಗದವರೆಗೂ ಸ್ಕ್ರೋಲ್ ಮಾಡಿ ಮತ್ತು ನೀಡಲು ಬಯಸುವ ನಕ್ಷತ್ರಗಳನ್ನು ಆಯ್ಕೆಮಾಡಿ.',
+      three: 'ಇಚ್ಛಿಸಿದರೆ ಸಣ್ಣ ವಿಮರ್ಶೆ ಬರೆಯಿರಿ ಮತ್ತು ಪ್ರತಿಕ್ರಿಯೆಯನ್ನು ಸಲ್ಲಿಸಿ.'
+    },
+    openStore: 'ಪ್ಲೇ ಸ್ಟೋರ್‌ನಲ್ಲಿ ರೇಟ್ ಮಾಡಿ',
+    reminder: 'BuildXpert ಸಮುದಾಯಕ್ಕೆ ಬೆಂಬಲ ನೀಡಿದಕ್ಕಾಗಿ ಧನ್ಯವಾದಗಳು!',
+    error: 'ಈ ಸಾಧನದಲ್ಲಿ ಪ್ಲೇ ಸ್ಟೋರ್ ತೆರೆಯಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.',
+  },
+  supportModal: {
+    title: 'ಸಹಾಯ ಮತ್ತು ಬೆಂಬಲ',
+    subtitle: 'ನಾವು ನಿಮ್ಮೊಂದಿಗೆ ಇದ್ದೇವೆ',
+    description: 'ಬುಕಿಂಗ್, ಖಾತೆ ಅಥವಾ BuildXpert ಸಂಬಂಧಿಸಿದ ಯಾವುದೇ ಸಮಸ್ಯೆಗೆ ನಮ್ಮ ಬೆಂಬಲ ತಂಡವನ್ನು ಸಂಪರ್ಕಿಸಿ.',
+    contactTitle: 'ಸಂಪರ್ಕ ಆಯ್ಕೆಗಳು',
+    emailLabel: 'ಇಮೇಲ್ ಬೆಂಬಲ',
+    emailAddress: 'support@buildxpert.com',
+    emailSubject: 'BuildXpert Support',
+    emailBody: 'ಹಾಯ್ BuildXpert ತಂಡ,',
+    emailError: 'ಈ ಸಾಧನದಲ್ಲಿ ಯಾವುದೇ ಇಮೇಲ್ ಅಪ್ಲಿಕೇಶನ್ ಕಾಣಿಸಲಿಲ್ಲ.',
+    phoneLabel: 'ಕಾಲ್ ಬೆಂಬಲ',
+    phoneNumber: '+15551234567',
+    displayPhoneNumber: '+1 555-123-4567',
+    phoneError: 'ಈ ಸಾಧನದಲ್ಲಿ ಕರೆ ಮಾಡುವುದು ಬೆಂಬಲಿತವಾಗಿಲ್ಲ.',
+    whatsappLabel: 'ವಾಟ್ಸಪ್',
+    whatsappNumber: '+15551234567',
+    displayWhatsApp: '+1 555-123-4567',
+    whatsappMessage: 'ಹಾಯ್ BuildXpert ಬೆಂಬಲ ತಂಡ, ನನಗೆ ಸಹಾಯ ಬೇಕಾಗಿದೆ.',
+    whatsappError: 'ಈ ಸಾಧನದಲ್ಲಿ ವಾಟ್ಸಪ್ ಸ್ಥಾಪಿತವಾಗಿಲ್ಲ.',
+    availableTitle: 'ಬೆಂಬಲ ಲಭ್ಯತೆ',
+    availableHours: 'ಸೋಮವಾರದಿಂದ ಶನಿವಾರ • ಬೆಳಿಗ್ಗೆ 9:00 – ಸಂಜೆ 8:00 (IST)\nಸರಾಸರಿ ಪ್ರತಿಕ್ರಿಯಾ ಸಮಯ: 1 ವ್ಯವಹಾರ ದಿನದೊಳಗೆ',
   },
   
   // Language Selection Modal
@@ -449,6 +505,10 @@ export default {
     mirrorInstallation: 'ಕನ್ನಡಿ ಸ್ಥಾಪನೆ',
     glassDoorInstallation: 'ಗಾಜಿನ ಬಾಗಿಲು ಸ್ಥಾಪನೆ',
     windowGlassReplacement: 'ಕಿಟಕಿ ಗಾಜು ಬದಲಾವಣೆ',
+    borewellDrilling: 'Borewell Drilling',
+    submersiblePumpInstallation: 'Submersible Pump Installation',
+    borewellMaintenance: 'Borewell Maintenance & Repair',
+    waterTesting: 'Water Quality Testing',
     others: 'ಇತರರು',
   },
 
@@ -471,5 +531,55 @@ export default {
     recentReviews: 'ಇತ್ತೀಚಿನ ವಿಮರ್ಶೆಗಳು',
     noReviewsYet: 'ಇನ್ನೂ ಯಾವುದೇ ವಿಮರ್ಶೆಗಳಿಲ್ಲ',
     bookNow: 'ಈಗ ಬುಕ್ ಮಾಡಿ',
+  },
+
+  // Terms & Privacy Modal
+  termsPrivacy: {
+    title: 'ನಿಯಮಗಳು ಮತ್ತು ಗೌಪ್ಯತೆ',
+    termsOfService: 'ಸೇವೆಯ ನಿಯಮಗಳು',
+    termsDescription: 'BuildXpert ಅನ್ನು ಬಳಸುವ ಮೂಲಕ, ನೀವು ಈ ಸೇವೆಯ ನಿಯಮಗಳಿಗೆ ಒಪ್ಪುತ್ತೀರಿ. ನಮ್ಮ ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ ವಿವಿಧ ಮನೆ ಸುಧಾರಣೆ ಮತ್ತು ನಿರ್ವಹಣಾ ಸೇವೆಗಳಿಗಾಗಿ ಬಳಕೆದಾರರನ್ನು ಸೇವಾ ಪ್ರದಾತರೊಂದಿಗೆ ಸಂಪರ್ಕಿಸುತ್ತದೆ.',
+    userResponsibilities: 'ಬಳಕೆದಾರರ ಜವಾಬ್ದಾರಿಗಳು:',
+    userResponsibilitiesList: [
+      'ಸೇವೆಗಳನ್ನು ಬುಕ್ ಮಾಡುವಾಗ ನಿಖರವಾದ ಮಾಹಿತಿಯನ್ನು ಒದಗಿಸಿ',
+      'ಸೇವಾ ಪ್ರದಾತರೊಂದಿಗೆ ಗೌರವ ಮತ್ತು ವೃತ್ತಿಪರತೆಯಿಂದ ವರ್ತಿಸಿ',
+      'ಒಪ್ಪಿದಂತೆ ಸೇವೆಗಳಿಗೆ ಪಾವತಿಸಿ',
+      'ಪ್ರಾಮಾಣಿಕ ಪ್ರತಿಕ್ರಿಯೆ ಮತ್ತು ರೇಟಿಂಗ್‌ಗಳನ್ನು ಒದಗಿಸಿ'
+    ],
+    providerResponsibilities: 'ಸೇವಾ ಪ್ರದಾತರ ಜವಾಬ್ದಾರಿಗಳು:',
+    providerResponsibilitiesList: [
+      'ವಾಗ್ದಾನ ಮಾಡಿದ ಮತ್ತು ಸಮಯಕ್ಕೆ ಸೇವೆಗಳನ್ನು ಒದಗಿಸಿ',
+      'ವೃತ್ತಿಪರ ಮಾನದಂಡಗಳು ಮತ್ತು ಗುಣಮಟ್ಟವನ್ನು ನಿರ್ವಹಿಸಿ',
+      'ನಿಖರವಾದ ಬೆಲೆ ಮತ್ತು ಲಭ್ಯತೆಯನ್ನು ಒದಗಿಸಿ',
+      'ಬಳಕೆದಾರರ ಸಂವಹನಕ್ಕೆ ತಕ್ಷಣ ಪ್ರತಿಕ್ರಿಯಿಸಿ'
+    ],
+    privacyPolicy: 'ಗೌಪ್ಯತೆ ನೀತಿ',
+    privacyDescription: 'ನಿಮ್ಮ ಗೌಪ್ಯತೆಯನ್ನು ರಕ್ಷಿಸಲು ಮತ್ತು ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯ ಭದ್ರತೆಯನ್ನು ಖಚಿತಪಡಿಸಲು ನಾವು ಬದ್ಧರಾಗಿದ್ದೇವೆ.',
+    informationWeCollect: 'ನಾವು ಸಂಗ್ರಹಿಸುವ ಮಾಹಿತಿ:',
+    informationWeCollectList: [
+      'ವೈಯಕ್ತಿಕ ಮಾಹಿತಿ (ಹೆಸರು, ಇಮೇಲ್, ಫೋನ್, ವಿಳಾಸ)',
+      'ಪಾವತಿ ಮಾಹಿತಿ (ಸುರಕ್ಷಿತವಾಗಿ ಸಂಸ್ಕರಿಸಲಾಗಿದೆ)',
+      'ಸೇವಾ ಆದ್ಯತೆಗಳು ಮತ್ತು ಬುಕಿಂಗ್ ಇತಿಹಾಸ',
+      'ಸಾಧನ ಮಾಹಿತಿ ಮತ್ತು ಅಪ್ಲಿಕೇಶನ್ ಬಳಕೆ ಡೇಟಾ'
+    ],
+    howWeUseInfo: 'ನಾವು ನಿಮ್ಮ ಮಾಹಿತಿಯನ್ನು ಹೇಗೆ ಬಳಸುತ್ತೇವೆ:',
+    howWeUseInfoList: [
+      'ನಮ್ಮ ಸೇವೆಗಳನ್ನು ಒದಗಿಸಲು ಮತ್ತು ಸುಧಾರಿಸಲು',
+      'ನಿಮ್ಮನ್ನು ಸೇವಾ ಪ್ರದಾತರೊಂದಿಗೆ ಸಂಪರ್ಕಿಸಲು',
+      'ಪಾವತಿಗಳು ಮತ್ತು ವಹಿವಾಟುಗಳನ್ನು ಸಂಸ್ಕರಿಸಲು',
+      'ಮುಖ್ಯ ಅಧಿಸೂಚನೆಗಳು ಮತ್ತು ನವೀಕರಣಗಳನ್ನು ಕಳುಹಿಸಲು',
+      'ಗ್ರಾಹಕ ಬೆಂಬಲವನ್ನು ಒದಗಿಸಲು'
+    ],
+    dataSecurity: 'ಡೇಟಾ ಭದ್ರತೆ:',
+    dataSecurityList: [
+      'ಎಲ್ಲಾ ಡೇಟಾವನ್ನು ಉದ್ಯಮ-ಪ್ರಮಾಣಿತ ಪ್ರೋಟೋಕಾಲ್‌ಗಳನ್ನು ಬಳಸಿಕೊಂಡು ಎನ್ಕ್ರಿಪ್ಟ್ ಮಾಡಲಾಗಿದೆ',
+      'ನಾವು ಕಟ್ಟುನಿಟ್ಟಾದ ಪ್ರವೇಶ ನಿಯಂತ್ರಣಗಳನ್ನು ಜಾರಿಗೆ ತರುತ್ತೇವೆ',
+      'ನಿಯಮಿತ ಭದ್ರತಾ ಆಡಿಟ್‌ಗಳು ಮತ್ತು ನವೀಕರಣಗಳು',
+      'ಡೇಟಾ ರಕ್ಷಣಾ ನಿಯಮಗಳಿಗೆ ಅನುಸರಣೆ'
+    ],
+    contactInfo: 'ಸಂಪರ್ಕ ಮಾಹಿತಿ',
+    contactDescription: 'ಈ ನಿಯಮಗಳು ಅಥವಾ ಗೌಪ್ಯತೆ ನೀತಿಯ ಬಗ್ಗೆ ಪ್ರಶ್ನೆಗಳಿಗೆ, ದಯವಿಟ್ಟು ನಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಿ:',
+    contactEmail: 'ಇಮೇಲ್: support@buildxpert.com',
+    contactPhone: 'ಫೋನ್: +1 (555) 123-4567',
+    contactAddress: 'ವಿಳಾಸ: 123 ಮೇನ್ ಸ್ಟ್ರೀಟ್, ನಗರ, ರಾಜ್ಯ 12345',
   },
 };

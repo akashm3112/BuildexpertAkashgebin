@@ -2,7 +2,6 @@ const { query } = require('../database/connection');
 
 const addRoleToNotifications = async () => {
   try {
-    console.log('🔧 Adding role column to notifications table...');
 
     // Add role column to notifications table
     await query(`
@@ -14,7 +13,6 @@ const addRoleToNotifications = async () => {
       END$$;
     `);
 
-    console.log('✅ Role column added to notifications table');
 
     // Update existing notifications to have 'user' role by default
     await query(`
@@ -23,9 +21,7 @@ const addRoleToNotifications = async () => {
       WHERE role IS NULL
     `);
 
-    console.log('✅ Updated existing notifications with default role');
-
-    console.log('🎉 Migration completed successfully!');
+   
   } catch (error) {
     console.error('❌ Migration failed:', error);
     throw error;
@@ -36,7 +32,6 @@ const addRoleToNotifications = async () => {
 if (require.main === module) {
   addRoleToNotifications()
     .then(() => {
-      console.log('✅ Migration completed successfully!');
       process.exit(0);
     })
     .catch((error) => {

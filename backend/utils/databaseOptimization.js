@@ -1,16 +1,8 @@
 const { query, getRow, getRows } = require('../database/connection');
 
-/**
- * Database optimization utilities for common query patterns
- * This helps prevent N+1 queries and improves performance
- */
 
 class DatabaseOptimizer {
   
-  /**
-   * Get bookings with all related data in a single query
-   * Prevents N+1 queries by joining all necessary tables
-   */
   static async getBookingsWithDetails(userId, options = {}) {
     const { status, page = 1, limit = 10, userType = 'user' } = options;
     const offset = (page - 1) * limit;

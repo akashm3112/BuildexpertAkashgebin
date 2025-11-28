@@ -1,10 +1,6 @@
 const path = require('path');
 const fs = require('fs');
 
-/**
- * Secure configuration loader with validation
- * This ensures all required environment variables are present and valid
- */
 
 class Config {
   constructor() {

@@ -34,7 +34,6 @@ export default function LabourPaymentScreen() {
   };
 
   const initiatePaytmPayment = async () => {
-    console.log('Initiating Paytm payment...');
     setIsProcessing(true);
     try {
       const token = await AsyncStorage.getItem('token');
@@ -42,7 +41,6 @@ export default function LabourPaymentScreen() {
         throw new Error('Authentication token not found');
       }
 
-      console.log('Token found, proceeding with payment...');
       
       // For testing: Make payment successful immediately
       const testOrderId = 'TEST_ORDER_' + Date.now();
@@ -65,7 +63,6 @@ export default function LabourPaymentScreen() {
   };
 
   const verifyPayment = async (orderId: string, token: string) => {
-    console.log('Verifying payment for order:', orderId);
     try {
       // For testing: Make payment successful immediately
       setIsProcessing(false);
@@ -73,9 +70,7 @@ export default function LabourPaymentScreen() {
       
       // For testing: Grant labour access using context
       try {
-        console.log('Granting labour access using context...');
         await grantLabourAccess();
-        console.log('✅ Labour access granted successfully!');
         
         // Also try to call the backend API
         try {
@@ -88,14 +83,11 @@ export default function LabourPaymentScreen() {
           });
 
           const data = await response.json();
-          console.log('Backend API response:', data);
         } catch (apiError) {
-          console.log('Backend API failed, but context updated:', apiError instanceof Error ? apiError.message : 'Unknown error');
         }
         
       } catch (error) {
         console.error('Error granting labour access:', error);
-        console.log('Continuing with success for testing despite error');
       }
       
       // Add a small delay to ensure backend processing
@@ -140,7 +132,6 @@ export default function LabourPaymentScreen() {
   };
 
   const handlePayment = () => {
-    console.log('Payment initiated with method:', selectedMethod);
     if (selectedMethod === 'paytm') {
       initiatePaytmPayment();
     }

@@ -524,11 +524,7 @@ export default function SignupScreen() {
         profilePicUrl: profilePicture || DEFAULT_PROFILE_PIC,
       };
       
-      console.log('📤 Sending signup request...');
-      console.log('  - Profile picture:', profilePicture ? profilePicture.substring(0, 50) + '...' : 'null');
-      console.log('  - Default profile pic:', DEFAULT_PROFILE_PIC);
-      console.log('  - Final profilePicUrl:', requestBody.profilePicUrl ? requestBody.profilePicUrl.substring(0, 50) + '...' : 'null');
-      
+     
       const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
         method: 'POST',
         headers: {
@@ -539,7 +535,6 @@ export default function SignupScreen() {
 
       const data = await response.json();
       
-      console.log('📥 Signup response:', data);
 
       if (response.ok) {
         Toast.show({
@@ -557,11 +552,21 @@ export default function SignupScreen() {
           }
         });
       } else {
-        Toast.show({
-          type: 'error',
-          text1: 'Signup Failed',
-          text2: data.message || 'Failed to create account. Please try again.',
-        });
+        // Check if it's a rate limit error (429)
+        if (response.status === 429 || (data.message && data.message.toLowerCase().includes('too many'))) {
+          showAlert(
+            'Signup Failed',
+            data.message || 'Too many signup attempts. Please try again in 1 hour.',
+            'error',
+            [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+          );
+        } else {
+          Toast.show({
+            type: 'error',
+            text1: 'Signup Failed',
+            text2: data.message || 'Failed to create account. Please try again.',
+          });
+        }
       }
     } catch (error) {
       console.error('Signup error:', error);
