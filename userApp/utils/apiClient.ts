@@ -500,20 +500,45 @@ const requestInterceptor = async (config: RequestConfig, forceTokenRefresh: bool
 
 const responseInterceptor = async <T>(response: Response, config: RequestConfig, retryWithRefresh: () => Promise<ApiResponse<T>>): Promise<ApiResponse<T>> => {
   if (response.status === 401 && !config.skipErrorHandling && !isLoggingOut) {
-    // Try to refresh token and retry once
+    // Try to refresh token and retry once (silent refresh)
     if (!config.skipAuth) {
       try {
         // Force refresh token on 401
-        await queueTokenRefresh(true);
-        // Retry the request with new token
-        return await retryWithRefresh();
-      } catch (refreshError) {
-        // Refresh failed, proceed with logout
-        console.warn('Token refresh failed on 401:', refreshError);
+        const refreshedToken = await queueTokenRefresh(true);
+        if (refreshedToken) {
+          // Retry the request with new token (silent retry)
+          const retryResult = await retryWithRefresh();
+          // If retry succeeds, return result (no error shown)
+          if (retryResult.ok) {
+            return retryResult;
+          }
+          // If retry still 401, refresh token expired (30 days)
+          if (retryResult.status === 401) {
+            // Refresh token expired - logout silently
+            if (globalLogout) {
+              isLoggingOut = true;
+              try {
+                await globalLogout();
+              } catch (err) {
+                console.error('Logout error', err);
+              } finally {
+                setTimeout(() => { isLoggingOut = false; }, 1000);
+              }
+            }
+            // Don't throw error - logout handles navigation
+            throw normalizeError({ message: 'Session expired', status: 401 }, response);
+          }
+          return retryResult;
+        }
+      } catch (refreshError: any) {
+        // Only log if it's not a session expired error
+        if (!refreshError.message?.includes('Session expired')) {
+          console.warn('Token refresh failed on 401:', refreshError);
+        }
       }
     }
     
-    // If refresh failed or skipAuth, trigger logout
+    // Refresh token expired (30 days) - logout silently
     if (globalLogout) {
       isLoggingOut = true;
       try {
@@ -524,7 +549,8 @@ const responseInterceptor = async <T>(response: Response, config: RequestConfig,
         setTimeout(() => { isLoggingOut = false; }, 1000);
       }
     }
-    throw normalizeError({ message: 'Authentication required', status: 401 }, response);
+    // Don't show error alert - logout handles navigation
+    throw normalizeError({ message: 'Session expired', status: 401 }, response);
   }
 
   if (response.status === 403 && !config.skipErrorHandling) {

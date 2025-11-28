@@ -470,54 +470,44 @@ export default function HomeScreen() {
   const fetchRegisteredServices = async () => {
     try {
       setIsLoadingServices(true);
-      const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
       
-      if (!token) {
-        setIsLoadingServices(false);
-        return;
-      }
+      // Use API client instead of direct fetch - it handles token refresh automatically
+      const { apiGet } = await import('@/utils/apiClient');
+      
+      try {
+        const response = await apiGet<{ status: string; data: { registeredServices: any[] } }>('/api/services/my-registrations');
+        
+        if (response.data.status === 'success' && response.data.data.registeredServices) {
+          // Map service names to frontend category IDs
+          const serviceNameToCategoryMap: { [key: string]: string } = {
+            'labors': 'labor',
+            'plumber': 'plumber',
+            'mason-mastri': 'mason-mastri',
+            'painting-cleaning': 'painting',
+            'painting': 'painting',
+            'cleaning': 'cleaning',
+            'granite-tiles': 'granite-tiles',
+            'engineer-interior': 'engineer-interior',
+            'electrician': 'electrician',
+            'carpenter': 'carpenter',
+            'painter': 'painting',
+            'interiors-building': 'interiors-building',
+            'stainless-steel': 'stainless-steel',
+            'contact-building': 'contact-building',
+            'glass-mirror': 'glass-mirror',
+            'borewell': 'borewell'
+          };
 
-      
-      const response = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+          const registeredCategoryIds = response.data.data.registeredServices.map((service: any) => {
+            const categoryId = serviceNameToCategoryMap[service.service_name];
+            return categoryId;
+          }).filter(Boolean);
+
+          setRegisteredServices(registeredCategoryIds);
         }
-      });
-
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Map service names to frontend category IDs
-        const serviceNameToCategoryMap: { [key: string]: string } = {
-          'labors': 'labor',
-          'plumber': 'plumber',
-          'mason-mastri': 'mason-mastri',
-          'painting-cleaning': 'painting',
-          'painting': 'painting',
-          'cleaning': 'cleaning',
-          'granite-tiles': 'granite-tiles',
-          'engineer-interior': 'engineer-interior',
-          'electrician': 'electrician',
-          'carpenter': 'carpenter',
-          'painter': 'painting',
-          'interiors-building': 'interiors-building',
-          'stainless-steel': 'stainless-steel',
-          'contact-building': 'contact-building',
-          'glass-mirror': 'glass-mirror',
-          'borewell': 'borewell'
-        };
-
-        const registeredCategoryIds = data.data.registeredServices.map((service: any) => {
-          const categoryId = serviceNameToCategoryMap[service.service_name];
-          return categoryId;
-        }).filter(Boolean);
-
-        setRegisteredServices(registeredCategoryIds);
-      } else {
-        const errorText = await response.text();
-        
+      } catch (apiError: any) {
+        // Handle API errors silently - don't show error for home screen
+        console.error('Error fetching registered services:', apiError);
       }
     } catch (error) {
       console.error('Error fetching registered services:', error);

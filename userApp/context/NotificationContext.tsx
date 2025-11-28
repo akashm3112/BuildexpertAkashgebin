@@ -71,6 +71,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (response.status === 401) {
+        // Try to refresh token first
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          // Retry with new token
+          const retryResponse = await fetch(`${API_BASE_URL}/api/notifications/unread-count`, {
+            headers: { 'Authorization': `Bearer ${refreshedToken}` },
+          });
+          if (retryResponse.ok) {
+            const data = await retryResponse.json();
+            if (data.status === 'success') {
+              setUnreadCount(data.data.unreadCount);
+            }
+            return;
+          }
+        }
+        // Refresh token expired (30 days) - logout silently
         await logout();
         return;
       }
@@ -100,6 +116,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (response.status === 401) {
+        // Try to refresh token first
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          // Retry with new token
+          const retryResponse = await fetch(`${API_BASE_URL}/api/notifications?page=${page}&limit=${limit}`, {
+            headers: { 'Authorization': `Bearer ${refreshedToken}` },
+          });
+          if (retryResponse.ok) {
+            const data = await retryResponse.json();
+            if (data.status === 'success') {
+              setNotifications(data.data.notifications);
+              setPagination(data.data.pagination);
+              const unread = data.data.notifications.filter((n: Notification) => !n.is_read).length;
+              setUnreadCount(unread);
+            }
+            return;
+          }
+        }
+        // Refresh token expired (30 days) - logout silently
         await logout();
         return;
       }
@@ -150,6 +185,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (response.status === 401) {
+        // Try to refresh token first
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          // Retry with new token
+          const retryResponse = await fetch(`${API_BASE_URL}/api/notifications/history?${queryParams}`, {
+            headers: { 'Authorization': `Bearer ${refreshedToken}` },
+          });
+          if (retryResponse.ok) {
+            const data = await retryResponse.json();
+            if (data.status === 'success') {
+              return {
+                notifications: data.data.notifications,
+                pagination: data.data.pagination,
+                statistics: data.data.statistics
+              };
+            }
+          }
+        }
+        // Refresh token expired (30 days) - logout silently
         await logout();
         return { notifications: [], pagination: {}, statistics: {} };
       }
@@ -195,6 +249,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (response.status === 401) {
+        // Try to refresh token first
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          // Retry with new token
+          await fetch(`${API_BASE_URL}/api/notifications/${id}/mark-read`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${refreshedToken}` },
+          });
+          return;
+        }
+        // Refresh token expired (30 days) - logout silently
         await logout();
         return;
       }
@@ -221,6 +286,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (response.status === 401) {
+        // Try to refresh token first
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          // Retry with new token
+          await fetch(`${API_BASE_URL}/api/notifications/mark-all-read`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${refreshedToken}` },
+          });
+          return;
+        }
+        // Refresh token expired (30 days) - logout silently
         await logout();
         return;
       }

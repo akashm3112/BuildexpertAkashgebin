@@ -111,40 +111,31 @@ export default function ServicesScreen() {
       setIsLoading(true);
       setError(null);
       
-      const token = await tokenManager.getValidToken();
-      if (!token) {
-        setError('No authentication token available');
-        return;
-      }
-
+      // Use API client instead of direct fetch - it handles token refresh automatically
+      const { apiGet } = await import('@/utils/apiClient');
       
-      const response = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-
-      if (response.ok) {
-        const data = await response.json();
+      try {
+        const response = await apiGet<{ status: string; data: { registeredServices: RegisteredService[] } }>('/api/services/my-registrations');
         
-        if (data.status === 'success' && data.data.registeredServices) {
-          setRegisteredServices(data.data.registeredServices);
+        if (response.data.status === 'success' && response.data.data.registeredServices) {
+          setRegisteredServices(response.data.data.registeredServices);
         } else {
           setError('Invalid response format from server');
         }
-      } else {
-        const errorText = await response.text();
-        
-        if (response.status === 403) {
+      } catch (apiError: any) {
+        // Handle API errors
+        if (apiError.status === 403) {
           setError('Access denied. Only providers can view registered services.');
+        } else if (apiError.status === 401) {
+          // Token refresh failed - user needs to login again
+          setError('Session expired. Please log in again.');
         } else {
-          setError('Failed to fetch registered services. Please try again.');
+          setError(apiError.message || 'Failed to fetch registered services. Please try again.');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching registered services:', error);
-      setError('Network error. Please check your connection and try again.');
+      setError(error.message || 'Network error. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }

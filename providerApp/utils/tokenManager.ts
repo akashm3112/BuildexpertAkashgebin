@@ -22,7 +22,7 @@ interface RefreshTokenResponse {
 }
 
 // -------------------- CONFIGURATION --------------------
-const DEFAULT_BUFFER_TIME = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_BUFFER_TIME = 2 * 60 * 1000; // 2 minutes - refresh proactively before expiration
 
 // -------------------- REACT NATIVE COMPATIBLE BASE64 DECODER --------------------
 // React Native compatible base64 decoder (works in both web and native)
@@ -116,33 +116,43 @@ export class TokenManager {
   async getValidToken(): Promise<string | null> {
     try {
       const tokenData = await this.getStoredToken();
-      if (!tokenData) return null;
-
-      const now = Date.now();
-      
-      // If access token is already expired, try to refresh
-      if (tokenData.accessTokenExpiresAt <= now) {
-        // If refresh token is also expired, clear data and return null
-        if (tokenData.refreshTokenExpiresAt <= now) {
-          await this.clearStoredData();
-          this.invalidateCache();
-          return null;
-        }
-        // Try to refresh the access token
-        return await this.refreshToken();
-      }
-      
-      // If access token will expire soon, try to refresh
-      if (tokenData.accessTokenExpiresAt - now < this.bufferTime) {
-        return await this.refreshToken();
+      if (!tokenData) {
+        // No tokens found - return null (API client will handle 401 and attempt refresh)
+        return null;
       }
 
-      return tokenData.accessToken;
+      return await this.processTokenData(tokenData);
     } catch (error) {
       console.error('Error getting valid token:', error);
       this.invalidateCache();
       return null;
     }
+  }
+
+  private async processTokenData(tokenData: TokenData): Promise<string | null> {
+    const now = Date.now();
+    
+    // Check if refresh token is expired first (30 days)
+    if (tokenData.refreshTokenExpiresAt <= now) {
+      // Refresh token expired - user must login again after 30 days
+      await this.clearStoredData();
+      this.invalidateCache();
+      return null;
+    }
+    
+    // If access token is already expired, try to refresh
+    if (tokenData.accessTokenExpiresAt <= now) {
+      // Refresh token is still valid, refresh the access token
+      return await this.refreshToken();
+    }
+    
+    // If access token will expire soon (within buffer time), refresh proactively
+    if (tokenData.accessTokenExpiresAt - now < this.bufferTime) {
+      // Proactively refresh before expiration to prevent 401 errors
+      return await this.refreshToken();
+    }
+
+    return tokenData.accessToken;
   }
 
   private invalidateCache(): void {

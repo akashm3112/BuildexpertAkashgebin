@@ -13,8 +13,8 @@ const UAParser = require('ua-parser-js');
 
 // Token expiration times
 const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
-const REFRESH_TOKEN_EXPIRY = '90d'; // 90 days (Instagram-like: users stay logged in for 3 months)
-const REFRESH_TOKEN_EXPIRY_MS = 90 * 24 * 60 * 60 * 1000; // 90 days in milliseconds
+const REFRESH_TOKEN_EXPIRY = '30d'; // 30 days (users stay logged in for 30 days)
+const REFRESH_TOKEN_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 /**
  * Parse user agent to get device info

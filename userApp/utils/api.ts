@@ -75,12 +75,12 @@ const apiRequestImpl = async (
       throw fetchError;
     }
 
-    // Handle 401 errors globally - try to refresh token first
+    // Handle 401 errors globally - try to refresh token first (silent refresh)
     if (response.status === 401) {
-      // Try to refresh the token
+      // Try to refresh the token silently
       const refreshedToken = await tokenManager.forceRefreshToken();
       if (refreshedToken) {
-        // Retry the request with the new token
+        // Retry the request with the new token (silent retry - no error shown)
         const retryHeaders = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${refreshedToken}`,
@@ -91,18 +91,33 @@ const apiRequestImpl = async (
             ...options,
             headers: retryHeaders,
           });
+          // If retry succeeds, return the response (no error shown to user)
+          if (response.ok) {
+            return response;
+          }
+          // If retry still fails with 401, refresh token is expired (30 days passed)
+          if (response.status === 401) {
+            // Refresh token expired - logout silently
+            if (globalLogout) {
+              await globalLogout();
+            }
+            // Don't show error - logout handles navigation
+            throw new Error('Session expired');
+          }
         } catch (retryError) {
-          await handleError(retryError, undefined, { showAlert: false });
+          // Only show error if it's not a 401 (network error, etc.)
+          if (!(retryError instanceof Error && retryError.message === 'Session expired')) {
+            await handleError(retryError, undefined, { showAlert: false });
+          }
           throw retryError;
         }
       } else {
-        // If refresh failed, logout
+        // Refresh token expired (30 days) - logout silently
         if (globalLogout) {
           await globalLogout();
         }
-        // Handle 401 error with unified error handler
-        await handleApiError(response, { showAlert: false });
-        throw new Error('Authentication failed');
+        // Don't show error alert - logout handles navigation to login
+        throw new Error('Session expired');
       }
     }
 
@@ -155,24 +170,39 @@ export const apiRequestWithErrorHandling = async (
         headers,
       });
 
-      // Handle 401 errors globally - try to refresh token first
+      // Handle 401 errors globally - try to refresh token first (silent refresh)
       if (response.status === 401) {
         const refreshedToken = await tokenManager.forceRefreshToken();
         if (refreshedToken) {
+          // Retry with new token silently
           const retryHeaders = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${refreshedToken}`,
             ...options.headers,
           };
-          return await fetch(`${API_BASE_URL}${endpoint}`, {
+          const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
             ...options,
             headers: retryHeaders,
           });
+          // If retry succeeds, return response
+          if (retryResponse.ok) {
+            return retryResponse;
+          }
+          // If still 401, refresh token expired (30 days)
+          if (retryResponse.status === 401) {
+            if (globalLogout) {
+              await globalLogout();
+            }
+            throw new Error('Session expired');
+          }
+          return retryResponse;
         }
         
+        // Refresh token expired (30 days) - logout silently
         if (globalLogout) {
           await globalLogout();
         }
+        throw new Error('Session expired');
       }
 
       return response;

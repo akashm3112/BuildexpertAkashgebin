@@ -286,31 +286,33 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
                 }}
               >
                 <View style={[styles.categoryWrapper, { width: itemWidth }]}>
-                  <TouchableOpacity
-                    style={styles.categoryItem}
-                    activeOpacity={0.8}
-                    onPress={() => handleCategoryPress(item)}
-                  >
-                    <View style={styles.imageContainer}>
-                      <Image 
-                        source={typeof item.image === 'string' ? { uri: item.image } : item.image}
-                        style={styles.categoryImage}
-                        resizeMode="cover"
-                      />
-                      {/* Pay ₹99 label on top right corner for labor when no access */}
-                      {item.id === 'labor' && !labourAccessStatus?.hasAccess && (
-                        <View style={styles.payLabelBadge}>
-                          <Text style={styles.payLabelBadgeText}>Pay ₹99</Text>
-                        </View>
-                      )}
-                      {/* Access indicator on top right for labor when access granted */}
-                      {item.id === 'labor' && labourAccessStatus?.hasAccess && (
-                        <View style={styles.accessBadge}>
-                          <CheckCircle size={14} color="#10B981" />
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
+                  <View style={styles.categoryItemContainer}>
+                    <TouchableOpacity
+                      style={styles.categoryItem}
+                      activeOpacity={0.8}
+                      onPress={() => handleCategoryPress(item)}
+                    >
+                      <View style={styles.imageContainer}>
+                        <Image 
+                          source={typeof item.image === 'string' ? { uri: item.image } : item.image}
+                          style={styles.categoryImage}
+                          resizeMode="cover"
+                        />
+                        {/* Pay ₹99 label on top right corner for labor when no access */}
+                        {item.id === 'labor' && !labourAccessStatus?.hasAccess && (
+                          <View style={styles.payLabelBadge}>
+                            <Text style={styles.payLabelBadgeText}>Pay ₹99</Text>
+                          </View>
+                        )}
+                        {/* Access indicator on top right for labor when access granted */}
+                        {item.id === 'labor' && labourAccessStatus?.hasAccess && (
+                          <View style={styles.accessBadge}>
+                            <CheckCircle size={14} color="#10B981" />
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                   <View style={styles.categoryContent}>
                     <View style={styles.categoryNameContainer}>
                       <Text style={styles.categoryName} numberOfLines={2}>
@@ -358,24 +360,29 @@ const styles = StyleSheet.create({
   categoryWrapper: {
     alignItems: 'center',
   },
+  categoryItemContainer: {
+    width: '100%',
+    height: 100,
+    marginBottom: 2,
+  },
   categoryItem: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    overflow: 'hidden',
     height: 100,
     width: '100%',
     ...Platform.select({
       ios: {
-        shadowColor: '#CBD5E1',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
       },
       android: {
-        elevation: 2,
+        elevation: 4,
+        shadowColor: '#3B82F6',
       },
       web: {
-        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
+        boxShadow: '0px 4px 14px rgba(59, 130, 246, 0.2), 0px 2px 6px rgba(59, 130, 246, 0.12)',
       },
     }),
   },

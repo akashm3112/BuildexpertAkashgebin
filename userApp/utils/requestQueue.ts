@@ -104,7 +104,15 @@ class RequestQueueManager {
         // If network just came back online, check speed and process queue
         if (wasOffline && this.isOnline) {
           console.log('🌐 Network restored, checking speed and processing queued requests...');
-          this.checkNetworkSpeed().then(() => {
+          this.checkNetworkSpeed().then(async () => {
+            // Trigger connection recovery to validate/refresh tokens
+            try {
+              const { connectionRecovery } = await import('./connectionRecovery');
+              await connectionRecovery.triggerRecovery();
+            } catch (error) {
+              console.warn('Failed to trigger connection recovery:', error);
+            }
+            // Process queued requests after recovery
             this.processQueue();
           });
         } else if (!this.isOnline) {

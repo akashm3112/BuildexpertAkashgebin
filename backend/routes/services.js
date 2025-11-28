@@ -707,37 +707,6 @@ router.post('/:id/providers', requireRole(['provider']), [
           }
         });
       }
-
-      // Notify users who might be interested in this service
-      // This could be enhanced to notify users who have searched for this service recently
-      try {
-        const interestedUsers = await getRows(`
-          SELECT DISTINCT u.id 
-          FROM users u 
-          WHERE u.role = 'user' 
-          AND u.id NOT IN (
-            SELECT DISTINCT user_id 
-            FROM notifications 
-            WHERE title LIKE '%New Provider%' 
-            AND created_at > NOW() - INTERVAL '1 hour'
-          )
-          LIMIT 10
-        `);
-
-        for (const user of interestedUsers) {
-          const serviceNotification = await sendNotification(
-            user.id,
-            'New Provider Available',
-            `A new ${serviceName} provider is now available in your area!`,
-            'user'
-          );
-        }
-      } catch (notificationError) {
-        logger.error('Failed to notify interested users', {
-          error: notificationError.message
-        });
-        // Don't fail the registration process if notification creation fails
-      }
   } catch (notificationError) {
     logger.error('Failed to create welcome notification for provider', {
       error: notificationError.message

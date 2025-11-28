@@ -595,8 +595,8 @@ export default function BookingsScreen() {
           <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">{t('bookings.subtitle')}</Text>
         </View>
         <View style={styles.errorContainer}>
-          <AlertTriangle size={48} color="#EF4444" />
-          <Text style={styles.errorText}>
+          <AlertTriangle size={getResponsiveSpacing(40, 48, 56)} color="#EF4444" />
+          <Text style={styles.errorText} numberOfLines={3}>
             {errorKey ? t(`bookings.errors.${errorKey}`) : (error || t('bookings.errors.fetchFailed'))}
           </Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => loadBookings(true)}>
@@ -1381,13 +1381,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: getResponsiveSpacing(20, 24, 28),
+    paddingVertical: getResponsiveSpacing(40, 50, 60),
+    width: '100%',
   },
   errorText: {
-    fontSize: 17,
+    fontSize: getResponsiveFontSize(15, 16, 17),
     fontFamily: 'Inter-SemiBold',
     color: '#DC2626',
-    marginBottom: 24,
+    marginTop: getResponsiveSpacing(16, 18, 20),
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+    textAlign: 'center',
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    lineHeight: getResponsiveFontSize(22, 24, 26),
+    width: '100%',
+    maxWidth: screenWidth - getResponsiveSpacing(40, 48, 56),
   },
   retryButton: {
     backgroundColor: '#3B82F6',

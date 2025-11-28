@@ -114,6 +114,14 @@ class RequestQueueManager {
         if (wasOffline && this.isOnline) {
           console.log('🌐 Network restored, checking speed and processing queued requests...');
           await this.checkNetworkSpeed();
+          // Trigger connection recovery to validate/refresh tokens
+          try {
+            const { connectionRecovery } = await import('./connectionRecovery');
+            await connectionRecovery.triggerRecovery();
+          } catch (error) {
+            console.warn('Failed to trigger connection recovery:', error);
+          }
+          // Process queued requests after recovery
           this.processQueue();
         } else if (!this.isOnline) {
           console.log('📴 Network offline, requests will be queued');

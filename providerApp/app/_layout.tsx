@@ -12,6 +12,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { globalErrorHandler } from '@/utils/globalErrorHandler';
 import { requestQueue } from '@/utils/requestQueue';
 import { frontendMonitor } from '@/utils/monitoring';
+import { connectionRecovery } from '@/utils/connectionRecovery';
 
 /**
  * ROOT LAYOUT - Navigation Structure
@@ -35,11 +36,13 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   useFrameworkReady();
 
-  // Initialize global error handler, request queue, and monitoring on mount
+  // Initialize global error handler, request queue, monitoring, and connection recovery on mount
   useEffect(() => {
     globalErrorHandler.initialize();
     frontendMonitor.initialize();
     // Request queue initializes automatically on import
+    // Connection recovery initializes automatically on import and starts monitoring
+    // It will automatically recover connections when network is restored or app comes to foreground
   }, []);
 
   const [fontsLoaded, fontError] = useFonts({

@@ -9,27 +9,55 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
   // Connection pool settings
   max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established                                                    
+  min: 2, // Keep minimum connections alive (prevents cold starts)
+  idleTimeoutMillis: 60000, // Close idle clients after 60 seconds (increased for cloud DBs)
+  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established
   // Set timezone to IST (India Standard Time)
-  timezone: 'Asia/Kolkata'
+  timezone: 'Asia/Kolkata',
+  // Allow pool to create connections on demand
+  allowExitOnIdle: false
 });
 
-// Set timezone for new connections (no logging - this happens frequently)
+// Set timezone for new connections and validate them
 pool.on('connect', (client) => {
   // Set timezone for this connection (silently)
   client.query('SET timezone = "Asia/Kolkata"').catch(err => {
     // Only log timezone setting errors, not the connection itself
-    console.error('❌ Failed to set timezone for database connection:', err.message);
+    logger.error('Failed to set timezone for database connection', {
+      message: err.message
+    });
+  });
+  
+  // Validate connection is alive
+  client.on('error', (err) => {
+    // Connection error - pool will handle reconnection
+    logger.resilience('Database client connection error', {
+      message: err.message,
+      code: err.code
+    });
   });
 });
 
-pool.on('error', (err) => {
-  console.error('❌ Unexpected error on idle client', err);
-  // Don't exit the process in production, just log the error
-  if (config.isDevelopment()) {
-    process.exit(-1);
+// Monitor pool acquisition for connection health
+pool.on('acquire', (client) => {
+  // Validate connection before use (only in production to avoid overhead)
+  if (config.isProduction()) {
+    // Quick validation - if connection is dead, pool will create new one
+    // This is handled automatically by pg-pool
   }
+});
+
+pool.on('error', (err) => {
+  // Handle connection errors gracefully - don't crash the app
+  // This happens when idle connections are terminated by the database server
+  logger.resilience('Database pool error (idle connection terminated)', {
+    message: err.message,
+    code: err.code,
+    severity: 'low' // This is expected behavior for idle connections
+  });
+  
+  // Never exit the process - let the pool handle reconnection automatically
+  // The pool will create new connections as needed
 });
 
 // One-time connection test at startup (only runs once when module is loaded)
@@ -55,6 +83,8 @@ let connectionTested = false;
 const RETRYABLE_DATABASE_CODES = new Set([
   'ECONNREFUSED',
   'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
   '57P01', // admin shutdown
   '57P02', // crash shutdown
   '57P03', // cannot connect now
@@ -62,20 +92,44 @@ const RETRYABLE_DATABASE_CODES = new Set([
   '08003', // connection does not exist
   '08006', // connection failure
   '53300', // too many connections
-  '40001'  // serialization failure
+  '40001', // serialization failure
+  '57P04', // database system is starting up
+  '57P05', // database system is shutting down
 ]);
+
+// Check if error message indicates connection termination (for cases where code might not be set)
+const isConnectionTerminatedError = (error) => {
+  if (!error) return false;
+  const message = error.message || '';
+  return message.includes('Connection terminated') ||
+         message.includes('connection closed') ||
+         message.includes('Connection ended') ||
+         message.includes('socket hang up') ||
+         message.includes('ECONNRESET');
+};
 
 const SLEEP_BASE_MS = 100;
 const BACKOFF_STEPS = [100, 300, 900];
 
 const isRetryableDatabaseError = (error) => {
-  if (!error || !error.code) return false;
-  return RETRYABLE_DATABASE_CODES.has(error.code);
+  if (!error) return false;
+  
+  // Check error code first
+  if (error.code && RETRYABLE_DATABASE_CODES.has(error.code)) {
+    return true;
+  }
+  
+  // Check error message for connection termination patterns
+  if (isConnectionTerminatedError(error)) {
+    return true;
+  }
+  
+  return false;
 };
 
 const query = async (text, params) => {
   const start = Date.now();
-  const maxRetries = config.isProduction() ? 2 : 2;
+  const maxRetries = config.isProduction() ? 3 : 2; // More retries in production
   let lastError;
   
   // Get metrics collector if available
@@ -88,6 +142,8 @@ const query = async (text, params) => {
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      // The pool automatically handles connection validation and reconnection
+      // If a connection is dead, it will create a new one automatically
       const res = await pool.query(text, params);
       const duration = Date.now() - start;
       
@@ -108,7 +164,7 @@ const query = async (text, params) => {
       
       if (attempt > 0) {
         logger.resilience('Database query recovered after retry', {
-          attempts: attempt,
+          attempts: attempt + 1,
           duration,
           queryPreview: typeof text === 'string' ? text.substring(0, 80) : 'dynamic query'
         });
@@ -140,19 +196,40 @@ const query = async (text, params) => {
         throw error;
       }
       
-      const delay = BACKOFF_STEPS[Math.min(attempt, BACKOFF_STEPS.length - 1)];
-      const jitter = Math.floor(Math.random() * 50);
-      const backoff = delay + jitter;
+      // For connection termination errors, use exponential backoff with jitter
+      const isConnectionError = isConnectionTerminatedError(error);
+      const baseDelay = isConnectionError 
+        ? 200 // Start with 200ms for connection errors
+        : BACKOFF_STEPS[Math.min(attempt, BACKOFF_STEPS.length - 1)];
       
-      logger.resilience('Database query retry scheduled', {
-        attempt: attempt + 1,
-        maxRetries,
-        delay: backoff,
-        error: error.message,
-        code: error.code
-      });
+      // Exponential backoff: 200ms, 400ms, 800ms for connection errors
+      const delay = baseDelay * Math.pow(2, attempt);
+      const jitter = Math.floor(Math.random() * 100);
+      const backoff = Math.min(delay + jitter, 2000); // Cap at 2 seconds
+      
+      // Only log retries in production if they're connection errors (expected)
+      if (isConnectionError && config.isProduction()) {
+        logger.resilience('Database connection retry (expected for idle connections)', {
+          attempt: attempt + 1,
+          maxRetries,
+          delay: backoff,
+          error: error.message
+        });
+      } else if (!config.isProduction()) {
+        logger.resilience('Database query retry scheduled', {
+          attempt: attempt + 1,
+          maxRetries,
+          delay: backoff,
+          error: error.message,
+          code: error.code,
+          isConnectionError
+        });
+      }
       
       await sleep(backoff);
+      
+      // Pool automatically creates new connections when old ones are terminated
+      // No manual reconnection needed - just retry the query
     }
   }
   
@@ -231,11 +308,94 @@ const getRows = async (text, params) => {
   return result.rows;
 };
 
+// Connection health check - keeps connections alive and detects dead connections
+// This prevents "Connection terminated unexpectedly" errors when app is idle
+// Production-ready: Only runs when there are idle connections, configurable interval
+let healthCheckInterval = null;
+let lastHealthCheckTime = 0;
+const HEALTH_CHECK_INTERVAL_MS = 50000; // Check every 50 seconds (before 60s idle timeout)
+const MIN_TIME_BETWEEN_CHECKS = 30000; // Minimum 30 seconds between checks
+
+const startConnectionHealthCheck = () => {
+  // Only start if not already running
+  if (healthCheckInterval) return;
+  
+  // Run health check at configured interval
+  healthCheckInterval = setInterval(async () => {
+    const now = Date.now();
+    
+    // Skip if checked recently (throttle)
+    if (now - lastHealthCheckTime < MIN_TIME_BETWEEN_CHECKS) {
+      return;
+    }
+    
+    // Only check if there are idle connections to keep alive
+    const idleCount = pool.idleCount || 0;
+    const totalCount = pool.totalCount || 0;
+    
+    // If no idle connections, skip health check (connections are in use)
+    if (idleCount === 0 && totalCount < pool.options.max) {
+      return;
+    }
+    
+    lastHealthCheckTime = now;
+    
+    try {
+      // Simple query to keep connections alive and detect dead ones
+      // This validates the connection pool is healthy
+      await pool.query('SELECT 1');
+    } catch (error) {
+      // Log but don't throw - the pool will handle reconnection automatically
+      // This is expected when connections are terminated by the database server
+      logger.resilience('Connection health check failed (pool will auto-recover)', {
+        message: error.message,
+        code: error.code,
+        idleConnections: idleCount,
+        totalConnections: totalCount
+      });
+    }
+  }, HEALTH_CHECK_INTERVAL_MS);
+  
+  if (config.isDevelopment()) {
+    logger.info('Database connection health check started', {
+      interval: HEALTH_CHECK_INTERVAL_MS
+    });
+  }
+};
+
+const stopConnectionHealthCheck = () => {
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval);
+    healthCheckInterval = null;
+    if (config.isDevelopment()) {
+      logger.info('Database connection health check stopped');
+    }
+  }
+};
+
+// Start health check automatically (only in production or if enabled)
+if (config.isProduction() || config.get('database.enableHealthCheck') !== false) {
+  startConnectionHealthCheck();
+}
+
+// Cleanup on process exit
+process.on('SIGINT', () => {
+  stopConnectionHealthCheck();
+  pool.end();
+});
+
+process.on('SIGTERM', () => {
+  stopConnectionHealthCheck();
+  pool.end();
+});
+
 module.exports = {
   pool,
   query,
   getRow,
   getRows,
   withTransaction,
-  isRetryableDatabaseError
+  isRetryableDatabaseError,
+  startConnectionHealthCheck,
+  stopConnectionHealthCheck
 }; 

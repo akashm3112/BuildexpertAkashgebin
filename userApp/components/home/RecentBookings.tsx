@@ -62,12 +62,34 @@ export default function RecentBookings() {
         return;
       }
       try {
-        const response = await fetch(`${API_BASE_URL}/api/bookings`, {
+        let response = await fetch(`${API_BASE_URL}/api/bookings`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         
+        // Handle 401 errors - try to refresh token first
+        if (response.status === 401) {
+          const refreshedToken = await tokenManager.forceRefreshToken();
+          if (refreshedToken) {
+            // Retry with new token
+            response = await fetch(`${API_BASE_URL}/api/bookings`, {
+              headers: { 'Authorization': `Bearer ${refreshedToken}` },
+            });
+            // If retry still fails with 401, refresh token expired (30 days)
+            if (response.status === 401) {
+              setBookings([]);
+              setLoading(false);
+              return;
+            }
+          } else {
+            // Refresh token expired (30 days) - silently fail
+            setBookings([]);
+            setLoading(false);
+            return;
+          }
+        }
+        
         if (!response.ok) {
-          // Handle non-OK responses
+          // Handle other non-OK responses
           const errorData = await response.json().catch(() => ({ message: 'Failed to fetch bookings' }));
           console.error('❌ RecentBookings: API error:', response.status, errorData.message);
           setBookings([]);
