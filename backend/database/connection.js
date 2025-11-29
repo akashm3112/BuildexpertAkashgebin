@@ -11,7 +11,7 @@ const pool = new Pool({
   max: 20, // Maximum number of clients in the pool
   min: 2, // Keep minimum connections alive (prevents cold starts)
   idleTimeoutMillis: 60000, // Close idle clients after 60 seconds (increased for cloud DBs)
-  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established
+  connectionTimeoutMillis: 15000, // Return an error after 15 seconds if connection could not be established (increased for reliability)
   // Set timezone to IST (India Standard Time)
   timezone: 'Asia/Kolkata',
   // Allow pool to create connections on demand

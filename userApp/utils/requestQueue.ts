@@ -69,23 +69,43 @@ class RequestQueueManager {
    * Initialize the queue manager
    */
   private async initialize() {
-    // Load persisted queue
-    await this.loadQueue();
+    try {
+      // Load persisted queue
+      await this.loadQueue();
 
-    // Check initial network status
-    await this.checkNetworkStatus();
+      // Check initial network status
+      await this.checkNetworkStatus();
 
-    // Check initial network speed
-    await this.checkNetworkSpeed();
+      // Check initial network speed
+      await this.checkNetworkSpeed().catch((error) => {
+        // Handle errors from checkNetworkSpeed silently
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('Network speed check error during initialization (handled):', error?.message || error);
+        }
+      });
 
-    // Start processing interval
-    this.startProcessingInterval();
+      // Start processing interval
+      this.startProcessingInterval();
 
-    // Start periodic speed checks
-    this.startSpeedCheckInterval();
+      // Start periodic speed checks
+      this.startSpeedCheckInterval();
 
-    // Setup network listener
-    this.setupNetworkListener();
+      // Setup network listener
+      this.setupNetworkListener();
+    } catch (error) {
+      // Handle initialization errors gracefully
+      const isSessionExpired = (error as any)?.message === 'Session expired' || 
+                               (error as any)?.status === 401 && (error as any)?.message?.includes('Session expired');
+      if (!isSessionExpired) {
+        console.error('RequestQueue initialization error (handled):', error);
+      }
+      // Continue with partial initialization - network listener and intervals can still work
+      this.startProcessingInterval();
+      this.startSpeedCheckInterval();
+      this.setupNetworkListener();
+    }
   }
 
   /**
@@ -110,9 +130,23 @@ class RequestQueueManager {
               const { connectionRecovery } = await import('./connectionRecovery');
               await connectionRecovery.triggerRecovery();
             } catch (error) {
-              console.warn('Failed to trigger connection recovery:', error);
+              // Errors are already handled in triggerRecovery, but catch here to prevent unhandled rejections
+              const isSessionExpired = (error as any)?.message === 'Session expired' || 
+                                       (error as any)?.status === 401 && (error as any)?.message?.includes('Session expired');
+              if (!isSessionExpired) {
+                console.warn('Failed to trigger connection recovery:', error);
+              }
             }
             // Process queued requests after recovery
+            this.processQueue();
+          }).catch((error) => {
+            // Handle errors from checkNetworkSpeed
+            const isSessionExpired = error?.message === 'Session expired' || 
+                                     error?.status === 401 && error?.message?.includes('Session expired');
+            if (!isSessionExpired) {
+              console.warn('Network speed check error (handled):', error?.message || error);
+            }
+            // Still try to process queue even if speed check fails
             this.processQueue();
           });
         } else if (!this.isOnline) {
@@ -120,7 +154,14 @@ class RequestQueueManager {
           this.networkSpeed = NetworkSpeed.UNKNOWN;
         } else if (this.isOnline) {
           // Network status changed, recheck speed
-          this.checkNetworkSpeed();
+          this.checkNetworkSpeed().catch((error) => {
+            // Handle errors from checkNetworkSpeed silently
+            const isSessionExpired = error?.message === 'Session expired' || 
+                                     error?.status === 401 && error?.message?.includes('Session expired');
+            if (!isSessionExpired) {
+              console.warn('Network speed check error (handled):', error?.message || error);
+            }
+          });
         }
       });
     } catch (error) {

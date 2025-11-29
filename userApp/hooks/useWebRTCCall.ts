@@ -64,7 +64,14 @@ export const useWebRTCCall = () => {
       }
     };
 
-    init();
+    init().catch((error) => {
+      // Errors are already handled in init, but catch here to prevent unhandled rejections
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired');
+      if (!isSessionExpired) {
+        console.warn('WebRTC init error (handled):', error?.message || error);
+      }
+    });
 
     return () => {
       if (durationInterval.current) {
@@ -151,6 +158,46 @@ export const useWebRTCCall = () => {
         body: JSON.stringify({ bookingId, callerType }),
       });
 
+      // Handle 401 errors (session expired)
+      if (response.status === 401) {
+        const { tokenManager } = await import('@/utils/tokenManager');
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          // Retry with new token
+          const retryResponse = await fetch(`${API_BASE_URL}/api/calls/initiate`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${refreshedToken}`,
+            },
+            body: JSON.stringify({ bookingId, callerType }),
+          });
+          if (retryResponse.ok) {
+            const retryData = await retryResponse.json();
+            if (retryData.status === 'success') {
+              const callData: CallData = {
+                bookingId: retryData.data.bookingId,
+                callerId: retryData.data.callerId,
+                callerName: retryData.data.callerName,
+                receiverId: retryData.data.receiverId,
+                receiverName: retryData.data.receiverName,
+                serviceName: retryData.data.serviceName,
+              };
+              setCurrentCall(callData);
+              await webRTCService.startCall(callData);
+              return;
+            }
+          }
+        }
+        // Refresh token expired (30 days) - throw handled error
+        // The apiClient will handle logout automatically
+        // Create a suppressed error that won't be logged by React Native
+        const sessionExpiredError = new Error('Session expired');
+        (sessionExpiredError as any)._suppressUnhandled = true;
+        (sessionExpiredError as any)._handled = true;
+        throw sessionExpiredError;
+      }
+
       const data = await response.json();
 
       if (data.status === 'success') {
@@ -210,19 +257,37 @@ export const useWebRTCCall = () => {
       if (callStatus === 'connected' && currentCall) {
         const token = await AsyncStorage.getItem('token');
         if (token) {
-          await fetch(`${API_BASE_URL}/api/calls/log`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              bookingId: currentCall.bookingId,
-              duration: callDuration,
-              callerType: user?.role === 'provider' ? 'provider' : 'user',
-              status: 'completed',
-            }),
-          });
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/calls/log`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                bookingId: currentCall.bookingId,
+                duration: callDuration,
+                callerType: user?.role === 'provider' ? 'provider' : 'user',
+                status: 'completed',
+              }),
+            });
+            
+            // Handle 401 errors silently (session expired) - don't block call ending
+            if (response.status === 401) {
+              // Try to refresh token, but don't retry - just log silently
+              const { tokenManager } = await import('@/utils/tokenManager');
+              await tokenManager.forceRefreshToken().catch(() => {
+                // Ignore refresh errors - call logging is not critical
+              });
+            }
+          } catch (logError) {
+            // Ignore call logging errors - they're not critical
+            const isSessionExpired = (logError as any)?.message === 'Session expired' || 
+                                     (logError as any)?.status === 401;
+            if (!isSessionExpired) {
+              console.warn('Error logging call (non-critical):', logError);
+            }
+          }
         }
       }
     } catch (err) {

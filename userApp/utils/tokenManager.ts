@@ -178,7 +178,11 @@ export class TokenManager {
     this.cacheTimestamp = 0;
   }
 
-  private async getStoredToken(): Promise<TokenData | null> {
+  /**
+   * Get stored token data without validation (public method for AuthContext)
+   * This is used to check if tokens exist and if refresh token is expired
+   */
+  async getStoredToken(): Promise<TokenData | null> {
     try {
       // Check in-memory cache first (reduces AsyncStorage I/O)
       const now = Date.now();
@@ -334,8 +338,27 @@ export class TokenManager {
       );
 
       if (!response.ok) {
-        // Refresh failed, clear stored data
-        await this.clearStoredData();
+        // Refresh failed - check the status code
+        if (response.status === 401) {
+          // Token is actually invalid - clear tokens but keep user data
+          // User will be logged out on next API call, but not immediately
+          await this.clearTokensOnly();
+          this.invalidateCache();
+          return null;
+        }
+        
+        if (response.status === 503) {
+          // Service temporarily unavailable (database error, backend restart, etc.)
+          // Don't clear tokens - this is a temporary issue, not a token problem
+          // Token refresh will be retried on next API call when service is back
+          console.warn('Token refresh failed: Service temporarily unavailable (will retry on next API call)');
+          this.invalidateCache();
+          return null;
+        }
+        
+        // Other server errors (500, etc.) - don't clear tokens, just return null
+        // Token refresh will be retried on next API call
+        console.warn('Token refresh failed with status:', response.status, '(will retry on next API call)');
         this.invalidateCache();
         return null;
       }
@@ -346,7 +369,8 @@ export class TokenManager {
       // Validate response structure
       if (!data || !data.data || !data.data.accessToken || !data.data.refreshToken) {
         console.error('Invalid refresh token response structure:', data);
-        await this.clearStoredData();
+        // Invalid response - clear tokens but keep user data
+        await this.clearTokensOnly();
         this.invalidateCache();
         return null;
       }
@@ -411,6 +435,38 @@ export class TokenManager {
     }
   }
 
+  /**
+   * Clear only tokens, not user data
+   * Used when tokens are invalid but we want to keep user logged in
+   * User will be logged out on next API call if tokens can't be refreshed
+   */
+  private async clearTokensOnly(): Promise<void> {
+    try {
+      await storage.multiRemove([
+        'accessToken',
+        'refreshToken',
+        'accessTokenExpiresAt',
+        'refreshTokenExpiresAt',
+        'token', // Remove old format too
+        // NOTE: Do NOT remove 'user' - keep user data so they stay logged in
+        // User will be logged out on next API call if tokens can't be refreshed
+      ], {
+        maxRetries: 3,
+        onRetry: (attempt, error) => {
+          console.log(`Storage retry attempt ${attempt}/3 for clearing tokens:`, error.message);
+        },
+      });
+      this.invalidateCache();
+    } catch (error) {
+      console.error('Error clearing tokens:', error);
+      this.invalidateCache();
+    }
+  }
+
+  /**
+   * Clear all stored data including user data
+   * Used only when refresh token is expired (30 days) or explicit logout
+   */
   private async clearStoredData(): Promise<void> {
     try {
       await storage.multiRemove([
@@ -419,11 +475,11 @@ export class TokenManager {
         'accessTokenExpiresAt',
         'refreshTokenExpiresAt',
         'token', // Remove old format too
-        'user'
+        'user' // Only clear user data when refresh token is expired
       ], {
         maxRetries: 3,
         onRetry: (attempt, error) => {
-          console.log(`Storage retry attempt ${attempt}/3 for clearing tokens:`, error.message);
+          console.log(`Storage retry attempt ${attempt}/3 for clearing all data:`, error.message);
         },
       });
       this.invalidateCache();
@@ -448,8 +504,21 @@ export class TokenManager {
   }
 
   async isTokenValid(): Promise<boolean> {
-    const token = await this.getValidToken();
-    return token !== null;
+    try {
+      const token = await this.getValidToken();
+      return token !== null;
+    } catch (error: any) {
+      // Suppress "Session expired" errors - they're expected after 30 days
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired');
+      if (isSessionExpired) {
+        // Session expired is expected behavior after 30 days - return false
+        return false;
+      }
+      // For other errors, log and return false
+      console.warn('Error checking token validity:', error?.message || error);
+      return false;
+    }
   }
 
   // Force refresh token (used on 401 errors)

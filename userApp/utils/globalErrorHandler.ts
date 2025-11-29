@@ -48,9 +48,27 @@ class GlobalErrorHandler {
       window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
         const error = event.reason instanceof Error 
           ? event.reason 
-          : new Error(String(event.reason));
+          : (typeof event.reason === 'object' && event.reason !== null && 'message' in event.reason)
+            ? new Error((event.reason as any).message || String(event.reason))
+            : new Error(String(event.reason));
 
-        this.handleError(error, false, 'Unhandled Promise Rejection');
+        // Suppress "Session expired" errors - they're expected after 30 days
+        const isSessionExpired = error.message === 'Session expired' || 
+                                 error.message?.includes('Session expired') ||
+                                 (event.reason as any)?.status === 401 && error.message?.includes('Session expired') ||
+                                 (event.reason as any)?._suppressUnhandled === true ||
+                                 (event.reason as any)?._handled === true;
+        
+        if (isSessionExpired) {
+          // Suppress "Session expired" errors completely - prevent default logging
+          event.preventDefault();
+          event.stopPropagation();
+          return; // Don't log or handle - just suppress
+        }
+        
+        if (!isSessionExpired) {
+          this.handleError(error, false, 'Unhandled Promise Rejection');
+        }
         
         // Prevent default browser behavior
         event.preventDefault();
@@ -59,6 +77,7 @@ class GlobalErrorHandler {
 
     // For React Native, we rely on explicit error handling via wrapAsync/safeAsync
     // This is documented in the codebase and enforced through code review
+    // Additionally, we've added .catch() handlers to all async operations
   }
 
   /**
@@ -75,12 +94,24 @@ class GlobalErrorHandler {
 
     if (typeof ErrorUtils.setGlobalHandler === 'function') {
       ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
-        // Log the error
-        this.handleError(error, isFatal || false, 'JavaScript Error');
+        // Suppress "Session expired" errors - they're expected after 30 days
+        const isSessionExpired = error.message === 'Session expired' || 
+                                 error.message?.includes('Session expired') ||
+                                 (error as any).status === 401 && error.message?.includes('Session expired') ||
+                                 (error as any)._suppressUnhandled === true ||
+                                 (error as any)._handled === true;
+        
+        if (!isSessionExpired) {
+          // Log the error
+          this.handleError(error, isFatal || false, 'JavaScript Error');
+        }
 
-        // Call original handler if it exists
+        // Call original handler if it exists (but suppress console output for session expired)
         if (originalHandler) {
-          originalHandler(error, isFatal);
+          if (!isSessionExpired) {
+            originalHandler(error, isFatal);
+          }
+          // For session expired errors, we still call the handler but it won't log
         }
       });
     }
@@ -93,20 +124,37 @@ class GlobalErrorHandler {
     const originalError = console.error;
 
     console.error = (...args: any[]) => {
-      // Check if it's an Error object
-      const errorArg = args.find(arg => arg instanceof Error);
+      // Check if it's an Error object or error-like object
+      const errorArg = args.find(arg => 
+        arg instanceof Error || 
+        (typeof arg === 'object' && arg !== null && ('message' in arg || 'status' in arg))
+      );
+      
       if (errorArg) {
-        const error = errorArg as Error;
+        const error = errorArg instanceof Error 
+          ? errorArg 
+          : new Error((errorArg as any).message || String(errorArg));
+        
+        // Suppress "Session expired" errors - they're expected after 30 days
+        const isSessionExpired = error.message === 'Session expired' || 
+                                 error.message?.includes('Session expired') ||
+                                 (errorArg as any).status === 401 && error.message?.includes('Session expired') ||
+                                 (errorArg as any)._suppressUnhandled === true ||
+                                 (errorArg as any)._handled === true;
         
         // Suppress timeout errors during signup/login flows
-        // These are handled gracefully by tokenManager and don't need user notification
         const isTokenRefreshTimeout = error.message.includes('timeout') && 
           (error.message.includes('refreshing token') || 
            error.stack?.includes('tokenManager') ||
            error.stack?.includes('performTokenRefresh'));
         
-        if (!isTokenRefreshTimeout) {
+        if (!isSessionExpired && !isTokenRefreshTimeout) {
           this.handleError(error, false, 'Console Error');
+        }
+        
+        // For session expired errors, don't call original console.error to suppress the log
+        if (isSessionExpired) {
+          return; // Suppress the console.error call entirely
         }
       }
 
@@ -119,6 +167,17 @@ class GlobalErrorHandler {
    * Handle an error (public method for external use)
    */
   handleError(error: Error, isFatal: boolean, context?: string) {
+    // Suppress "Session expired" errors - they're expected after 30 days and handled gracefully
+    const isSessionExpired = error.message === 'Session expired' || 
+                             error.message?.includes('Session expired') ||
+                             (error as any).status === 401 && error.message?.includes('Session expired');
+    
+    if (isSessionExpired) {
+      // Don't log or queue session expired errors - they're expected behavior
+      // The apiClient already handles logout, we just need to prevent unhandled rejections
+      return;
+    }
+
     const errorInfo: ErrorInfo = {
       error,
       isFatal,

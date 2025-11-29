@@ -144,12 +144,30 @@ export default function BookingsScreen() {
       socket.on('connect', () => console.log('Socket connected:', socket.id));
       socket.emit('join', user.id);
       socket.on('booking_created', () => {
-        fetchBookings(false);
+        fetchBookings(false).catch((error) => {
+          // Errors are already handled in fetchBookings, but catch here to prevent unhandled rejections
+          const isSessionExpired = error?.message === 'Session expired' || 
+                                   error?.status === 401 && error?.message?.includes('Session expired');
+          if (!isSessionExpired) {
+            console.warn('fetchBookings error on booking_created (handled):', error?.message || error);
+          }
+        });
       });
       socket.on('booking_updated', () => {
-        fetchBookings(false);
+        fetchBookings(false).catch((error) => {
+          // Errors are already handled in fetchBookings, but catch here to prevent unhandled rejections
+          const isSessionExpired = error?.message === 'Session expired' || 
+                                   error?.status === 401 && error?.message?.includes('Session expired');
+          if (!isSessionExpired) {
+            console.warn('fetchBookings error on booking_updated (handled):', error?.message || error);
+          }
+        });
       });
       socket.on('disconnect', () => console.log('Socket disconnected'));
+      socket.on('error', (error) => {
+        // Handle socket errors silently - they're usually connection issues
+        console.warn('Socket error (handled):', error);
+      });
       return () => {
         socket.disconnect();
       };

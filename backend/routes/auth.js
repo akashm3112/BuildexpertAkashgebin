@@ -863,7 +863,33 @@ router.post('/refresh', [tokenRefreshLimiter,
   const { refreshToken } = req.body;
   
   // Refresh access token (implements token rotation)
-  const tokenPair = await refreshAccessToken(refreshToken, ipAddress, userAgent);
+  let tokenPair;
+  try {
+    tokenPair = await refreshAccessToken(refreshToken, ipAddress, userAgent);
+  } catch (error) {
+    // Check if it's a database connection error
+    const isDbError = error?.message?.includes('Database connection error') ||
+                      error?.message?.includes('timeout') ||
+                      error?.message?.includes('connection');
+    
+    if (isDbError) {
+      // Database error - return 503 (Service Unavailable) instead of 401
+      // This tells the client it's a temporary issue, not an authentication issue
+      logger.error('Database error during token refresh', {
+        error: error.message,
+        ipAddress
+      });
+      return res.status(503).json({
+        status: 'error',
+        message: 'Service temporarily unavailable. Please try again in a moment.',
+        code: 'SERVICE_UNAVAILABLE'
+      });
+    }
+    
+    // Token error - return 401 (Unauthorized)
+    // This is the expected error for invalid/expired tokens
+    throw error;
+  }
   
   // Get user data
   const user = await getRow('SELECT * FROM users WHERE id = $1', [tokenPair.userId]);

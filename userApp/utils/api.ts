@@ -102,7 +102,11 @@ const apiRequestImpl = async (
               await globalLogout();
             }
             // Don't show error - logout handles navigation
-            throw new Error('Session expired');
+            // Create a suppressed error that won't be logged by React Native
+            const sessionExpiredError = new Error('Session expired');
+            (sessionExpiredError as any)._suppressUnhandled = true;
+            (sessionExpiredError as any)._handled = true;
+            throw sessionExpiredError;
           }
         } catch (retryError) {
           // Only show error if it's not a 401 (network error, etc.)
@@ -117,7 +121,11 @@ const apiRequestImpl = async (
           await globalLogout();
         }
         // Don't show error alert - logout handles navigation to login
-        throw new Error('Session expired');
+        // Create a suppressed error that won't be logged by React Native
+        const sessionExpiredError = new Error('Session expired');
+        (sessionExpiredError as any)._suppressUnhandled = true;
+        (sessionExpiredError as any)._handled = true;
+        throw sessionExpiredError;
       }
     }
 
@@ -193,7 +201,11 @@ export const apiRequestWithErrorHandling = async (
             if (globalLogout) {
               await globalLogout();
             }
-            throw new Error('Session expired');
+            // Create a suppressed error that won't be logged by React Native
+            const sessionExpiredError = new Error('Session expired');
+            (sessionExpiredError as any)._suppressUnhandled = true;
+            (sessionExpiredError as any)._handled = true;
+            throw sessionExpiredError;
           }
           return retryResponse;
         }
@@ -202,7 +214,11 @@ export const apiRequestWithErrorHandling = async (
         if (globalLogout) {
           await globalLogout();
         }
-        throw new Error('Session expired');
+        // Create a suppressed error that won't be logged by React Native
+        const sessionExpiredError = new Error('Session expired');
+        (sessionExpiredError as any)._suppressUnhandled = true;
+        (sessionExpiredError as any)._handled = true;
+        throw sessionExpiredError;
       }
 
       return response;

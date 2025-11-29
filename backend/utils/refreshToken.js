@@ -135,12 +135,35 @@ const refreshAccessToken = async (refreshToken, ipAddress, userAgent) => {
     const refreshTokenHash = hashRefreshToken(refreshToken);
     
     // Look up refresh token by hash
-    const refreshTokenRecord = await getRow(`
-      SELECT * FROM refresh_tokens 
-      WHERE token_hash = $1 
-        AND is_revoked = FALSE 
-        AND expires_at > CURRENT_TIMESTAMP
-    `, [refreshTokenHash]);
+    let refreshTokenRecord;
+    try {
+      refreshTokenRecord = await getRow(`
+        SELECT * FROM refresh_tokens 
+        WHERE token_hash = $1 
+          AND is_revoked = FALSE 
+          AND expires_at > CURRENT_TIMESTAMP
+      `, [refreshTokenHash]);
+    } catch (dbError) {
+      // Check if it's a database connection/timeout error
+      const isDbError = dbError?.message?.includes('timeout') || 
+                        dbError?.message?.includes('connection') ||
+                        dbError?.code === 'ETIMEDOUT' ||
+                        dbError?.code === 'ECONNREFUSED' ||
+                        dbError?.code === 'ENOTFOUND';
+      
+      if (isDbError) {
+        // Database error - don't treat as token error, throw as database error
+        logger.error('Database error during refresh token lookup', {
+          error: dbError.message,
+          code: dbError.code,
+          ipAddress
+        });
+        throw new Error('Database connection error. Please try again.');
+      }
+      
+      // Other database errors - re-throw
+      throw dbError;
+    }
     
     if (!refreshTokenRecord) {
       throw new Error('Refresh token not found, expired, or revoked');

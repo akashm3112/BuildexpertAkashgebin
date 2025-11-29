@@ -90,61 +90,98 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   /**
-   * Check labour access, preferring backend truth and falling back to local
-   * AsyncStorage when offline. This is the single source of truth used by
-   * the home grid and other screens.
+   * Check labour access, loading local cache first for instant UI, then updating from backend.
+   * This ensures the UI shows the correct state immediately without waiting for network.
    */
   const checkLabourAccess = async () => {
     try {
-      // 1. Try to get latest status from backend (preferred, production source of truth)
-      try {
-        const { apiGet } = await import('@/utils/apiClient');
-        const response = await apiGet('/api/payments/labour-access-status');
-
-        if (response.ok && response.data && response.data.status === 'success') {
-          const apiData = response.data.data;
-          if (apiData) {
-            const mapped = mapApiToLabourAccessData(apiData);
-            await AsyncStorage.setItem('labour_access_status', JSON.stringify(mapped));
-            setLabourAccessStatus(mapped);
-            return;
-          }
-        }
-      } catch (apiError: any) {
-        // Handle "Session expired" errors silently (expected after 30 days - logout will happen)
-        const isSessionExpired = apiError?.message === 'Session expired' || 
-                                 apiError?.status === 401 && apiError?.message?.includes('Session expired');
-        
-        if (isSessionExpired) {
-          // Session expired is expected behavior after 30 days - don't log as error
-          // The apiClient already handles logout, we just fall back to local cache
-        } else {
-          // Other errors (network, etc.) - log but continue to fallback
-          console.warn('Error fetching labour access from API (will use local cache):', apiError?.message || apiError);
-        }
-      }
-
-      // 2. Fallback: use local AsyncStorage cache if available
+      // STEP 1: Load local cache FIRST for instant UI (synchronous, fast)
+      // This ensures the UI shows the correct state immediately without waiting for network
       const localAccessData = await AsyncStorage.getItem('labour_access_status');
       if (localAccessData) {
-        const parsedData = JSON.parse(localAccessData);
-        const mapped = mapApiToLabourAccessData(parsedData);
+        try {
+          const parsedData = JSON.parse(localAccessData);
+          const mapped = mapApiToLabourAccessData(parsedData);
 
-        // If expired, clear it; otherwise keep
-        if (mapped.isExpired || !mapped.hasAccess) {
+          // If expired, clear it; otherwise use it immediately
+          if (mapped.isExpired || !mapped.hasAccess) {
+            await AsyncStorage.removeItem('labour_access_status');
+            setLabourAccessStatus(mapped.hasAccess ? mapped : null);
+          } else {
+            // Set local data immediately so UI shows correct state right away
+            setLabourAccessStatus(mapped);
+          }
+        } catch (parseError) {
+          // Invalid local data, clear it
           await AsyncStorage.removeItem('labour_access_status');
-          setLabourAccessStatus(mapped.hasAccess ? mapped : null);
-        } else {
-          setLabourAccessStatus(mapped);
+          setLabourAccessStatus(null);
         }
       } else {
         setLabourAccessStatus(null);
       }
+
+      // Mark as initialized IMMEDIATELY after loading local cache
+      // This allows UI to show the correct state right away
+      setIsInitialized(true);
+
+      // STEP 2: Fetch from backend in the background and update if different
+      // This happens asynchronously and doesn't block the UI
+      // BUT: Only make the API call if we have valid tokens (avoid unnecessary 401 errors)
+      try {
+        // Check if tokens exist before making API call
+        // This prevents unnecessary 401 errors when tokens are expired
+        const { tokenManager } = await import('@/utils/tokenManager');
+        const tokenData = await tokenManager.getStoredToken();
+        
+        // Only make API call if tokens exist and refresh token is not expired
+        if (tokenData && tokenData.refreshToken) {
+          const now = Date.now();
+          const refreshTokenExpired = tokenData.refreshTokenExpiresAt && 
+                                      tokenData.refreshTokenExpiresAt <= now;
+          
+          // Skip API call if refresh token is expired (30 days) - user will be logged out anyway
+          if (!refreshTokenExpired) {
+            const { apiGet } = await import('@/utils/apiClient');
+            const response = await apiGet('/api/payments/labour-access-status');
+
+            if (response.ok && response.data && response.data.status === 'success') {
+              const apiData = response.data.data;
+              if (apiData) {
+                const mapped = mapApiToLabourAccessData(apiData);
+                await AsyncStorage.setItem('labour_access_status', JSON.stringify(mapped));
+                // Update state with backend data (may be same as local, but ensures consistency)
+                setLabourAccessStatus(mapped);
+              }
+            }
+          }
+          // If refresh token is expired, skip API call - user will be logged out on next API call
+          // Just keep using local cache
+        }
+        // If no tokens exist, skip API call - user needs to login first
+        // Just keep using local cache
+      } catch (apiError: any) {
+        // Handle "Session expired" errors silently (expected after 30 days - logout will happen)
+        const isSessionExpired = apiError?.message === 'Session expired' || 
+                                 apiError?.status === 401 && apiError?.message?.includes('Session expired') ||
+                                 apiError?._suppressUnhandled === true ||
+                                 apiError?._handled === true;
+        
+        if (isSessionExpired) {
+          // Session expired is expected behavior after 30 days - don't log as error
+          // The apiClient already handles logout, we just keep using local cache
+          // Suppress the error completely to prevent unhandled rejection
+          return; // Exit early, don't log anything
+        } else {
+          // Other errors (network, etc.) - log but keep using local cache
+          // This is fine - local cache is still valid for offline use
+          console.warn('Error fetching labour access from API (using local cache):', apiError?.message || apiError);
+        }
+        // Don't update state on error - keep using local cache that was already set
+      }
     } catch (error) {
       console.error('Error checking labour access:', error);
       setLabourAccessStatus(null);
-    } finally {
-      // Mark as initialized so UI can avoid showing wrong state while loading
+      // Still mark as initialized even on error, so UI doesn't stay in loading state
       setIsInitialized(true);
     }
   };

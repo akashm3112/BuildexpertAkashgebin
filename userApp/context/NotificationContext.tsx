@@ -331,8 +331,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const handleAppStateChange = (nextAppState: AppStateStatus) => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
       // App has come to foreground, refresh notifications
-      fetchUnreadCount();
-      fetchNotifications();
+      fetchUnreadCount().catch((error) => {
+        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchUnreadCount error on app state change (handled):', error?.message || error);
+        }
+      });
+      fetchNotifications().catch((error) => {
+        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchNotifications error on app state change (handled):', error?.message || error);
+        }
+      });
     }
     appState.current = nextAppState;
   };
@@ -355,18 +369,60 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       //   handleBookingNotification(data);
       // }
       
-      fetchNotifications();
-      fetchUnreadCount();
+      fetchNotifications().catch((error) => {
+        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchNotifications error on notification_created (handled):', error?.message || error);
+        }
+      });
+      fetchUnreadCount().catch((error) => {
+        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchUnreadCount error on notification_created (handled):', error?.message || error);
+        }
+      });
     });
 
     socket.on('notification_updated', () => {
-      fetchNotifications();
-      fetchUnreadCount();
+      fetchNotifications().catch((error) => {
+        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchNotifications error on notification_updated (handled):', error?.message || error);
+        }
+      });
+      fetchUnreadCount().catch((error) => {
+        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchUnreadCount error on notification_updated (handled):', error?.message || error);
+        }
+      });
     });
 
     socket.on('notification_deleted', () => {
-      fetchNotifications();
-      fetchUnreadCount();
+      fetchNotifications().catch((error) => {
+        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchNotifications error on notification_deleted (handled):', error?.message || error);
+        }
+      });
+      fetchUnreadCount().catch((error) => {
+        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchUnreadCount error on notification_deleted (handled):', error?.message || error);
+        }
+      });
     });
 
     socket.on('disconnect', () => {
@@ -392,8 +448,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Initial fetch when user changes - wait for auth to finish loading
   useEffect(() => {
     if (!authLoading && user?.id) {
-      fetchUnreadCount();
-      fetchNotifications();
+      fetchUnreadCount().catch((error) => {
+        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchUnreadCount error on initial fetch (handled):', error?.message || error);
+        }
+      });
+      fetchNotifications().catch((error) => {
+        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        if (!isSessionExpired) {
+          console.warn('fetchNotifications error on initial fetch (handled):', error?.message || error);
+        }
+      });
     } else if (!authLoading && !user?.id) {
       setUnreadCount(0);
       setNotifications([]);

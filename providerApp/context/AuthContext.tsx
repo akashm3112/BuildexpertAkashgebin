@@ -51,21 +51,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           userData.registeredServices = [];
         }
         
-        // Verify that tokens exist in TokenManager
-        const { tokenManager } = await import('@/utils/tokenManager');
-        const hasValidToken = await tokenManager.isTokenValid();
-        
-        if (!hasValidToken) {
-          // Tokens don't exist or are invalid, clear user data
-          console.log('📱 AuthContext: No valid tokens found, clearing user data');
-          try {
-            await storage.removeItem('user', { maxRetries: 2 });
-          } catch (error) {
-            console.error('Error removing user data:', error);
+        // Check if tokens exist and if refresh token is expired (30 days)
+        // Only clear user data if refresh token is actually expired, not if access token is expired
+        try {
+          const { tokenManager } = await import('@/utils/tokenManager');
+          
+          // First, check if tokens exist at all (don't validate yet, just check existence)
+          const tokenData = await tokenManager.getStoredToken();
+          
+          if (!tokenData) {
+            // No tokens found at all - user needs to login
+            console.log('📱 AuthContext: No tokens found, clearing user data');
+            try {
+              await storage.removeItem('user', { maxRetries: 2 });
+            } catch (error) {
+              console.error('Error removing user data:', error);
+            }
+            setUser(null);
+            return;
           }
-          setUser(null);
-        } else {
-          console.log('📱 AuthContext: Loading user from storage:', { 
+          
+          // Check if refresh token is expired (30 days) - this is the only case where we should logout
+          const now = Date.now();
+          if (tokenData.refreshTokenExpiresAt && tokenData.refreshTokenExpiresAt <= now) {
+            // Refresh token expired after 30 days - user must login again
+            console.log('📱 AuthContext: Refresh token expired (30 days), clearing user data');
+            try {
+              await storage.removeItem('user', { maxRetries: 2 });
+            } catch (error) {
+              console.error('Error removing user data:', error);
+            }
+            setUser(null);
+            return;
+          }
+          
+          // Tokens exist and refresh token is still valid - load user
+          // Access token might be expired, but that's fine - it will be refreshed on first API call
+          console.log('📱 AuthContext: Loading user from storage (tokens valid):', { 
             id: userData.id, 
             phone: userData.phone, 
             role: userData.role,
@@ -73,14 +95,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
           
           setUser(userData);
+          
+          // Optionally, try to refresh access token in the background (non-blocking)
+          // This ensures we have a fresh token ready for API calls
+          // Wrap in try-catch to prevent unhandled promise rejections
+          (async () => {
+            try {
+              await tokenManager.getValidToken();
+            } catch (error) {
+              // Ignore errors - token refresh will happen on first API call if needed
+              // This is just an optimization to have a fresh token ready
+              // Errors are expected if backend is down or network is unavailable
+            }
+          })();
+          
+        } catch (tokenError: any) {
+          // If we can't check tokens (e.g., storage error), still load user
+          // Token validation will happen on first API call
+          const isTimeout = tokenError instanceof Error && tokenError.message.includes('timeout');
+          if (isTimeout) {
+            console.log('📱 AuthContext: Token check timeout, loading user anyway (will validate on first API call)');
+          } else {
+            console.warn('📱 AuthContext: Error checking tokens, loading user anyway (will validate on first API call):', tokenError?.message || tokenError);
+          }
+          // Load user anyway - token validation will happen on first API call
+          setUser(userData);
         }
       } else {
-        // No user data, ensure tokens are also cleared
-        const { tokenManager } = await import('@/utils/tokenManager');
-        const hasValidToken = await tokenManager.isTokenValid();
-        if (!hasValidToken) {
-          // Already cleared, nothing to do
-        }
+        // No user data - don't check tokens to avoid triggering refresh during signup
+        setUser(null);
       }
     } catch (error) {
       console.error('Error loading user:', error);

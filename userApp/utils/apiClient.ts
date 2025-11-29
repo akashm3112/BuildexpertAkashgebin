@@ -357,6 +357,11 @@ const mergeAbortSignals = (...signals: (AbortSignal | null | undefined)[]): Abor
 const normalizeError = (error: any, response?: Response): ApiError => {
   const message = error?.message || 'An unexpected error occurred';
   const code = error?.code;
+  
+  // Check if this is a "Session expired" error
+  const isSessionExpired = message === 'Session expired' || 
+                           message?.includes('Session expired') ||
+                           (error?.status === 401 && message?.includes('Session expired'));
 
   const isNetworkError =
     message.includes('Network request failed') ||
@@ -526,7 +531,27 @@ const responseInterceptor = async <T>(response: Response, config: RequestConfig,
               }
             }
             // Don't throw error - logout handles navigation
-            throw normalizeError({ message: 'Session expired', status: 401 }, response);
+            // For "Session expired" errors, we need to return a promise that won't be logged by React Native
+            // React Native logs unhandled rejections synchronously, so we need to suppress it at the source
+            const sessionExpiredError = normalizeError({ message: 'Session expired', status: 401 }, response);
+            // Suppress this error from being logged as unhandled - it's expected after 30 days
+            (sessionExpiredError as any)._suppressUnhandled = true;
+            (sessionExpiredError as any)._handled = true;
+            
+            // Create a promise that resolves immediately but with an error flag
+            // This prevents React Native from logging it as an unhandled rejection
+            // The caller will still get the error, but React Native won't log it
+            const suppressedPromise = Promise.resolve().then(() => {
+              // Return a rejected promise wrapped in a way that React Native won't log
+              return Promise.reject(sessionExpiredError);
+            });
+            
+            // Attach a catch handler immediately to prevent unhandled rejection
+            suppressedPromise.catch(() => {
+              // Error is already handled (logout triggered), this catch prevents unhandled rejection
+            });
+            
+            return suppressedPromise as any;
           }
           return retryResult;
         }
@@ -549,8 +574,28 @@ const responseInterceptor = async <T>(response: Response, config: RequestConfig,
         setTimeout(() => { isLoggingOut = false; }, 1000);
       }
     }
-    // Don't show error alert - logout handles navigation
-    throw normalizeError({ message: 'Session expired', status: 401 }, response);
+            // Don't show error alert - logout handles navigation
+            // For "Session expired" errors, we need to return a promise that won't be logged by React Native
+            // React Native logs unhandled rejections synchronously, so we need to suppress it at the source
+            const sessionExpiredError = normalizeError({ message: 'Session expired', status: 401 }, response);
+            // Suppress this error from being logged as unhandled - it's expected after 30 days
+            (sessionExpiredError as any)._suppressUnhandled = true;
+            (sessionExpiredError as any)._handled = true;
+            
+            // Create a promise that resolves immediately but with an error flag
+            // This prevents React Native from logging it as an unhandled rejection
+            // The caller will still get the error, but React Native won't log it
+            const suppressedPromise = Promise.resolve().then(() => {
+              // Return a rejected promise wrapped in a way that React Native won't log
+              return Promise.reject(sessionExpiredError);
+            });
+            
+            // Attach a catch handler immediately to prevent unhandled rejection
+            suppressedPromise.catch(() => {
+              // Error is already handled (logout triggered), this catch prevents unhandled rejection
+            });
+            
+            return suppressedPromise as any;
   }
 
   if (response.status === 403 && !config.skipErrorHandling) {
@@ -574,7 +619,7 @@ const responseInterceptor = async <T>(response: Response, config: RequestConfig,
 };
 
 // -------------------- MAIN REQUEST --------------------
-export const apiRequest = async <T = any>(endpoint: string, config: RequestConfig = {}): Promise<ApiResponse<T>> => {
+export const apiRequest = <T = any>(endpoint: string, config: RequestConfig = {}): Promise<ApiResponse<T>> => {
   const { timeout = DEFAULT_TIMEOUT, retries = DEFAULT_RETRIES, retryDelay = DEFAULT_RETRY_DELAY, allowDedup = false, ...fetchConfig } = config;
   let url = endpoint.startsWith('http') ? endpoint : joinUrl(API_BASE_URL, endpoint);
   
@@ -586,10 +631,14 @@ export const apiRequest = async <T = any>(endpoint: string, config: RequestConfi
 
   // Check rate limiting per endpoint
   if (!checkRateLimit(endpointKey, method)) {
-    throw normalizeError({
+    const rateLimitError = normalizeError({
       message: 'Rate limit exceeded. Please try again later.',
       code: 'RATE_LIMIT_EXCEEDED',
     });
+    // Return a rejected promise with a catch handler to prevent unhandled rejection
+    const rejectedPromise = Promise.reject(rateLimitError);
+    rejectedPromise.catch(() => {}); // Attach catch handler to prevent unhandled rejection
+    return rejectedPromise;
   }
 
   // Check for duplicate request
@@ -602,10 +651,71 @@ export const apiRequest = async <T = any>(endpoint: string, config: RequestConfi
   // Create the actual request
   const requestPromise = executeRequest<T>(url, method, config, fetchConfig);
   
-  // Cache the promise for deduplication
-  setDedupedRequest(requestKey, requestPromise, allowDedup, method);
+  // Wrap the promise to catch "Session expired" errors and prevent unhandled rejections
+  // This is critical for React Native which doesn't have native unhandledrejection support
+  // We attach a catch handler that immediately handles "Session expired" errors silently
+  const wrappedPromise = requestPromise.catch((error: any) => {
+    // Check if this is a "Session expired" error
+    const isSessionExpired = error?.message === 'Session expired' || 
+                             error?.message?.includes('Session expired') ||
+                             (error?.status === 401 && error?.message?.includes('Session expired')) ||
+                             error?._suppressUnhandled === true;
+    
+    if (isSessionExpired) {
+      // The error is already handled (logout triggered), but we need to prevent unhandled rejection
+      // Mark the error as handled to prevent React Native from logging it
+      (error as any)._handled = true;
+      (error as any)._suppressUnhandled = true;
+      // The catch handler here prevents React Native from logging it as an unhandled rejection
+      // We still reject so the caller can handle it, but the catch prevents the log
+    }
+    
+    // Re-throw the error so the caller can handle it
+    throw error;
+  });
   
-  return requestPromise;
+  // Create a promise that ALWAYS has a catch handler attached to prevent unhandled rejections
+  // This is the key to preventing React Native from logging "Session expired" errors
+  const safePromise = new Promise<ApiResponse<T>>((resolve, reject) => {
+    wrappedPromise
+      .then((result) => {
+        resolve(result);
+      })
+      .catch((error: any) => {
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.message?.includes('Session expired') ||
+                                 (error?.status === 401 && error?.message?.includes('Session expired')) ||
+                                 error?._suppressUnhandled === true;
+        
+        if (isSessionExpired) {
+          // Error is already handled (logout triggered), mark as handled and suppress
+          (error as any)._handled = true;
+          (error as any)._suppressUnhandled = true;
+          // Still reject so caller can handle it, but the catch prevents React Native from logging
+        }
+        
+        reject(error);
+      });
+  });
+  
+  // Attach a final catch handler to the safe promise to ensure "Session expired" errors are never unhandled
+  // This is a safety net - the promise already has a catch handler, but this ensures it's never unhandled
+  safePromise.catch((error: any) => {
+    const isSessionExpired = error?.message === 'Session expired' || 
+                             error?.message?.includes('Session expired') ||
+                             (error?.status === 401 && error?.message?.includes('Session expired')) ||
+                             error?._suppressUnhandled === true;
+    if (isSessionExpired) {
+      // Error is already handled (logout triggered), this catch prevents unhandled rejection
+      // This is a no-op but prevents React Native from logging the error
+      // The error is still propagated to the caller via the promise chain
+    }
+  });
+  
+  // Cache the safe promise for deduplication
+  setDedupedRequest(requestKey, safePromise, allowDedup, method);
+  
+  return safePromise;
 };
 
 const executeRequest = async <T = any>(
@@ -669,7 +779,24 @@ const executeRequest = async <T = any>(
         ? parseInt(response.headers.get('retry-after') || '0', 10)
         : undefined;
       
-      const result = await responseInterceptor<T>(response, config, retryWithRefresh);
+      // Response interceptor (handles 401, token refresh, retry)
+      // Wrap in a promise that always has a catch handler to prevent unhandled rejections
+      const resultPromise = responseInterceptor<T>(response, config, retryWithRefresh);
+      
+      // Attach a catch handler immediately to prevent unhandled rejections
+      resultPromise.catch((error: any) => {
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.message?.includes('Session expired') ||
+                                 (error?.status === 401 && error?.message?.includes('Session expired')) ||
+                                 error?._suppressUnhandled === true;
+        if (isSessionExpired) {
+          // Error is already handled (logout triggered), this catch prevents unhandled rejection
+          (error as any)._handled = true;
+          (error as any)._suppressUnhandled = true;
+        }
+      });
+      
+      const result = await resultPromise;
       
       return result;
       
@@ -689,6 +816,16 @@ const executeRequest = async <T = any>(
       }
       
       lastError = normalizeError(error);
+      
+      // Suppress "Session expired" errors from being retried or logged as unhandled
+      const isSessionExpired = lastError.message === 'Session expired' || 
+                               lastError.message?.includes('Session expired') ||
+                               (lastError.status === 401 && lastError.message?.includes('Session expired'));
+      if (isSessionExpired) {
+        (lastError as any)._suppressUnhandled = true;
+        // Don't retry session expired errors
+        break;
+      }
 
       if (!isRetryable(lastError, attempt, retries, method)) break;
 
@@ -703,8 +840,33 @@ const executeRequest = async <T = any>(
     }
   }
 
-  if (!config.skipErrorHandling && lastError && globalErrorHandler) globalErrorHandler(lastError);
-  throw lastError || normalizeError({ message: 'Request failed after retries' });
+  // Suppress "Session expired" errors from being logged
+  if (!config.skipErrorHandling && lastError && globalErrorHandler) {
+    const isSessionExpired = lastError.message === 'Session expired' || 
+                             lastError.message?.includes('Session expired') ||
+                             (lastError.status === 401 && lastError.message?.includes('Session expired'));
+    if (!isSessionExpired) {
+      globalErrorHandler(lastError);
+    } else {
+      // Mark as handled to prevent React Native from logging it
+      (lastError as any)._handled = true;
+      (lastError as any)._suppressUnhandled = true;
+    }
+  }
+  
+  // For "Session expired" errors, we need to prevent React Native from logging them
+  // The error is already handled (logout triggered), so we just need to suppress the log
+  const finalError = lastError || normalizeError({ message: 'Request failed after retries' });
+  const isSessionExpired = finalError.message === 'Session expired' || 
+                           finalError.message?.includes('Session expired') ||
+                           (finalError.status === 401 && finalError.message?.includes('Session expired'));
+  
+  if (isSessionExpired) {
+    (finalError as any)._handled = true;
+    (finalError as any)._suppressUnhandled = true;
+  }
+  
+  throw finalError;
 };
 
 // -------------------- CONVENIENCE METHODS --------------------
