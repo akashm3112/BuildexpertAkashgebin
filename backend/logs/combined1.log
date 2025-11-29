@@ -1,5 +1,0 @@
-{"level":"info","message":"MY-REGISTRATIONS endpoint called","role":"provider","service":"buildxpert-api","timestamp":"2025-11-28 17:41:30","userId":"51765f75-c865-4fd5-aad1-41b862b92675"}
-{"level":"warn","message":"Slow request detected","method":"GET","path":"/bookings","responseTime":2967,"service":"buildxpert-api","statusCode":304,"timestamp":"2025-11-28 17:41:31","userId":"51765f75-c865-4fd5-aad1-41b862b92675"}
-{"found":true,"level":"info","message":"Provider profile lookup","service":"buildxpert-api","timestamp":"2025-11-28 17:41:32","userId":"51765f75-c865-4fd5-aad1-41b862b92675"}
-{"count":5,"level":"info","message":"Found registered services","service":"buildxpert-api","timestamp":"2025-11-28 17:41:33","userId":"51765f75-c865-4fd5-aad1-41b862b92675"}
-{"level":"info","message":"Database connection health check stopped","service":"buildxpert-api","timestamp":"2025-11-28 17:41:35"}

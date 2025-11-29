@@ -16,6 +16,65 @@ const { ServiceUnavailableError, DatabaseConnectionError, RateLimitError } = req
 const { asyncHandler } = require('../middleware/errorHandler');
 const { ValidationError, NotFoundError } = require('../utils/errorTypes');
 
+/**
+ * Normalize appointment time to a standard format for comparison.
+ * Converts various time formats (12-hour with AM/PM, 24-hour) to a normalized 12-hour format.
+ * @param {string} timeStr - Time string in any format
+ * @returns {string|null} - Normalized time string in "H:MM AM/PM" format, or null if invalid
+ */
+const normalizeAppointmentTime = (timeStr) => {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  
+  const trimmed = timeStr.trim();
+  if (!trimmed || trimmed === '00:00:00' || trimmed === '00:00') return null;
+  
+  try {
+    let hours, minutes;
+    
+    // Check if it's already in 12-hour format (e.g., "2:00 PM", "03:00 PM")
+    const ampmMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)$/i);
+    if (ampmMatch) {
+      hours = parseInt(ampmMatch[1], 10);
+      minutes = parseInt(ampmMatch[2], 10);
+      const ampm = ampmMatch[3].toUpperCase();
+      
+      // Convert to 24-hour for normalization, then back to 12-hour
+      if (ampm === 'PM' && hours !== 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      
+      // Convert back to 12-hour format (standardized)
+      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      const displayAmpm = hours >= 12 ? 'PM' : 'AM';
+      const displayMinutes = minutes.toString().padStart(2, '0');
+      
+      return `${displayHours}:${displayMinutes} ${displayAmpm}`;
+    }
+    
+    // Parse 24-hour format (e.g., "14:00" or "14:00:00")
+    const timeParts = trimmed.split(':');
+    if (timeParts.length >= 2) {
+      hours = parseInt(timeParts[0], 10);
+      minutes = parseInt(timeParts[1], 10);
+      
+      if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        return null;
+      }
+      
+      // Convert to 12-hour format
+      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      const displayAmpm = hours >= 12 ? 'PM' : 'AM';
+      const displayMinutes = minutes.toString().padStart(2, '0');
+      
+      return `${displayHours}:${displayMinutes} ${displayAmpm}`;
+    }
+    
+    return null;
+  } catch (error) {
+    logger.error('Error normalizing appointment time', { timeStr, error: error.message });
+    return null;
+  }
+};
+
 const bookingTrafficShaper = createQueuedRateLimiter({
   windowMs: 60 * 1000, // 1 minute burst window
   maxRequests: 8,
@@ -96,12 +155,53 @@ router.post('/', [
     throw new ValidationError('Appointment date and time must be in the future');
   }
 
-  // Create booking
+  // Normalize appointment time for comparison
+  const normalizedAppointmentTime = normalizeAppointmentTime(appointmentTime);
+  if (!normalizedAppointmentTime) {
+    throw new ValidationError('Invalid appointment time format');
+  }
+
+  // Check for duplicate booking: same user cannot book same provider at same date/time
+  // Only check for pending or accepted bookings (rejected, completed, cancelled are allowed)
+  // Fetch all bookings for this user/provider/date with pending/accepted status
+  const potentialDuplicates = await getRows(`
+    SELECT b.id, b.status, b.appointment_date, b.appointment_time
+    FROM bookings b
+    WHERE b.user_id = $1
+      AND b.provider_service_id = $2
+      AND b.appointment_date = $3
+      AND b.status IN ('pending', 'accepted')
+  `, [req.user.id, providerServiceId, appointmentDate]);
+
+  // Normalize and compare times
+  let existingBooking = null;
+  for (const booking of potentialDuplicates) {
+    const normalizedStoredTime = normalizeAppointmentTime(booking.appointment_time);
+    if (normalizedStoredTime === normalizedAppointmentTime) {
+      existingBooking = booking;
+      break;
+    }
+  }
+
+  if (existingBooking) {
+    logger.warn('Duplicate booking attempt blocked', {
+      userId: req.user.id,
+      providerServiceId,
+      appointmentDate,
+      appointmentTime: normalizedAppointmentTime,
+      existingBookingId: existingBooking.id,
+      existingStatus: existingBooking.status
+    });
+    throw new ValidationError('You already have a booking with this provider at the same date and time. Please choose a different time or wait for the current booking to be completed or cancelled.');
+  }
+
+  // Create booking (store normalized time for consistency)
+  const timeToStore = normalizedAppointmentTime;
   const result = await query(`
       INSERT INTO bookings (user_id, provider_service_id, selected_service, appointment_date, appointment_time)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
-    `, [req.user.id, providerServiceId, selectedService, appointmentDate, appointmentTime]);
+    `, [req.user.id, providerServiceId, selectedService, appointmentDate, timeToStore]);
 
   const newBooking = result.rows[0];
 
