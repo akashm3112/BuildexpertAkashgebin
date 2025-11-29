@@ -3,6 +3,7 @@ import { webRTCService, CallData } from '@/services/webrtc';
 import { useAuth } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
 
 export type CallStatus = 'idle' | 'calling' | 'ringing' | 'connecting' | 'connected' | 'ended';
 
@@ -37,6 +38,21 @@ export const useWebRTCCall = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const durationInterval = useRef<number | null>(null);
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Connection timeout duration (20 seconds)
+  const CONNECTION_TIMEOUT = 20000;
+
+  // Monitor call status changes and clear timeout when call connects or ends
+  useEffect(() => {
+    // Clear timeout if call status changes to connected, ended, or idle
+    if (callStatus === 'connected' || callStatus === 'ended' || callStatus === 'idle') {
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
+    }
+  }, [callStatus]);
 
   // Initialize WebRTC service
   useEffect(() => {
@@ -77,6 +93,10 @@ export const useWebRTCCall = () => {
       if (durationInterval.current) {
         clearInterval(durationInterval.current);
       }
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
       webRTCService.disconnect();
     };
   }, [user?.id]);
@@ -97,6 +117,12 @@ export const useWebRTCCall = () => {
   }, []);
 
   const handleCallEnded = useCallback((duration: number, endedBy: string) => {
+    // Clear connection timeout when call ends
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+    
     setCallStatus('ended');
     setCallDuration(duration);
     if (durationInterval.current) {
@@ -113,6 +139,12 @@ export const useWebRTCCall = () => {
   }, []);
 
   const handleCallConnected = useCallback(() => {
+    // Clear connection timeout since connection is established
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+    
     setCallStatus('connected');
     setCallDuration(0);
     
@@ -127,8 +159,24 @@ export const useWebRTCCall = () => {
   }, []);
 
   const handleError = useCallback((errorMsg: string) => {
-    setError(mapCallError(undefined, errorMsg));
+    // Clear connection timeout on error
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+    
+    const errorMessage = mapCallError(undefined, errorMsg);
+    setError(errorMessage);
     setCallStatus('ended');
+    
+    // Show error toast to user
+    Toast.show({
+      type: 'error',
+      text1: 'Call Failed',
+      text2: errorMessage,
+      position: 'top',
+      visibilityTime: 4000,
+    });
     
     setTimeout(() => {
       setError(null);
@@ -140,6 +188,12 @@ export const useWebRTCCall = () => {
   // Initiate a call
   const initiateCall = useCallback(async (bookingId: string, callerType: 'user' | 'provider') => {
     try {
+      // Clear any existing timeout
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
+      
       setError(null);
       setCallStatus('calling');
       
@@ -184,6 +238,48 @@ export const useWebRTCCall = () => {
                 serviceName: retryData.data.serviceName,
               };
               setCurrentCall(callData);
+              
+              // Set up connection timeout before starting call
+              connectionTimeoutRef.current = setTimeout(() => {
+                // Check current status first (read-only)
+                setCallStatus((currentStatus) => {
+                  // Only proceed if still in calling/connecting state
+                  if (currentStatus === 'calling' || currentStatus === 'connecting') {
+                    // Schedule side effects outside of setState callback
+                    setTimeout(() => {
+                      const errorMessage = 'Connection timeout. Unable to establish call connection. Please check your internet connection and try again.';
+                      setError(errorMessage);
+                      
+                      // Show error toast to user
+                      Toast.show({
+                        type: 'error',
+                        text1: 'Call Failed',
+                        text2: errorMessage,
+                        position: 'top',
+                        visibilityTime: 5000,
+                      });
+                      
+                      // End the call
+                      webRTCService.endCall().catch(() => {
+                        // Ignore errors when ending call due to timeout
+                      });
+                      
+                      // Reset after a delay
+                      setTimeout(() => {
+                        setCallStatus('idle');
+                        setCurrentCall(null);
+                        setError(null);
+                      }, 2000);
+                    }, 0);
+                    
+                    return 'ended';
+                  }
+                  return currentStatus;
+                });
+                
+                connectionTimeoutRef.current = null;
+              }, CONNECTION_TIMEOUT);
+              
               await webRTCService.startCall(callData);
               return;
             }
@@ -211,6 +307,48 @@ export const useWebRTCCall = () => {
         };
 
         setCurrentCall(callData);
+        
+        // Set up connection timeout before starting call
+        connectionTimeoutRef.current = setTimeout(() => {
+          // Check current status first (read-only)
+          setCallStatus((currentStatus) => {
+            // Only proceed if still in calling/connecting state
+            if (currentStatus === 'calling' || currentStatus === 'connecting') {
+              // Schedule side effects outside of setState callback
+              setTimeout(() => {
+                const errorMessage = 'Connection timeout. Unable to establish call connection. Please check your internet connection and try again.';
+                setError(errorMessage);
+                
+                // Show error toast to user
+                Toast.show({
+                  type: 'error',
+                  text1: 'Call Failed',
+                  text2: errorMessage,
+                  position: 'top',
+                  visibilityTime: 5000,
+                });
+                
+                // End the call
+                webRTCService.endCall().catch(() => {
+                  // Ignore errors when ending call due to timeout
+                });
+                
+                // Reset after a delay
+                setTimeout(() => {
+                  setCallStatus('idle');
+                  setCurrentCall(null);
+                  setError(null);
+                }, 2000);
+              }, 0);
+              
+              return 'ended';
+            }
+            return currentStatus;
+          });
+          
+          connectionTimeoutRef.current = null;
+        }, CONNECTION_TIMEOUT);
+        
         await webRTCService.startCall(callData);
       } else {
         const message = mapCallError(data.errorCode, data.message);
@@ -219,10 +357,25 @@ export const useWebRTCCall = () => {
         throw error;
       }
     } catch (err: any) {
+      // Clear timeout on error
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
+      
       console.error('Error initiating call:', err);
       const message = mapCallError(err.code, err.message);
       setError(message);
       setCallStatus('idle');
+      
+      // Show error toast to user
+      Toast.show({
+        type: 'error',
+        text1: 'Call Failed',
+        text2: message,
+        position: 'top',
+        visibilityTime: 4000,
+      });
     }
   }, []);
 

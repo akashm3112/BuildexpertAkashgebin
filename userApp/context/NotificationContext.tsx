@@ -62,43 +62,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!user?.id) return;
     
     try {
-      const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
-      if (!token) return;
+      // Use API client for automatic token management and error handling
+      const { apiGet } = await import('@/utils/apiClient');
+      const response = await apiGet('/api/notifications/unread-count');
 
-      const response = await fetch(`${API_BASE_URL}/api/notifications/unread-count`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (response.status === 401) {
-        // Try to refresh token first
-        const refreshedToken = await tokenManager.forceRefreshToken();
-        if (refreshedToken) {
-          // Retry with new token
-          const retryResponse = await fetch(`${API_BASE_URL}/api/notifications/unread-count`, {
-            headers: { 'Authorization': `Bearer ${refreshedToken}` },
-          });
-          if (retryResponse.ok) {
-            const data = await retryResponse.json();
-            if (data.status === 'success') {
-              setUnreadCount(data.data.unreadCount);
-            }
-            return;
-          }
-        }
-        // Refresh token expired (30 days) - logout silently
-        await logout();
-        return;
+      if (response.ok && response.data && response.data.status === 'success') {
+        setUnreadCount(response.data.data.unreadCount);
       }
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          setUnreadCount(data.data.unreadCount);
-        }
+    } catch (error: any) {
+      // Check if it's a "Session expired" error (expected after 30 days)
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired') ||
+                               error?._suppressUnhandled === true ||
+                               error?._handled === true;
+      
+      if (!isSessionExpired) {
+        // Only log non-session-expired errors
+        console.warn('Error fetching unread count:', error?.message || error);
       }
-    } catch (error) {
-      console.error('Error fetching unread count:', error);
+      // Session expired errors are handled by apiClient (logout triggered)
     }
   };
 
@@ -107,52 +89,29 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!user?.id) return;
     
     try {
-      const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
-      if (!token) return;
+      // Use API client for automatic token management and error handling
+      const { apiGet } = await import('@/utils/apiClient');
+      const response = await apiGet(`/api/notifications?page=${page}&limit=${limit}`);
 
-      const response = await fetch(`${API_BASE_URL}/api/notifications?page=${page}&limit=${limit}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (response.status === 401) {
-        // Try to refresh token first
-        const refreshedToken = await tokenManager.forceRefreshToken();
-        if (refreshedToken) {
-          // Retry with new token
-          const retryResponse = await fetch(`${API_BASE_URL}/api/notifications?page=${page}&limit=${limit}`, {
-            headers: { 'Authorization': `Bearer ${refreshedToken}` },
-          });
-          if (retryResponse.ok) {
-            const data = await retryResponse.json();
-            if (data.status === 'success') {
-              setNotifications(data.data.notifications);
-              setPagination(data.data.pagination);
-              const unread = data.data.notifications.filter((n: Notification) => !n.is_read).length;
-              setUnreadCount(unread);
-            }
-            return;
-          }
-        }
-        // Refresh token expired (30 days) - logout silently
-        await logout();
-        return;
+      if (response.ok && response.data && response.data.status === 'success') {
+        setNotifications(response.data.data.notifications);
+        setPagination(response.data.data.pagination);
+        // Update unread count based on notifications
+        const unread = response.data.data.notifications.filter((n: Notification) => !n.is_read).length;
+        setUnreadCount(unread);
       }
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          setNotifications(data.data.notifications);
-          setPagination(data.data.pagination);
-          // Update unread count based on notifications
-          const unread = data.data.notifications.filter((n: Notification) => !n.is_read).length;
-          setUnreadCount(unread);
-        }
-      } else {
-        console.error('🔔 Notifications API error:', response.status, response.statusText);
+    } catch (error: any) {
+      // Check if it's a "Session expired" error (expected after 30 days)
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired') ||
+                               error?._suppressUnhandled === true ||
+                               error?._handled === true;
+      
+      if (!isSessionExpired) {
+        // Only log non-session-expired errors
+        console.warn('Error fetching notifications:', error?.message || error);
       }
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
+      // Session expired errors are handled by apiClient (logout triggered)
     }
   };
 
@@ -168,10 +127,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!user?.id) return { notifications: [], pagination: {}, statistics: {} };
     
     try {
-      const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
-      if (!token) return { notifications: [], pagination: {}, statistics: {} };
-
+      // Use API client for automatic token management and error handling
+      const { apiGet } = await import('@/utils/apiClient');
+      
       const queryParams = new URLSearchParams();
       if (params.page) queryParams.append('page', params.page.toString());
       if (params.limit) queryParams.append('limit', params.limit.toString());
@@ -180,47 +138,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (params.dateTo) queryParams.append('dateTo', params.dateTo);
       if (params.readStatus) queryParams.append('readStatus', params.readStatus);
 
-      const response = await fetch(`${API_BASE_URL}/api/notifications/history?${queryParams}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      const response = await apiGet(`/api/notifications/history?${queryParams}`);
 
-      if (response.status === 401) {
-        // Try to refresh token first
-        const refreshedToken = await tokenManager.forceRefreshToken();
-        if (refreshedToken) {
-          // Retry with new token
-          const retryResponse = await fetch(`${API_BASE_URL}/api/notifications/history?${queryParams}`, {
-            headers: { 'Authorization': `Bearer ${refreshedToken}` },
-          });
-          if (retryResponse.ok) {
-            const data = await retryResponse.json();
-            if (data.status === 'success') {
-              return {
-                notifications: data.data.notifications,
-                pagination: data.data.pagination,
-                statistics: data.data.statistics
-              };
-            }
-          }
-        }
-        // Refresh token expired (30 days) - logout silently
-        await logout();
-        return { notifications: [], pagination: {}, statistics: {} };
-      }
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          return {
-            notifications: data.data.notifications,
-            pagination: data.data.pagination,
-            statistics: data.data.statistics
-          };
-        }
+      if (response.ok && response.data && response.data.status === 'success') {
+        return {
+          notifications: response.data.data.notifications,
+          pagination: response.data.data.pagination,
+          statistics: response.data.data.statistics
+        };
       }
       return { notifications: [], pagination: {}, statistics: {} };
-    } catch (error) {
-      console.error('Error fetching notification history:', error);
+    } catch (error: any) {
+      // Check if it's a "Session expired" error (expected after 30 days)
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired') ||
+                               error?._suppressUnhandled === true ||
+                               error?._handled === true;
+      
+      if (!isSessionExpired) {
+        // Only log non-session-expired errors
+        console.warn('Error fetching notification history:', error?.message || error);
+      }
+      // Session expired errors are handled by apiClient (logout triggered)
       return { notifications: [], pagination: {}, statistics: {} };
     }
   };
@@ -228,10 +167,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Mark individual notification as read
   const markAsRead = async (id: string) => {
     try {
-      const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
-      if (!token) return;
-
       // Update local state immediately for better UX
       setNotifications(prev =>
         prev.map(notification =>
@@ -242,11 +177,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       // Update unread count
       setUnreadCount(prev => Math.max(0, prev - 1));
 
-      // Call API to mark as read
-      const response = await fetch(`${API_BASE_URL}/api/notifications/${id}/mark-read`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      // Use API client for automatic token management and error handling
+      const { apiPut } = await import('@/utils/apiClient');
+      const response = await apiPut(`/api/notifications/${id}/mark-read`);
 
       if (response.status === 401) {
         // Try to refresh token first
@@ -271,37 +204,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Mark all notifications as read
   const markAllAsRead = async () => {
     try {
-      const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
-      if (!token) return;
-
       // Update local state immediately
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
 
-      // Call API
-      const response = await fetch(`${API_BASE_URL}/api/notifications/mark-all-read`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (response.status === 401) {
-        // Try to refresh token first
-        const refreshedToken = await tokenManager.forceRefreshToken();
-        if (refreshedToken) {
-          // Retry with new token
-          await fetch(`${API_BASE_URL}/api/notifications/mark-all-read`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${refreshedToken}` },
-          });
-          return;
-        }
-        // Refresh token expired (30 days) - logout silently
-        await logout();
-        return;
+      // Use API client for automatic token management and error handling
+      const { apiPut } = await import('@/utils/apiClient');
+      await apiPut('/api/notifications/mark-all-read');
+      
+      // Response is handled by apiClient - no need to check status manually
+    } catch (error: any) {
+      // Check if it's a "Session expired" error (expected after 30 days)
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired') ||
+                               error?._suppressUnhandled === true ||
+                               error?._handled === true;
+      
+      if (!isSessionExpired) {
+        // Only log non-session-expired errors
+        console.warn('Error marking all notifications as read:', error?.message || error);
       }
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
+      // Session expired errors are handled by apiClient (logout triggered)
+      // Revert local state on error (optional - could keep optimistic update)
     }
   };
 

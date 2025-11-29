@@ -53,34 +53,32 @@ export default function LabourAccessScreen() {
 
   const fetchLabourAccessData = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
-      if (!token) return;
-
+      // Use API client for automatic token management and error handling
+      const { apiGet } = await import('@/utils/apiClient');
+      
       // Fetch access status
-      const accessResponse = await fetch(`${API_BASE_URL}/api/payments/labour-access-status`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (accessResponse.ok) {
-        const accessResult = await accessResponse.json();
-        setAccessData(accessResult.data);
+      const accessResponse = await apiGet('/api/payments/labour-access-status');
+      if (accessResponse.ok && accessResponse.data && accessResponse.data.status === 'success') {
+        setAccessData(accessResponse.data.data);
       }
 
       // Fetch transaction history
-      const historyResponse = await fetch(`${API_BASE_URL}/api/payments/labour-transaction-history`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (historyResponse.ok) {
-        const historyResult = await historyResponse.json();
-        setTransactions(historyResult.data.transactions);
+      const historyResponse = await apiGet('/api/payments/labour-transaction-history');
+      if (historyResponse.ok && historyResponse.data && historyResponse.data.status === 'success') {
+        setTransactions(historyResponse.data.data.transactions || []);
       }
-    } catch (error) {
-      console.error('Error fetching labour access data:', error);
+    } catch (error: any) {
+      // Check if it's a "Session expired" error (expected after 30 days)
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired') ||
+                               error?._suppressUnhandled === true ||
+                               error?._handled === true;
+      
+      if (!isSessionExpired) {
+        // Only log non-session-expired errors
+        console.warn('Error fetching labour access data:', error?.message || error);
+      }
+      // Session expired errors are handled by apiClient (logout triggered)
     } finally {
       setLoading(false);
     }

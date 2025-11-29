@@ -1,6 +1,7 @@
 ﻿import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@/context/AuthContext';
 
 interface LabourAccessData {
   hasAccess: boolean;
@@ -47,6 +48,9 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [labourAccessStatus, setLabourAccessStatus] = useState<LabourAccessData | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const appState = useRef(AppState.currentState);
+  
+  // Get user from AuthContext to check if user is authenticated before making API calls
+  const { user } = useAuth();
 
   /**
    * Core helper to map API response into our internal LabourAccessData shape.
@@ -94,6 +98,32 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
    * This ensures the UI shows the correct state immediately without waiting for network.
    */
   const checkLabourAccess = async () => {
+    // CRITICAL: Don't make API calls if user is not authenticated
+    // This prevents 401 errors before user reaches home screen
+    if (!user?.id) {
+      // User not authenticated - just load local cache and mark as initialized
+      try {
+        const localAccessData = await AsyncStorage.getItem('labour_access_status');
+        if (localAccessData) {
+          try {
+            const parsedData = JSON.parse(localAccessData);
+            const mapped = mapApiToLabourAccessData(parsedData);
+            setLabourAccessStatus(mapped.hasAccess ? mapped : null);
+          } catch (parseError) {
+            await AsyncStorage.removeItem('labour_access_status');
+            setLabourAccessStatus(null);
+          }
+        } else {
+          setLabourAccessStatus(null);
+        }
+        setIsInitialized(true);
+      } catch (error) {
+        setLabourAccessStatus(null);
+        setIsInitialized(true);
+      }
+      return; // Exit early - don't make API calls without authenticated user
+    }
+    
     try {
       // STEP 1: Load local cache FIRST for instant UI (synchronous, fast)
       // This ensures the UI shows the correct state immediately without waiting for network
@@ -216,20 +246,52 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   useEffect(() => {
-    // Wrap in error handler to prevent unhandled promise rejections
-    checkLabourAccess().catch((error) => {
-      // Errors are already handled in checkLabourAccess, but catch here to prevent unhandled rejections
-      console.warn('checkLabourAccess error (handled):', error?.message || error);
-    });
-  }, []);
-
-  const handleAppStateChange = (nextAppState: AppStateStatus) => {
-    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+    // Only check labour access if user is authenticated
+    // This prevents API calls before user reaches home screen
+    if (user?.id) {
       // Wrap in error handler to prevent unhandled promise rejections
       checkLabourAccess().catch((error) => {
         // Errors are already handled in checkLabourAccess, but catch here to prevent unhandled rejections
-        console.warn('checkLabourAccess error on app state change (handled):', error?.message || error);
+        console.warn('checkLabourAccess error (handled):', error?.message || error);
       });
+    } else {
+      // User not authenticated - just load local cache and mark as initialized
+      // This prevents API calls before authentication
+      (async () => {
+        try {
+          const localAccessData = await AsyncStorage.getItem('labour_access_status');
+          if (localAccessData) {
+            try {
+              const parsedData = JSON.parse(localAccessData);
+              const mapped = mapApiToLabourAccessData(parsedData);
+              setLabourAccessStatus(mapped.hasAccess ? mapped : null);
+            } catch (parseError) {
+              await AsyncStorage.removeItem('labour_access_status');
+              setLabourAccessStatus(null);
+            }
+          } else {
+            setLabourAccessStatus(null);
+          }
+          setIsInitialized(true);
+        } catch (error) {
+          setLabourAccessStatus(null);
+          setIsInitialized(true);
+        }
+      })();
+    }
+  }, [user?.id]); // Re-run when user authentication state changes
+
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      // Only check labour access if user is authenticated
+      // This prevents API calls when app comes to foreground before user is authenticated
+      if (user?.id) {
+        // Wrap in error handler to prevent unhandled promise rejections
+        checkLabourAccess().catch((error) => {
+          // Errors are already handled in checkLabourAccess, but catch here to prevent unhandled rejections
+          console.warn('checkLabourAccess error on app state change (handled):', error?.message || error);
+        });
+      }
     }
     appState.current = nextAppState;
   };

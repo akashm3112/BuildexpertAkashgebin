@@ -81,19 +81,15 @@ class ExpoGoNotificationService {
    */
   private async checkMissedNotifications(): Promise<void> {
     try {
-      const token = await AsyncStorage.getItem('token');
-      if (!token) return;
-
       const lastCheck = await AsyncStorage.getItem('last_notification_check') || '0';
       const since = parseInt(lastCheck);
 
-      const response = await fetch(`${API_BASE_URL}/api/notifications/recent?since=${since}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      // Use API client for automatic token management and error handling
+      const { apiGet } = await import('@/utils/apiClient');
+      const response = await apiGet(`/api/notifications/recent?since=${since}`);
 
-      if (response.ok) {
-        const data = await response.json();
-        const newNotifications = data.data?.notifications || [];
+      if (response.ok && response.data && response.data.status === 'success') {
+        const newNotifications = response.data.data?.notifications || [];
 
         for (const notification of newNotifications) {
           // Trigger notification callbacks
@@ -104,8 +100,18 @@ class ExpoGoNotificationService {
           await AsyncStorage.setItem('last_notification_check', Date.now().toString());
         }
       }
-    } catch (error) {
-      console.error('❌ Error checking missed notifications:', error);
+    } catch (error: any) {
+      // Check if it's a "Session expired" error (expected after 30 days)
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired') ||
+                               error?._suppressUnhandled === true ||
+                               error?._handled === true;
+      
+      if (!isSessionExpired) {
+        // Only log non-session-expired errors
+        console.warn('Error checking missed notifications:', error?.message || error);
+      }
+      // Session expired errors are handled by apiClient (logout triggered)
     }
   }
 

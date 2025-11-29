@@ -256,8 +256,12 @@ const tokenRefreshQueue: Array<{
 }> = [];
 
 const queueTokenRefresh = async (forceRefresh: boolean = false): Promise<string | null> => {
-  // If refresh is already in progress, queue this request
-  if (tokenRefreshPromise && !forceRefresh) {
+  // If refresh is already in progress, queue this request (even for force refresh to prevent duplicates)
+  // This prevents multiple simultaneous refresh calls which can cause race conditions
+  if (tokenRefreshPromise) {
+    // If force refresh is requested but a refresh is already in progress,
+    // queue the request to wait for the current refresh to complete
+    // This prevents duplicate refresh calls and race conditions
     return new Promise<string | null>((resolve, reject) => {
       tokenRefreshQueue.push({ resolve, reject });
     });

@@ -222,18 +222,17 @@ const memoryMonitor = new MemoryMonitor({
 memoryMonitor.start();
 
 io.on('connection', (socket) => {
-  // Register socket connection
+  // Register socket connection (without userId initially)
   socketManager.registerConnection(socket);
-  // Socket connection logging removed for production
   
   // Join user's personal room
   socket.on('join', (userId) => {
     if (userId) {
       socket.join(userId);
       socket.userId = userId;
-      // Update socket manager with userId
+      // Update existing socket registration with userId (don't register again)
+      // The registerConnection method should handle updating existing registrations
       socketManager.registerConnection(socket, userId);
-      // Socket room joining logging removed for production
     }
   });
 

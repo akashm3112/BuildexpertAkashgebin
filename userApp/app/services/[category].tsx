@@ -19,6 +19,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { ArrowLeft, Search, Star, MapPin, Filter, Heart, Phone, MessageCircle, X, FileSliders as Sliders, AlertTriangle, CreditCard, Lock } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useLabourAccess } from '@/context/LabourAccessContext';
 import Toast from 'react-native-toast-message';
 import { API_BASE_URL } from '@/constants/api';
 import { SafeView } from '@/components/SafeView';
@@ -77,27 +78,16 @@ export default function ServiceListingScreen() {
   const [categoryName, setCategoryName] = useState<string>('Services');
   const [labourAccessStatus, setLabourAccessStatus] = useState<any>(null);
   const [showLabourPaymentModal, setShowLabourPaymentModal] = useState(false);
+  
+  // Use labour access context - this already uses apiClient and handles errors properly
+  const { labourAccessStatus: contextLabourAccessStatus, checkLabourAccess } = useLabourAccess();
 
-  // Check labour access status
-  const checkLabourAccess = async () => {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`${API_BASE_URL}/api/payments/labour-access-status`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setLabourAccessStatus(data.data);
-      }
-    } catch (error) {
-      console.error('Error checking labour access:', error);
+  // Sync context status to local state
+  useEffect(() => {
+    if (contextLabourAccessStatus) {
+      setLabourAccessStatus(contextLabourAccessStatus);
     }
-  };
+  }, [contextLabourAccessStatus]);
 
   useEffect(() => {
     const fetchServiceUuids = async () => {
@@ -129,9 +119,15 @@ export default function ServiceListingScreen() {
             
             // Check labour access if this is a labour service
             if (found.name === 'labors') {
-              await checkLabourAccess().catch((error) => {
+              await checkLabourAccess().catch((error: any) => {
                 // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
-                console.warn('checkLabourAccess error (handled):', error?.message || error);
+                const isSessionExpired = error?.message === 'Session expired' || 
+                                         error?.status === 401 && error?.message?.includes('Session expired') ||
+                                         error?._suppressUnhandled === true ||
+                                         error?._handled === true;
+                if (!isSessionExpired) {
+                  console.warn('checkLabourAccess error (handled):', error?.message || error);
+                }
               });
             }
           } else {

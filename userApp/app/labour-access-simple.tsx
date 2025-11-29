@@ -31,33 +31,8 @@ export default function LabourAccessSimpleScreen() {
         });
         
         // Also fetch from API to ensure we have latest data
-        const token = await AsyncStorage.getItem('token');
-        if (token) {
-          try {
-            const response = await fetch(`${API_BASE_URL}/api/payments/labour-access-status`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
-              if (data.status === 'success' && data.data) {
-                // Store API data in AsyncStorage and update context
-                await AsyncStorage.setItem('labour_access_status', JSON.stringify(data.data));
-                // The context will pick it up on next check
-                await checkLabourAccess().catch((error) => {
-                  // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
-                  console.warn('checkLabourAccess error (handled):', error?.message || error);
-                });
-              }
-            }
-          } catch (apiError) {
-            // If API fails, still show local data - this is fine
-          }
-        } else {
-          // No token - still show UI with local data (if any)
-        }
+        // Use checkLabourAccess which already uses apiClient and handles errors properly
+        // No need for additional direct fetch call - it's redundant
       } catch (error) {
         // Even if checkLabourAccess fails, show the UI
         console.error('Error fetching labour access:', error);

@@ -470,6 +470,44 @@ class SocketConnectionManager {
    * Register a new socket connection
    */
   registerConnection(socket, userId = null) {
+    // Check if socket is already registered to prevent duplicate registrations
+    const existingConnection = this.connections.get(socket.id);
+    if (existingConnection) {
+      // Update existing connection with userId if provided
+      if (userId && !existingConnection.userId) {
+        existingConnection.userId = userId;
+        existingConnection.lastActivity = Date.now();
+        
+        // Add to userSockets map if userId is provided
+        if (!this.userSockets.has(userId)) {
+          this.userSockets.set(userId, new Set());
+        }
+        this.userSockets.get(userId).add(socket.id);
+        
+        // Check connection limit per user
+        const userConnections = this.userSockets.get(userId);
+        if (userConnections.size > this.maxConnectionsPerUser) {
+          logger.warn('User exceeded max connections', {
+            userId,
+            count: userConnections.size,
+            max: this.maxConnectionsPerUser
+          });
+        }
+        
+        logger.info('Socket connection updated with userId', {
+          socketId: socket.id,
+          userId,
+          totalConnections: this.connections.size
+        });
+      } else {
+        // Just update last activity if no userId change
+        existingConnection.lastActivity = Date.now();
+      }
+      // Socket already registered, don't register again
+      return;
+    }
+    
+    // New connection - register it
     const connectionData = {
       socketId: socket.id,
       userId,
