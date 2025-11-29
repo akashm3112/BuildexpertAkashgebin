@@ -251,7 +251,7 @@ export default function BookingsScreen() {
 
       const response = await apiPut<{ status: string; data: { booking: any } }>(
         `/api/providers/bookings/${bookingId}/status`,
-        { body: JSON.stringify(payload) }
+        payload
       );
 
       if (response.ok && response.data && response.data.status === 'success') {
