@@ -191,40 +191,28 @@ export default function BookingsScreen() {
       if (showSpinner) setIsLoading(true);
       setError(null);
       setErrorKey(null);
-      
-      const token = await tokenManager.getValidToken();
-      if (!token) {
-        setErrorKey('noToken');
-        return;
-      }
 
-      
-      const response = await fetch(`${API_BASE_URL}/api/providers/bookings`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      // Use centralized API client so token refresh and reconnection are handled globally
+      const { apiGet } = await import('@/utils/apiClient');
 
+      const response = await apiGet<{ status: string; data: { bookings: any[] } }>(
+        '/api/providers/bookings'
+      );
 
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.status === 'success' && data.data.bookings) {
-          // Debug location data
-          data.data.bookings.forEach((booking: any, index: number) => {
-            console.log(`Booking ${index + 1} location data:`, {
-              customer_state: booking.customer_state,
-              customer_address: booking.customer_address,
-              customer_name: booking.customer_name
-            });
+      if (response.ok && response.data && response.data.status === 'success') {
+        const bookingsData = response.data.data.bookings || [];
+
+        // Debug location data
+        bookingsData.forEach((booking: any, index: number) => {
+          console.log(`Booking ${index + 1} location data:`, {
+            customer_state: booking.customer_state,
+            customer_address: booking.customer_address,
+            customer_name: booking.customer_name,
           });
-          setBookings(data.data.bookings);
-        } else {
-          setErrorKey('invalidResponse');
-        }
+        });
+
+        setBookings(bookingsData);
       } else {
-        const errorText = await response.text();
-        
         if (response.status === 403) {
           setErrorKey('accessDenied');
         } else {
@@ -233,6 +221,7 @@ export default function BookingsScreen() {
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
+      // apiClient already handled token refresh / logout; remaining errors are network-level
       setErrorKey('networkError');
     } finally {
       if (showSpinner) setIsLoading(false);
@@ -245,42 +234,42 @@ export default function BookingsScreen() {
     setRefreshing(false);
   };
 
-  const handleBookingAction = async (bookingId: string, action: 'accept' | 'reject' | 'complete', reason?: string) => {
+  const handleBookingAction = async (
+    bookingId: string,
+    action: 'accept' | 'reject' | 'complete',
+    reason?: string
+  ) => {
     try {
-      const token = await tokenManager.getValidToken();
-      if (!token) {
-        showAlert(t('alerts.error'), t('alerts.noAuthTokenAvailable'));
-        return;
-      }
+      const { apiPut } = await import('@/utils/apiClient');
 
       const status = action === 'accept' ? 'accepted' : action === 'complete' ? 'completed' : 'rejected';
       const payload: any = { status };
-      
+
       if (action === 'reject' && reason) {
         payload.rejectionReason = reason;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/providers/bookings/${bookingId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
+      const response = await apiPut<{ status: string; data: { booking: any } }>(
+        `/api/providers/bookings/${bookingId}/status`,
+        { body: JSON.stringify(payload) }
+      );
 
-      if (response.ok) {
-        const data = await response.json();
-        showAlert(t('alerts.success'), data.message || t('alerts.bookingActionSuccess', { action }));
+      if (response.ok && response.data && response.data.status === 'success') {
+        showAlert(
+          t('alerts.success'),
+          (response.data as any).message || t('alerts.bookingActionSuccess', { action })
+        );
         // Refresh bookings to get updated data
         loadBookings();
       } else {
-        const errorData = await response.json();
-        showAlert(t('alerts.error'), errorData.message || t('alerts.failedToActionBooking', { action }));
+        const message =
+          (response.data && (response.data as any).message) ||
+          t('alerts.failedToActionBooking', { action });
+        showAlert(t('alerts.error'), message);
       }
     } catch (error) {
       console.error('Error updating booking status:', error);
-              showAlert(t('alerts.error'), t('alerts.networkError'));
+      showAlert(t('alerts.error'), t('alerts.networkError'));
     }
   };
 

@@ -175,7 +175,7 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
   const numColumns = 3;
   const [routeToUuidMap, setRouteToUuidMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const { labourAccessStatus } = useLabourAccess();
+  const { labourAccessStatus, isInitialized } = useLabourAccess();
   
   
   // Get categories with translated names - use filtered services if provided, otherwise use default
@@ -298,14 +298,16 @@ export default function ServiceCategoryGrid({ filteredServices }: ServiceCategor
                           style={styles.categoryImage}
                           resizeMode="cover"
                         />
-                        {/* Pay ₹99 label on top right corner for labor when no access */}
-                        {item.id === 'labor' && !labourAccessStatus?.hasAccess && (
+                        {/* Pay ₹99 label on top right corner for labor when no access.
+                            Only show after labour access has been initialized to avoid
+                            flashing incorrect state on app launch. */}
+                        {item.id === 'labor' && isInitialized && !labourAccessStatus?.hasAccess && (
                           <View style={styles.payLabelBadge}>
                             <Text style={styles.payLabelBadgeText}>Pay ₹99</Text>
                           </View>
                         )}
                         {/* Access indicator on top right for labor when access granted */}
-                        {item.id === 'labor' && labourAccessStatus?.hasAccess && (
+                        {item.id === 'labor' && isInitialized && labourAccessStatus?.hasAccess && (
                           <View style={styles.accessBadge}>
                             <CheckCircle size={14} color="#10B981" />
                           </View>

@@ -147,7 +147,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Refresh notifications (for pull-to-refresh)
   const refreshNotifications = () => {
-    fetchNotifications();
+    fetchNotifications().catch((error) => {
+      console.error('Error refreshing notifications:', error);
+    });
   };
 
   const resetNotificationState = () => {
@@ -215,8 +217,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const handleAppStateChange = (nextAppState: AppStateStatus) => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
       // App has come to foreground, refresh notifications
-      fetchUnreadCount();
-      fetchNotifications();
+      fetchUnreadCount().catch((error) => {
+        console.error('Error fetching unread count on app state change:', error);
+      });
+      fetchNotifications().catch((error) => {
+        console.error('Error fetching notifications on app state change:', error);
+      });
     }
     appState.current = nextAppState;
   };
@@ -238,18 +244,30 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         handleBookingNotification(data);
       }
       
-      fetchNotifications();
-      fetchUnreadCount();
+      fetchNotifications().catch((error) => {
+        console.error('Error fetching notifications after creation:', error);
+      });
+      fetchUnreadCount().catch((error) => {
+        console.error('Error fetching unread count after creation:', error);
+      });
     });
 
     socket.on('notification_updated', () => {
-      fetchNotifications();
-      fetchUnreadCount();
+      fetchNotifications().catch((error) => {
+        console.error('Error fetching notifications after update:', error);
+      });
+      fetchUnreadCount().catch((error) => {
+        console.error('Error fetching unread count after update:', error);
+      });
     });
 
     socket.on('notification_deleted', () => {
-      fetchNotifications();
-      fetchUnreadCount();
+      fetchNotifications().catch((error) => {
+        console.error('Error fetching notifications after deletion:', error);
+      });
+      fetchUnreadCount().catch((error) => {
+        console.error('Error fetching unread count after deletion:', error);
+      });
     });
 
     socket.on('disconnect', () => {
@@ -273,8 +291,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Initial fetch when user changes - wait for auth to finish loading
   useEffect(() => {
     if (!authLoading && user?.id) {
-      fetchUnreadCount();
-      fetchNotifications();
+      fetchUnreadCount().catch((error) => {
+        console.error('Error fetching unread count on user change:', error);
+      });
+      fetchNotifications().catch((error) => {
+        console.error('Error fetching notifications on user change:', error);
+      });
     } else if (!authLoading && !user?.id) {
       setUnreadCount(0);
       setNotifications([]);

@@ -38,11 +38,16 @@ export default function RootLayout() {
 
   // Initialize global error handler, request queue, monitoring, and connection recovery on mount
   useEffect(() => {
-    globalErrorHandler.initialize();
-    frontendMonitor.initialize();
-    // Request queue initializes automatically on import
-    // Connection recovery initializes automatically on import and starts monitoring
-    // It will automatically recover connections when network is restored or app comes to foreground
+    try {
+      globalErrorHandler.initialize();
+      frontendMonitor.initialize();
+      // Request queue initializes automatically on import
+      // Connection recovery initializes automatically on import (singleton pattern)
+      // It will automatically recover connections when network is restored or app comes to foreground
+    } catch (error) {
+      console.error('Error during app initialization:', error);
+      globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'RootLayout.initialize');
+    }
   }, []);
 
   const [fontsLoaded, fontError] = useFonts({

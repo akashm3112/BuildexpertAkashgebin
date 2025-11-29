@@ -28,6 +28,7 @@ import { API_BASE_URL } from '@/constants/api';
 import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import io from 'socket.io-client';
+import { globalErrorHandler } from '@/utils/globalErrorHandler';
 
 // Responsive design utilities
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -211,7 +212,9 @@ export default function HomeScreen() {
 
   // Load saved location preferences
   useEffect(() => {
-    loadLocationPreferences();
+    loadLocationPreferences().catch((error) => {
+      console.error('Error loading location preferences on mount:', error);
+    });
   }, []);
 
   // Debug selectedLocation changes
@@ -233,9 +236,15 @@ export default function HomeScreen() {
     if (user?.id) {
       // Wait a bit to ensure tokens are loaded
       const timer = setTimeout(() => {
-        fetchRegisteredServices();
+        fetchRegisteredServices().catch((error) => {
+          console.error('Error fetching registered services:', error);
+          globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
+        });
         // Initial earnings fetch (only once on mount)
-        fetchEarnings();
+        fetchEarnings().catch((error) => {
+          console.error('Error fetching earnings:', error);
+          globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchEarnings');
+        });
       }, 100);
       
       // Setup socket connection for real-time updates
@@ -329,12 +338,19 @@ export default function HomeScreen() {
     React.useCallback(() => {
       if (user?.id) {
         // Only fetch registered services on focus, earnings are handled by sockets
-        fetchRegisteredServices();
+        fetchRegisteredServices().catch((error) => {
+          console.error('Error fetching registered services on focus:', error);
+          globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
+        });
       }
       // Reload location preferences when screen comes into focus
-      loadLocationPreferences();
+      loadLocationPreferences().catch((error) => {
+        console.error('Error loading location preferences:', error);
+      });
       // Load recent searches
-      loadRecentSearches();
+      loadRecentSearches().catch((error) => {
+        console.error('Error loading recent searches:', error);
+      });
     }, [user])
   );
 

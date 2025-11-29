@@ -25,7 +25,10 @@ export default function LabourAccessSimpleScreen() {
       try {
         setLoading(true);
         // First check local storage (fast) - this will update context
-        await checkLabourAccess();
+        await checkLabourAccess().catch((error) => {
+          // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
+          console.warn('checkLabourAccess error (handled):', error?.message || error);
+        });
         
         // Also fetch from API to ensure we have latest data
         const token = await AsyncStorage.getItem('token');
@@ -43,7 +46,10 @@ export default function LabourAccessSimpleScreen() {
                 // Store API data in AsyncStorage and update context
                 await AsyncStorage.setItem('labour_access_status', JSON.stringify(data.data));
                 // The context will pick it up on next check
-                await checkLabourAccess();
+                await checkLabourAccess().catch((error) => {
+                  // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
+                  console.warn('checkLabourAccess error (handled):', error?.message || error);
+                });
               }
             }
           } catch (apiError) {
@@ -70,7 +76,10 @@ export default function LabourAccessSimpleScreen() {
   useFocusEffect(
     React.useCallback(() => {
       // Only check when screen is focused, not periodically
-      checkLabourAccess();
+      checkLabourAccess().catch((error) => {
+        // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
+        console.warn('checkLabourAccess error on focus (handled):', error?.message || error);
+      });
     }, [])
   );
 

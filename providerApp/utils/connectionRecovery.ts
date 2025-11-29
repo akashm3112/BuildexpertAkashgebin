@@ -41,7 +41,9 @@ class ConnectionRecoveryManager {
       if (nextAppState === 'active') {
         // App came to foreground - validate connection and tokens
         console.log('📱 App came to foreground, validating connection...');
-        await this.recoverConnection();
+        this.recoverConnection().catch((error) => {
+          console.error('Error during connection recovery on app state change:', error);
+        });
       }
     });
   }
@@ -59,7 +61,9 @@ class ConnectionRecoveryManager {
         if (isOnline) {
           // Network restored - recover connection
           console.log('🌐 Network restored, recovering connection...');
-          await this.recoverConnection();
+          this.recoverConnection().catch((error) => {
+            console.error('Error during connection recovery on network restore:', error);
+          });
         }
       });
     } catch (error) {
@@ -159,7 +163,12 @@ class ConnectionRecoveryManager {
    * Manually trigger connection recovery
    */
   async triggerRecovery(): Promise<void> {
-    await this.recoverConnection();
+    try {
+      await this.recoverConnection();
+    } catch (error) {
+      console.error('Error in triggerRecovery:', error);
+      // Don't throw - let the recovery handle its own errors
+    }
   }
 
   /**

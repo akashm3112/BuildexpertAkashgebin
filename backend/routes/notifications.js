@@ -47,16 +47,16 @@ router.get('/', asyncHandler(async (req, res) => {
         notificationId: notification.id,
         error: error.message
       });
-      // Fallback formatting
+      // Fallback formatting with IST timezone
       const date = new Date(notification.created_at);
       return {
         ...notification,
-        formatted_date: date.toLocaleDateString('en-IN'),
+        formatted_date: date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
         formatted_time: date.toLocaleTimeString('en-IN', { 
-          hour: '2-digit', 
+          hour: 'numeric', 
           minute: '2-digit', 
           hour12: true,
-          timeZone: undefined // Remove timezone information
+          timeZone: 'Asia/Kolkata'
         }),
         relative_time: 'Recently'
       };
@@ -202,11 +202,12 @@ router.get('/history', asyncHandler(async (req, res) => {
         const date = new Date(notification.created_at);
         return {
           ...notification,
-          formatted_date: date.toLocaleDateString('en-IN'),
+          formatted_date: date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
           formatted_time: date.toLocaleTimeString('en-IN', { 
-            hour: '2-digit', 
+            hour: 'numeric', 
             minute: '2-digit', 
-            hour12: true 
+            hour12: true,
+            timeZone: 'Asia/Kolkata'
           }),
           relative_time: 'Recently'
         };

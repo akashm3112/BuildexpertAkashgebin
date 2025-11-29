@@ -163,23 +163,14 @@ export default function BookingsScreen() {
     if (showSpinner) setLoading(true);
     setError(null);
     try {
-      const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
-      if (!token) {
-        setError('No authentication token available. Please log in again.');
-        if (showSpinner) setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-      const response = await fetch(`${API_BASE_URL}/api/bookings`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      const data = await response.json();
-      if (response.ok && data.status === 'success') {
+      // Use centralized API client so token refresh and reconnection are handled globally
+      const { apiGet } = await import('@/utils/apiClient');
+
+      const response = await apiGet<{ status: string; data: { bookings: any[] } }>('/api/bookings');
+
+      if (response.ok && response.data && response.data.status === 'success') {
         // Map backend fields to BookingItem props
-        const mapped = data.data.bookings.map((b: any) => ({
+        const mapped = response.data.data.bookings.map((b: any) => ({
           id: b.id,
           serviceName: b.service_name,
           providerName: b.provider_name,
@@ -193,10 +184,14 @@ export default function BookingsScreen() {
         }));
         setBookings(mapped);
       } else {
-        setError(data.message || 'Failed to fetch bookings');
+        const message =
+          (response.data && (response.data as any).message) ||
+          'Failed to fetch bookings. Please pull to refresh.';
+        setError(message);
       }
-    } catch (err) {
-      setError('Network error. Please try again.');
+    } catch (err: any) {
+      // apiClient already handled token refresh / logout; just show a soft, generic message
+      setError('Unable to load bookings right now. Please check your connection and try again.');
     } finally {
       if (showSpinner) setLoading(false);
       setRefreshing(false);

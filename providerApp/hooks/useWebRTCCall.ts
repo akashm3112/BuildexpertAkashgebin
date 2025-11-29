@@ -65,7 +65,10 @@ export const useWebRTCCall = () => {
       }
     };
 
-    init();
+    init().catch((error) => {
+      console.error('Failed to initialize WebRTC service:', error);
+      setError('Failed to initialize call service');
+    });
 
     return () => {
       if (durationInterval.current) {

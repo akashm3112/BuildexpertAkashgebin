@@ -425,6 +425,9 @@ router.put('/bookings/:id/status', [
     paramCount++;
   }
 
+  // Always update updated_at when status changes
+  updateFields.push(`updated_at = NOW()`);
+  
   updateValues.push(id);
   const result = await query(`
     UPDATE bookings 
@@ -443,13 +446,24 @@ router.put('/bookings/:id/status', [
       JOIN services_master sm ON ps.service_id = sm.id
       WHERE b.id = $1
     `, [id]);
+    
+    // Import time formatting utility
+    const { formatAppointmentTime, formatDate } = require('../utils/timezone');
+    
     if (bookingDetails) {
+      // Format appointment date and time for display
+      const formattedDate = bookingDetails.appointment_date 
+        ? formatDate(new Date(bookingDetails.appointment_date)) 
+        : bookingDetails.appointment_date;
+      const formattedTime = formatAppointmentTime(bookingDetails.appointment_time);
+      const timeDisplay = formattedTime ? ` at ${formattedTime}` : '';
+      
       if (status === 'accepted') {
         // Send in-app notification
         const acceptedNotification = await sendNotification(
           bookingDetails.user_id,
           'Booking Accepted',
-          `Your booking for ${bookingDetails.service_name} on ${bookingDetails.appointment_date} at ${bookingDetails.appointment_time} has been accepted.`,
+          `Your booking for ${bookingDetails.service_name} on ${formattedDate}${timeDisplay} has been accepted.`,
           'user'
         );
 
@@ -473,7 +487,7 @@ router.put('/bookings/:id/status', [
         const rejectedNotification = await sendNotification(
           bookingDetails.user_id,
           'Booking Rejected',
-          `Your booking for ${bookingDetails.service_name} on ${bookingDetails.appointment_date} at ${bookingDetails.appointment_time} was rejected.`,
+          `Your booking for ${bookingDetails.service_name} on ${formattedDate}${timeDisplay} was rejected.`,
           'user'
         );
 
@@ -498,7 +512,7 @@ router.put('/bookings/:id/status', [
         const completedNotification = await sendNotification(
           bookingDetails.user_id,
           'Booking Completed',
-          `Your booking for ${bookingDetails.service_name} on ${bookingDetails.appointment_date} at ${bookingDetails.appointment_time} has been marked as completed. Please rate your experience.`,
+          `Your booking for ${bookingDetails.service_name} on ${formattedDate}${timeDisplay} has been marked as completed. Please rate your experience.`,
           'user'
         );
 
@@ -522,7 +536,7 @@ router.put('/bookings/:id/status', [
       const providerNotification = await sendNotification(
         req.user.id,
         `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-        `You have ${status} a booking for ${bookingDetails.service_name} on ${bookingDetails.appointment_date} at ${bookingDetails.appointment_time}.`,
+        `You have ${status} a booking for ${bookingDetails.service_name} on ${formattedDate}${timeDisplay}.`,
         'provider'
       );
       // Emit real-time event to both the user's and provider's userId rooms

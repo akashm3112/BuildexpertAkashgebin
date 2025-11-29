@@ -129,7 +129,10 @@ export default function ServiceListingScreen() {
             
             // Check labour access if this is a labour service
             if (found.name === 'labors') {
-              await checkLabourAccess();
+              await checkLabourAccess().catch((error) => {
+                // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
+                console.warn('checkLabourAccess error (handled):', error?.message || error);
+              });
             }
           } else {
             setError('Service category not found');
