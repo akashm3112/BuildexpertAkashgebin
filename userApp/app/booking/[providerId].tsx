@@ -196,16 +196,6 @@ export default function BookingScreen() {
       return;
     }
 
-    let token = user?.token;
-    if (!token) {
-      const storedToken = await AsyncStorage.getItem('token');
-      token = storedToken === null ? undefined : storedToken;
-    }
-    if (!token) {
-      showAlert(t('booking.authenticationRequired'), t('booking.loginToBook'), 'error');
-      return;
-    }
-
     // Check labour access for labour services
     if (provider.service_name?.toLowerCase().includes('labors') || provider.service_name?.toLowerCase().includes('labour')) {
       if (!labourAccessStatus?.hasAccess) {
@@ -243,18 +233,11 @@ export default function BookingScreen() {
         appointmentTime: selectedTime
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/bookings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(bookingData)
-      });
+      // Use API client for better error handling and token management
+      const { apiPost } = await import('@/utils/apiClient');
+      const response = await apiPost('/api/bookings', bookingData);
 
-      const result = await response.json();
-
-      if (response.ok && result.status === 'success') {
+      if (response.ok && response.data && response.data.status === 'success') {
         setShowConfirmation(true);
         Toast.show({
           type: 'success',
@@ -266,11 +249,32 @@ export default function BookingScreen() {
           })
         });
       } else {
-        throw new Error(result.message || 'Failed to create booking');
+        // Extract error message from response
+        const errorMessage = response.data?.message || 
+                            (response.data?.error?.message) ||
+                            t('booking.failedToCreateBooking');
+        showAlert(t('booking.bookingFailed'), errorMessage, 'error');
       }
-    } catch (err) {
-      console.error('Booking error:', err);
-      showAlert(t('booking.bookingFailed'), err instanceof Error ? err.message : t('booking.failedToCreateBooking'), 'error');
+    } catch (err: any) {
+      // Check if it's a validation error (user-friendly message) or a system error
+      const errorMessage = err?.message || err?.data?.message || t('booking.failedToCreateBooking');
+      
+      // Check if it's a validation error (like duplicate booking)
+      // These are expected errors that should be shown to the user, not logged as errors
+      const isValidationError = errorMessage.includes('already have a booking') ||
+                                errorMessage.includes('duplicate') ||
+                                errorMessage.includes('same date and time') ||
+                                err?.status === 400 ||
+                                err?.status === 422;
+      
+      if (!isValidationError) {
+        // Only log non-validation errors (system errors, network errors, etc.)
+        // Use console.warn instead of console.error to avoid triggering global error handler
+        console.warn('Booking system error:', err);
+      }
+      
+      // Show error to user (validation errors are user-friendly, system errors need translation)
+      showAlert(t('booking.bookingFailed'), errorMessage, 'error');
     } finally {
       setLoading(false);
     }

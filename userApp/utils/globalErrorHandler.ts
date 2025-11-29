@@ -13,6 +13,7 @@ class GlobalErrorHandler {
   private errorQueue: ErrorInfo[] = [];
   private maxQueueSize = 50;
   private isInitialized = false;
+  private originalConsoleError: typeof console.error | null = null; // Store original console.error to prevent circular calls
 
   /**
    * Initialize global error handlers
@@ -121,7 +122,8 @@ class GlobalErrorHandler {
    * Setup handler for console errors
    */
   private setupConsoleErrorHandler() {
-    const originalError = console.error;
+    // Store original console.error to prevent circular calls
+    this.originalConsoleError = console.error;
 
     console.error = (...args: any[]) => {
       // Check if it's an Error object or error-like object
@@ -148,8 +150,19 @@ class GlobalErrorHandler {
            error.stack?.includes('tokenManager') ||
            error.stack?.includes('performTokenRefresh'));
         
-        if (!isSessionExpired && !isTokenRefreshTimeout) {
+        // Suppress Metro bundler errors (InternalBytecode.js not found - harmless development issue)
+        const isMetroBundlerError = error.message.includes('ENOENT') &&
+                                    (error.message.includes('InternalBytecode.js') ||
+                                     error.stack?.includes('InternalBytecode.js') ||
+                                     error.message.includes('no such file or directory'));
+        
+        if (!isSessionExpired && !isTokenRefreshTimeout && !isMetroBundlerError) {
           this.handleError(error, false, 'Console Error');
+        }
+        
+        // For Metro bundler errors, suppress completely (harmless development issue)
+        if (isMetroBundlerError) {
+          return; // Suppress the console.error call entirely
         }
         
         // For session expired errors, don't call original console.error to suppress the log
@@ -158,13 +171,16 @@ class GlobalErrorHandler {
         }
       }
 
-      // Call original console.error
-      originalError.apply(console, args);
+      // Call original console.error (use stored reference to prevent circular calls)
+      if (this.originalConsoleError) {
+        this.originalConsoleError.apply(console, args);
+      }
     };
   }
 
   /**
    * Handle an error (public method for external use)
+   * IMPORTANT: This method uses originalConsoleError to prevent circular calls
    */
   handleError(error: Error, isFatal: boolean, context?: string) {
     // Suppress "Session expired" errors - they're expected after 30 days and handled gracefully
@@ -191,23 +207,51 @@ class GlobalErrorHandler {
       this.errorQueue.shift();
     }
 
-    // Log error
-    console.error(`[${context || 'Error'}]`, {
-      message: error.message,
-      stack: error.stack,
-      isFatal,
-      timestamp: new Date(errorInfo.timestamp).toISOString(),
-    });
+    // CRITICAL: Use originalConsoleError to prevent circular calls
+    // If we used console.error here, it would call our overridden version,
+    // which would call handleError again, creating an infinite loop
+    const logError = this.originalConsoleError;
+    
+    if (!logError) {
+      // Fallback: If originalConsoleError is not set (shouldn't happen), 
+      // use a try-catch to prevent infinite loops
+      try {
+        // Use native console.error directly (bypass our override)
+        const nativeError = (console as any).__originalError || console.error;
+        nativeError(`[${context || 'Error'}]`, {
+          message: error.message,
+          stack: error.stack,
+          isFatal,
+          timestamp: new Date(errorInfo.timestamp).toISOString(),
+        });
+      } catch {
+        // If even that fails, silently ignore to prevent crash
+      }
+      return;
+    }
+    
+    // Use original console.error (bypasses our override, prevents circular calls)
+    try {
+      logError.call(console, `[${context || 'Error'}]`, {
+        message: error.message,
+        stack: error.stack,
+        isFatal,
+        timestamp: new Date(errorInfo.timestamp).toISOString(),
+      });
 
-    // In production, you might want to:
-    // 1. Send to error reporting service (Sentry, Bugsnag, etc.)
-    // 2. Show user-friendly error message
-    // 3. Attempt recovery
+      // In production, you might want to:
+      // 1. Send to error reporting service (Sentry, Bugsnag, etc.)
+      // 2. Show user-friendly error message
+      // 3. Attempt recovery
 
-    // For fatal errors, we might want to show a critical error screen
-    if (isFatal) {
-      // This will be handled by ErrorBoundary or a global error screen
-      console.error('Fatal error occurred - app may crash');
+      // For fatal errors, we might want to show a critical error screen
+      if (isFatal) {
+        // This will be handled by ErrorBoundary or a global error screen
+        logError.call(console, 'Fatal error occurred - app may crash');
+      }
+    } catch (logErr) {
+      // If logging itself fails, silently ignore to prevent infinite loops
+      // This should never happen, but is a safety measure
     }
   }
 
