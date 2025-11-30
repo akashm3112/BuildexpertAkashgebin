@@ -19,6 +19,8 @@ import {
   CreditCard,
   Gift,
   Clock,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
 import { useNotifications } from '@/context/NotificationContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -46,24 +48,49 @@ const getResponsiveFontSize = (small: number, medium: number, large: number) => 
 type NotificationVariant = 'success' | 'error' | 'info';
 
 const getNotificationIcon = (type: string, variant: NotificationVariant = 'info') => {
-  const variantColor =
-    variant === 'error' ? '#EF4444' : variant === 'success' ? '#10B981' : undefined;
+  const variantColor = '#FFFFFF';
 
   switch (type) {
     case 'booking':
-      return <Calendar size={24} color={variantColor || '#3B82F6'} />;
+      return <Calendar size={22} color={variantColor} strokeWidth={2.5} />;
     case 'payment':
-      return <CreditCard size={24} color={variantColor || '#10B981'} />;
+      return <CreditCard size={22} color={variantColor} strokeWidth={2.5} />;
     case 'service':
-      return <CheckCircle size={24} color={variantColor || '#10B981'} />;
+      return <CheckCircle size={22} color={variantColor} strokeWidth={2.5} />;
     case 'message':
-      return <MessageCircle size={24} color={variantColor || '#3B82F6'} />;
+      return <MessageCircle size={22} color={variantColor} strokeWidth={2.5} />;
     case 'reminder':
-      return <Clock size={24} color={variantColor || '#F59E0B'} />;
+      return <Clock size={22} color={variantColor} strokeWidth={2.5} />;
     case 'offer':
-      return <Gift size={24} color={variantColor || '#EF4444'} />;
+      return <Gift size={22} color={variantColor} strokeWidth={2.5} />;
     default:
-      return <Bell size={24} color={variantColor || '#64748B'} />;
+      return <Bell size={22} color={variantColor} strokeWidth={2.5} />;
+  }
+};
+
+const getNotificationIconBg = (type: string, variant: NotificationVariant = 'info') => {
+  if (variant === 'success') {
+    return '#10B981'; // Green for success
+  }
+  if (variant === 'error') {
+    return '#EF4444'; // Red for error/cancel
+  }
+
+  switch (type) {
+    case 'booking':
+      return '#3B82F6'; // Blue
+    case 'payment':
+      return '#10B981'; // Green
+    case 'service':
+      return '#10B981'; // Green
+    case 'message':
+      return '#3B82F6'; // Blue
+    case 'reminder':
+      return '#F59E0B'; // Amber
+    case 'offer':
+      return '#EC4899'; // Pink
+    default:
+      return '#64748B'; // Gray
   }
 };
 
@@ -71,29 +98,8 @@ const getNotificationColor = (
   type: string,
   variant: NotificationVariant = 'info'
 ) => {
-  if (variant === 'success') {
-    return '#ECFDF5';
-  }
-  if (variant === 'error') {
-    return '#FEE2E2';
-  }
-
-  switch (type) {
-    case 'booking':
-      return '#EFF6FF';
-    case 'payment':
-      return '#ECFDF5';
-    case 'service':
-      return '#F0F9FF';
-    case 'message':
-      return '#FEF3C7';
-    case 'reminder':
-      return '#FEF2F2';
-    case 'offer':
-      return '#FDF2F8';
-    default:
-      return '#F8FAFC';
-  }
+  // Always use white background for modern look
+  return '#FFFFFF';
 };
 
 const classifyNotification = (title: string, message: string) => {
@@ -129,6 +135,8 @@ const classifyNotification = (title: string, message: string) => {
     'issue',
     'problem',
     'cancel',
+    'cancelled',
+    'cancellation',
     'report',
   ];
 
@@ -172,6 +180,7 @@ export default function NotificationsScreen() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, refreshNotifications } = useNotifications();
   const { t } = useLanguage();
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
 
   // Create responsive styles based on current screen dimensions
   const responsiveStyles = {
@@ -188,17 +197,45 @@ export default function NotificationsScreen() {
     },
     notificationCard: {
       ...styles.notificationCard,
-      padding: getResponsiveSpacing(16, 18, 20),
-      borderRadius: getResponsiveSpacing(12, 16, 20),
-      marginBottom: getResponsiveSpacing(6, 8, 10),
-      borderLeftWidth: getResponsiveSpacing(3, 4, 5),
+      padding: getResponsiveSpacing(12, 14, 16),
+      borderRadius: getResponsiveSpacing(20, 24, 28),
+      marginBottom: getResponsiveSpacing(8, 10, 12),
+    },
+    collapsedCard: {
+      minHeight: getResponsiveSpacing(90, 95, 100),
+      maxHeight: getResponsiveSpacing(90, 95, 100),
     },
     notificationIcon: {
       ...styles.notificationIcon,
-      width: getResponsiveSpacing(36, 40, 44),
-      height: getResponsiveSpacing(36, 40, 44),
-      borderRadius: getResponsiveSpacing(18, 20, 22),
+      width: getResponsiveSpacing(40, 44, 48),
+      height: getResponsiveSpacing(40, 44, 48),
+      borderRadius: getResponsiveSpacing(20, 22, 24),
       marginRight: getResponsiveSpacing(10, 12, 14),
+    },
+    notificationTitle: {
+      ...styles.notificationTitle,
+      fontSize: getResponsiveFontSize(14, 15, 16),
+      lineHeight: getResponsiveFontSize(18, 20, 22),
+    },
+    notificationTime: {
+      ...styles.notificationTime,
+      fontSize: getResponsiveFontSize(10, 11, 12),
+      lineHeight: getResponsiveFontSize(12, 14, 16),
+    },
+    notificationMessage: {
+      ...styles.notificationMessage,
+      fontSize: getResponsiveFontSize(12, 13, 14),
+      lineHeight: getResponsiveFontSize(16, 18, 20),
+      paddingRight: getResponsiveSpacing(20, 24, 28),
+    },
+    messageContainer: {
+      ...styles.messageContainer,
+      minHeight: getResponsiveSpacing(32, 36, 40),
+      marginTop: getResponsiveSpacing(3, 4, 5),
+    },
+    notificationHeaderRow: {
+      ...styles.notificationHeaderRow,
+      marginBottom: getResponsiveSpacing(5, 6, 7),
     },
   };
 
@@ -214,6 +251,18 @@ export default function NotificationsScreen() {
 
   const handleMarkAllAsRead = async () => {
     await markAllAsRead();
+  };
+
+  const toggleNotificationExpansion = (id: string) => {
+    setExpandedNotifications(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
   };
 
   // Handle orientation changes for responsive design
@@ -235,35 +284,67 @@ export default function NotificationsScreen() {
   const renderNotification = ({ item }: any) => {
     // Determine notification type based on title or message content
     const { category, variant } = classifyNotification(item.title, item.message);
+    const iconBgColor = getNotificationIconBg(category, variant);
+    const isUnread = !item.is_read;
+    const isExpanded = expandedNotifications.has(item.id);
+    
+    // Check if message is long enough to need truncation (roughly 80 characters for 2 lines)
+    const messageLength = item.message?.length || 0;
+    const needsTruncation = messageLength > 80;
     
     return (
       <TouchableOpacity
         style={[
           responsiveStyles.notificationCard,
           { backgroundColor: getNotificationColor(category, variant) },
-          !item.is_read && styles.unreadNotificationCard,
+          isUnread && styles.unreadNotificationCard,
+          !isExpanded && needsTruncation && responsiveStyles.collapsedCard,
         ]}
-        activeOpacity={0.85}
-        onPress={() => handleMarkAsRead(item.id)}
+        activeOpacity={0.7}
+        onPress={() => {
+          if (!item.is_read) {
+            handleMarkAsRead(item.id);
+          }
+          if (needsTruncation) {
+            toggleNotificationExpansion(item.id);
+          }
+        }}
       >
-        <View style={responsiveStyles.notificationIcon}>
+        <View style={[responsiveStyles.notificationIcon, { backgroundColor: iconBgColor }]}>
           {getNotificationIcon(category, variant)}
         </View>
         <View style={styles.notificationContent}>
-          <View style={styles.notificationHeaderRow}>
-            <Text style={styles.notificationTitle}>{item.title}</Text>
-            <Text style={styles.notificationTime}>
+          <View style={responsiveStyles.notificationHeaderRow}>
+            <View style={styles.titleContainer}>
+              <Text style={responsiveStyles.notificationTitle} numberOfLines={1} ellipsizeMode="tail">
+                {item.title}
+              </Text>
+              {isUnread && <View style={styles.unreadDot} />}
+            </View>
+            <Text style={responsiveStyles.notificationTime}>
               {item.formatted_time && item.formatted_date 
                 ? `${item.formatted_date} ${item.formatted_time}` 
                 : format(new Date(item.created_at), 'MMM d, yyyy h:mm a')}
             </Text>
           </View>
-          <Text style={styles.notificationMessage}>{item.message}</Text>
-          {!item.is_read && (
-            <View style={styles.newBadge}>
-              <Text style={styles.newBadgeText}>New</Text>
-            </View>
-          )}
+          <View style={responsiveStyles.messageContainer}>
+            <Text 
+              style={responsiveStyles.notificationMessage}
+              numberOfLines={isExpanded ? undefined : 2}
+              ellipsizeMode="tail"
+            >
+              {item.message}
+            </Text>
+            {needsTruncation && (
+              <View style={styles.expandIndicator}>
+                {isExpanded ? (
+                  <ChevronUp size={getResponsiveSpacing(16, 18, 20)} color="#94A3B8" />
+                ) : (
+                  <ChevronDown size={getResponsiveSpacing(16, 18, 20)} color="#94A3B8" />
+                )}
+              </View>
+            )}
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -294,8 +375,28 @@ export default function NotificationsScreen() {
           data={notifications}
           renderItem={renderNotification}
           keyExtractor={item => item.id}
-          contentContainerStyle={styles.notificationsList}
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.notificationsList, { 
+            paddingHorizontal: getResponsiveSpacing(12, 12, 16), 
+            paddingTop: getResponsiveSpacing(16, 20, 24) 
+          }]}
+          ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
+          showsVerticalScrollIndicator={true}
+          scrollIndicatorInsets={{ right: 2 }}
+          scrollEventThrottle={16}
+          decelerationRate={0.98}
+          bounces={true}
+          bouncesZoom={false}
+          alwaysBounceVertical={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={8}
+          windowSize={8}
+          getItemLayout={(data, index) => ({
+            length: 105,
+            offset: 105 * index,
+            index,
+          })}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -318,39 +419,61 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 18,
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    minHeight: 60,
+    borderBottomWidth: 0,
+    minHeight: 64,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#1E293B',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#0F172A',
     flex: 1,
     marginRight: 12,
-    flexWrap: 'wrap',
+    letterSpacing: -0.5,
   },
   markAllButton: {
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    backgroundColor: '#3B82F6',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 100,
-    maxWidth: 180,
-    minHeight: 36,
+    minWidth: 120,
+    maxWidth: 200,
+    minHeight: 40,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   markAllText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: '600',
+    color: '#FFFFFF',
     textAlign: 'center',
     lineHeight: 18,
+    letterSpacing: 0.2,
     flexShrink: 1,
   },
   emptyContainer: {
@@ -374,87 +497,119 @@ const styles = StyleSheet.create({
   },
   notificationsList: {
     flexGrow: 1,
-    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    paddingHorizontal: getResponsiveSpacing(12, 12, 12),
     paddingTop: getResponsiveSpacing(12, 16, 20),
   },
   notificationCard: {
     flexDirection: 'row',
-    padding: 18,
-    borderRadius: 16,
+    padding: 14,
+    borderRadius: 24,
     backgroundColor: '#FFFFFF',
-    marginBottom: 8,
-    alignItems: 'flex-start',
+    marginBottom: 10,
+    alignItems: 'center',
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#CBD5E1',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
-        shadowRadius: 6,
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
-    borderLeftWidth: 4,
-    borderLeftColor: 'transparent',
+    borderWidth: 0.5,
+    borderColor: '#E2E8F0',
+  },
+  collapsedCard: {
+    minHeight: 95,
+    maxHeight: 95,
   },
   unreadNotificationCard: {
-    borderLeftColor: '#3B82F6',
-    backgroundColor: '#F0F6FF',
+    borderColor: '#E2E8F0',
+    borderWidth: 1.5,
+    backgroundColor: '#FAFBFC',
   },
   notificationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 1.5,
+      },
+    }),
   },
   notificationContent: {
     flex: 1,
+    justifyContent: 'center',
   },
   notificationHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 6,
+    gap: 8,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 6,
+    minWidth: 0,
   },
   notificationTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#0F172A',
     flex: 1,
-    marginRight: 8,
     lineHeight: 20,
+    letterSpacing: -0.1,
+  },
+  unreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#3B82F6',
+    marginTop: 1,
   },
   notificationTime: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 11,
+    color: '#94A3B8',
     fontWeight: '500',
-    marginLeft: 8,
-    lineHeight: 16,
+    lineHeight: 14,
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  messageContainer: {
+    position: 'relative',
+    marginTop: 4,
+    minHeight: 36,
   },
   notificationMessage: {
-    fontSize: 14,
-    color: '#475569',
-    marginBottom: 8,
-    marginTop: 2,
-    lineHeight: 20,
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+    paddingRight: 24,
   },
-  newBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#3B82F6',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 6,
-  },
-  newBadgeText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    lineHeight: 16,
+  expandIndicator: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    paddingLeft: 6,
+    paddingTop: 2,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
