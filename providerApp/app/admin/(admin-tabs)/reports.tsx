@@ -461,11 +461,13 @@ export default function ReportsScreen() {
     const userRemovalTargetName = userRemovalTarget?.name || (item.reported_type === 'User' ? 'Reported User' : 'Reporter');
     const providerRemovalTargetId = providerRemovalTarget?.id;
     const providerRemovalTargetName = providerRemovalTarget?.name || (item.reported_type === 'Provider' ? 'Reported Provider' : 'Reporter');
+    const isLastItem = index === filteredReports.length - 1;
 
     return (
       <Animated.View 
         style={[
           styles.reportCard,
+          isLastItem && { marginBottom: 0 },
           {
             opacity: fadeAnim,
             transform: [
@@ -980,9 +982,9 @@ const styles = StyleSheet.create({
   // Header Styles
   header: {
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingTop: Platform.OS === 'ios' ? 8 : 12,
     paddingHorizontal: getResponsivePadding(),
-    paddingBottom: 16,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     ...Platform.select({
@@ -1048,7 +1050,8 @@ const styles = StyleSheet.create({
   // Stats Section
   statsSection: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
+    paddingTop: getResponsivePadding() * 0.5,
+    paddingBottom: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
@@ -1117,7 +1120,8 @@ const styles = StyleSheet.create({
   searchSection: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: getResponsivePadding(),
-    paddingVertical: 12,
+    paddingTop: getResponsivePadding() * 0.5,
+    paddingBottom: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
@@ -1148,7 +1152,8 @@ const styles = StyleSheet.create({
   },
   filterScrollContent: {
     paddingHorizontal: getResponsivePadding(),
-    paddingVertical: 12,
+    paddingTop: getResponsivePadding() * 0.5,
+    paddingBottom: 0,
     paddingRight: getResponsivePadding() + 4,
   },
   filterButton: {
@@ -1182,13 +1187,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   listContainer: {
-    padding: getResponsivePadding(),
-    paddingBottom: 100,
+    paddingHorizontal: getResponsivePadding(),
+    paddingTop: 0,
+    paddingBottom: 0,
   },
 
   // Report Card Styles
   reportCard: {
-    marginBottom: 16,
+    marginBottom: 12,
     borderRadius: 16,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',

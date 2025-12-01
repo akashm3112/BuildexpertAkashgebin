@@ -665,7 +665,7 @@ function AuthScreen() {
   useEffect(() => {
     if (user) {
       if (user.role === 'admin') {
-        router.replace('/admin/dashboard');
+        router.replace('/admin/(admin-tabs)');
       } else {
         router.replace('/(tabs)');
       }

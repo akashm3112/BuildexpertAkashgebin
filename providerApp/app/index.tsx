@@ -16,9 +16,9 @@ export default function Index() {
         // This prevents back navigation to previous role's screens
         if (user.role === 'admin') {
           setTimeout(() => {
-            // Replace current route with admin dashboard
+            // Replace current route with admin tabs
             // This clears any provider screens from the navigation stack
-            router.replace('/admin/dashboard');
+            router.replace('/admin/(admin-tabs)');
           }, 100);
         } else {
           setTimeout(() => {
