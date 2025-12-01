@@ -54,49 +54,19 @@ export default function RecentBookings() {
 
     const fetchBookings = async () => {
       setLoading(true);
-      const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
-      if (!token) {
-        setBookings([]);
-        setLoading(false);
-        return;
-      }
       try {
-        let response = await fetch(`${API_BASE_URL}/api/bookings`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
+        // Use centralized API client so token refresh and reconnection are handled globally
+        // This ensures proper recovery when backend restarts
+        const { apiGet } = await import('@/utils/apiClient');
+        const response = await apiGet<{ status: string; data: { bookings: any[] } }>('/api/bookings');
         
-        // Handle 401 errors - try to refresh token first
-        if (response.status === 401) {
-          const refreshedToken = await tokenManager.forceRefreshToken();
-          if (refreshedToken) {
-            // Retry with new token
-            response = await fetch(`${API_BASE_URL}/api/bookings`, {
-              headers: { 'Authorization': `Bearer ${refreshedToken}` },
-            });
-            // If retry still fails with 401, refresh token expired (30 days)
-            if (response.status === 401) {
-              setBookings([]);
-              setLoading(false);
-              return;
-            }
-          } else {
-            // Refresh token expired (30 days) - silently fail
-            setBookings([]);
-            setLoading(false);
-            return;
-          }
-        }
-        
-        if (!response.ok) {
-          // Handle other non-OK responses
-          const errorData = await response.json().catch(() => ({ message: 'Failed to fetch bookings' }));
-          console.error('❌ RecentBookings: API error:', response.status, errorData.message);
+        if (!response.ok || !response.data || response.data.status !== 'success') {
+          // Handle non-OK responses gracefully
           setBookings([]);
           return;
         }
         
-        const data = await response.json();
+        const data = response.data;
         
         if (data.status === 'success') {
           const rawBookings = data.data.bookings || [];
@@ -167,18 +137,30 @@ export default function RecentBookings() {
           setBookings([]);
         }
       } catch (err: any) {
-        // Check if it's a network error
+        // Check if it's a "Session expired" error (expected after 30 days)
+        const isSessionExpired = err?.message === 'Session expired' || 
+                                 err?.status === 401 && err?.message?.includes('Session expired');
+        
+        // Check if it's a network error (backend might be down)
         const isNetworkError = err instanceof TypeError && 
           (err.message?.includes('Network request failed') || 
            err.message?.includes('Failed to fetch') ||
-           err.message?.includes('NetworkError'));
+           err.message?.includes('NetworkError')) ||
+          err?.isNetworkError === true;
         
-        if (isNetworkError) {
-          console.error('❌ RecentBookings: Network error - Cannot reach server at', API_BASE_URL);
-          console.error('   Make sure the backend server is running and accessible');
-        } else {
-          console.error('❌ RecentBookings: Fetch error:', err);
+        // Only log non-session-expired errors
+        // Network errors are expected when backend is down - they'll be retried when backend comes back
+        if (!isSessionExpired) {
+          if (isNetworkError) {
+            // Network errors are expected when backend is down - don't show error to user
+            // The connection recovery manager will retry when backend comes back online
+            console.warn('RecentBookings: Network error (backend may be down, will retry when back online)');
+          } else {
+            console.warn('RecentBookings: Error fetching bookings:', err?.message || err);
+          }
         }
+        // Session expired errors are handled by apiClient (logout triggered) - don't log
+        
         setBookings([]);
       } finally {
         setLoading(false);

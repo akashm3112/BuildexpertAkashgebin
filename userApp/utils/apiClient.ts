@@ -507,16 +507,23 @@ const requestInterceptor = async (config: RequestConfig, forceTokenRefresh: bool
   return { ...config, headers };
 };
 
-const responseInterceptor = async <T>(response: Response, config: RequestConfig, retryWithRefresh: () => Promise<ApiResponse<T>>): Promise<ApiResponse<T>> => {
+const responseInterceptor = async <T>(response: Response, config: RequestConfig, retryWithRefresh: (token?: string) => Promise<ApiResponse<T>>): Promise<ApiResponse<T>> => {
   if (response.status === 401 && !config.skipErrorHandling && !isLoggingOut) {
     // Try to refresh token and retry once (silent refresh)
     if (!config.skipAuth) {
       try {
+        // CRITICAL: Invalidate token cache BEFORE refresh to prevent using stale tokens
+        // This ensures that if multiple requests are refreshing simultaneously,
+        // they all get the new token, not a cached old one
+        tokenManager.invalidateCache();
+        
         // Force refresh token on 401
         const refreshedToken = await queueTokenRefresh(true);
         if (refreshedToken) {
           // Retry the request with new token (silent retry)
-          const retryResult = await retryWithRefresh();
+          // IMPORTANT: Pass the refreshed token directly to retryWithRefresh
+          // This ensures we use the exact token that was just refreshed, not a potentially stale one
+          const retryResult = await retryWithRefresh(refreshedToken);
           // If retry succeeds, return result (no error shown)
           if (retryResult.ok) {
             return retryResult;
@@ -558,12 +565,79 @@ const responseInterceptor = async <T>(response: Response, config: RequestConfig,
             return suppressedPromise as any;
           }
           return retryResult;
+        } else {
+          // Refresh token returned null - this can happen if:
+          // 1. Refresh token expired (30 days) - logout
+          // 2. Backend is down/restarting - don't logout, just return error (will retry when backend is back)
+          // 3. Network error - don't logout, just return error (will retry when network is back)
+          
+          // Check if it's a network error or backend down scenario
+          // If refresh token is expired, we should logout
+          // But if it's a network/backend issue, we should not logout
+          const { tokenManager } = await import('@/utils/tokenManager');
+          const tokenData = await tokenManager.getStoredToken();
+          const refreshTokenExpired = tokenData && tokenData.refreshTokenExpiresAt && tokenData.refreshTokenExpiresAt <= Date.now();
+          
+          if (refreshTokenExpired) {
+            // Refresh token expired (30 days) - logout silently
+            if (globalLogout) {
+              isLoggingOut = true;
+              try {
+                await globalLogout();
+              } catch (err) {
+                console.error('Logout error', err);
+              } finally {
+                setTimeout(() => { isLoggingOut = false; }, 1000);
+              }
+            }
+            // Return suppressed "Session expired" error
+            const sessionExpiredError = normalizeError({ message: 'Session expired', status: 401 }, response);
+            (sessionExpiredError as any)._suppressUnhandled = true;
+            (sessionExpiredError as any)._handled = true;
+            
+            const suppressedPromise = Promise.resolve().then(() => {
+              return Promise.reject(sessionExpiredError);
+            });
+            
+            suppressedPromise.catch(() => {
+              // Error is already handled (logout triggered), this catch prevents unhandled rejection
+            });
+            
+            return suppressedPromise as any;
+          } else {
+            // Backend might be down or network issue - don't logout, just return error
+            // The connection recovery manager will retry when backend comes back online
+            throw normalizeError({ 
+              message: 'Unable to refresh token. Backend may be unavailable. Will retry when connection is restored.', 
+              status: 503,
+              code: 'SERVICE_UNAVAILABLE'
+            }, response);
+          }
         }
       } catch (refreshError: any) {
-        // Only log if it's not a session expired error
-        if (!refreshError.message?.includes('Session expired')) {
+        // Check if it's a network error or backend down scenario
+        const isNetworkError = refreshError?.isNetworkError === true ||
+                               refreshError?.message?.includes('Network') ||
+                               refreshError?.message?.includes('Failed to fetch') ||
+                               refreshError?.status === 503;
+        
+        const isSessionExpired = refreshError?.message === 'Session expired' || 
+                                 refreshError?.message?.includes('Session expired') ||
+                                 refreshError?.status === 401;
+        
+        if (isNetworkError) {
+          // Network/backend error - don't logout, just throw error (will retry when backend is back)
+          throw normalizeError({ 
+            message: 'Unable to refresh token. Backend may be unavailable. Will retry when connection is restored.', 
+            status: 503,
+            code: 'SERVICE_UNAVAILABLE',
+            isNetworkError: true
+          }, response);
+        } else if (!isSessionExpired) {
+          // Other errors - log but don't logout (might be temporary)
           console.warn('Token refresh failed on 401:', refreshError);
         }
+        // Session expired errors are handled below
       }
     }
     
@@ -578,28 +652,21 @@ const responseInterceptor = async <T>(response: Response, config: RequestConfig,
         setTimeout(() => { isLoggingOut = false; }, 1000);
       }
     }
-            // Don't show error alert - logout handles navigation
-            // For "Session expired" errors, we need to return a promise that won't be logged by React Native
-            // React Native logs unhandled rejections synchronously, so we need to suppress it at the source
-            const sessionExpiredError = normalizeError({ message: 'Session expired', status: 401 }, response);
-            // Suppress this error from being logged as unhandled - it's expected after 30 days
-            (sessionExpiredError as any)._suppressUnhandled = true;
-            (sessionExpiredError as any)._handled = true;
-            
-            // Create a promise that resolves immediately but with an error flag
-            // This prevents React Native from logging it as an unhandled rejection
-            // The caller will still get the error, but React Native won't log it
-            const suppressedPromise = Promise.resolve().then(() => {
-              // Return a rejected promise wrapped in a way that React Native won't log
-              return Promise.reject(sessionExpiredError);
-            });
-            
-            // Attach a catch handler immediately to prevent unhandled rejection
-            suppressedPromise.catch(() => {
-              // Error is already handled (logout triggered), this catch prevents unhandled rejection
-            });
-            
-            return suppressedPromise as any;
+    // Don't show error alert - logout handles navigation
+    // For "Session expired" errors, we need to return a promise that won't be logged by React Native
+    const sessionExpiredError = normalizeError({ message: 'Session expired', status: 401 }, response);
+    (sessionExpiredError as any)._suppressUnhandled = true;
+    (sessionExpiredError as any)._handled = true;
+    
+    const suppressedPromise = Promise.resolve().then(() => {
+      return Promise.reject(sessionExpiredError);
+    });
+    
+    suppressedPromise.catch(() => {
+      // Error is already handled (logout triggered), this catch prevents unhandled rejection
+    });
+    
+    return suppressedPromise as any;
   }
 
   if (response.status === 403 && !config.skipErrorHandling) {
@@ -751,19 +818,60 @@ const executeRequest = async <T = any>(
       }, timeout);
 
       // Create retry function for 401 handling
-      const retryWithRefresh = async (): Promise<ApiResponse<T>> => {
+      const retryWithRefresh = async (refreshedToken?: string): Promise<ApiResponse<T>> => {
         if (hasRetriedWithRefresh) {
           throw normalizeError({ message: 'Authentication required', status: 401 });
         }
         hasRetriedWithRefresh = true;
-        // Retry with fresh token
-        const refreshedConfig = await requestInterceptor(fetchConfig, true);
+        
+        // IMPORTANT: If refreshedToken is provided, use it directly (from responseInterceptor)
+        // Otherwise, get it from tokenManager (fallback for other cases)
+        let tokenToUse: string | null = null;
+        if (refreshedToken) {
+          // Use the token that was just refreshed - this is the key fix!
+          // CRITICAL: The old token is already blacklisted on the backend,
+          // so we MUST use the new token that was just refreshed
+          tokenToUse = refreshedToken;
+        } else {
+          // Fallback: invalidate cache and get token from storage
+          // This should rarely happen, but handle it gracefully
+          tokenManager.invalidateCache();
+          tokenToUse = await queueTokenRefresh(false);
+        }
+        
+        if (!tokenToUse) {
+          throw normalizeError({ message: 'Authentication required', status: 401 });
+        }
+        
+        // CRITICAL: Ensure we're using the new token, not the old blacklisted one
+        // Create headers with the refreshed token
+        const headers = new Headers(fetchConfig.headers as HeadersInit || {});
+        headers.set('Authorization', `Bearer ${tokenToUse}`);
+        if (fetchConfig.body && !headers.has('Content-Type')) {
+          if (!isFormData(fetchConfig.body) && !(fetchConfig.body instanceof Blob)) {
+            headers.set('Content-Type', 'application/json');
+          }
+        }
+        
         const retryResponse = await fetch(url, {
-          ...refreshedConfig,
+          ...fetchConfig,
+          headers,
           signal: mergedSignal,
         });
-        return await responseInterceptor<T>(retryResponse, config, async () => {
-          throw normalizeError({ message: 'Authentication required after refresh', status: 401 });
+        return await responseInterceptor<T>(retryResponse, config, async (token?: string) => {
+          // If retry after refresh still returns 401, refresh token expired (30 days)
+          // Logout silently and throw suppressed "Session expired" error
+          if (globalLogout) {
+            isLoggingOut = true;
+            try {
+              await globalLogout();
+            } catch (err) {
+              console.error('Logout error', err);
+            } finally {
+              setTimeout(() => { isLoggingOut = false; }, 1000);
+            }
+          }
+          throw normalizeError({ message: 'Session expired', status: 401 });
         });
       };
 

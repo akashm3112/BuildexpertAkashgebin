@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { query, getRow, withTransaction } = require('../database/connection');
 const { blacklistToken } = require('./tokenBlacklist');
+const { createSession, invalidateSession } = require('./sessionManager');
 const logger = require('./logger');
 const config = require('./config');
 const UAParser = require('ua-parser-js');
@@ -244,6 +245,42 @@ const refreshAccessToken = async (refreshToken, ipAddress, userAgent) => {
         newRefreshTokenExpiresAt,
         familyId
       ]);
+      
+      // CRITICAL: Create a new session for the new token's JTI
+      // The old session is tied to the old token's JTI, which is now blacklisted
+      // Without a new session, the auth middleware will reject the new token
+      try {
+        await createSession(
+          userId,
+          newAccessTokenJti,
+          newAccessTokenExpiresAt,
+          ipAddress,
+          userAgent
+        );
+        
+        // Optionally invalidate the old session (it's already tied to a blacklisted token)
+        // This is optional since the old token is blacklisted, but it's cleaner to mark the session as inactive
+        try {
+          await invalidateSession(oldAccessTokenJti, userId);
+        } catch (sessionError) {
+          // Non-critical - old session might not exist or already be invalidated
+          logger.warn('Could not invalidate old session during token refresh', {
+            error: sessionError.message,
+            oldTokenJti: oldAccessTokenJti,
+            userId
+          });
+        }
+      } catch (sessionError) {
+        // If session creation fails, log but don't fail the token refresh
+        // The session might already exist or there might be a temporary DB issue
+        logger.error('Error creating session during token refresh', {
+          error: sessionError.message,
+          newTokenJti: newAccessTokenJti,
+          userId
+        });
+        // Continue - the token refresh should still succeed
+        // The session might be created on the next request or might already exist
+      }
       
       return {
         userId,

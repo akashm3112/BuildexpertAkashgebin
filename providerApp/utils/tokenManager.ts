@@ -155,16 +155,20 @@ export class TokenManager {
     return tokenData.accessToken;
   }
 
-  private invalidateCache(): void {
+  /**
+   * Invalidate token cache (public method for apiClient)
+   * This ensures that after token refresh, the cache is cleared immediately
+   */
+  public invalidateCache(): void {
     this.memoryCache = null;
     this.cacheTimestamp = 0;
   }
 
   /**
-   * Get stored token data without validation (public method for AuthContext)
+   * Get stored token data without validation (public method for AuthContext and apiClient)
    * This is used to check if tokens exist and if refresh token is expired
    */
-  async getStoredToken(): Promise<TokenData | null> {
+  public async getStoredToken(): Promise<TokenData | null> {
     try {
       // Check in-memory cache first (reduces AsyncStorage I/O)
       const now = Date.now();
@@ -269,16 +273,19 @@ export class TokenManager {
 
   private async performTokenRefresh(): Promise<string | null> {
     try {
+      // CRITICAL: Invalidate cache IMMEDIATELY when refresh starts
+      // This prevents any concurrent requests from using the old (soon-to-be-blacklisted) token
+      // The old token will be blacklisted on the backend, so we must ensure no requests use it
+      this.invalidateCache();
+      
       const tokenData = await this.getStoredToken();
       if (!tokenData || !tokenData.refreshToken) {
-        this.invalidateCache();
         return null;
       }
 
       // Check if refresh token is expired
       if (tokenData.refreshTokenExpiresAt <= Date.now()) {
         await this.clearStoredData();
-        this.invalidateCache();
         return null;
       }
 
