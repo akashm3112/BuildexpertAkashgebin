@@ -121,9 +121,27 @@ export class TokenManager {
         return null;
       }
 
+      // Check if user exists before attempting token refresh
+      // This prevents token refresh attempts during signup/login flows
+      try {
+        const userData = await storage.getJSON<any>('user', { maxRetries: 1 });
+        if (!userData) {
+          // No user data means we're in signup/login flow, skip token refresh
+          this.invalidateCache();
+          return null;
+        }
+      } catch {
+        // If we can't read user data, skip token refresh to avoid errors during signup
+        return null;
+      }
+
       return await this.processTokenData(tokenData);
     } catch (error) {
-      console.error('Error getting valid token:', error);
+      // Silently fail during signup/login flows - don't log as error
+      const isTimeout = error instanceof Error && error.message.includes('timeout');
+      if (!isTimeout) {
+        console.error('Error getting valid token:', error);
+      }
       this.invalidateCache();
       return null;
     }
@@ -278,6 +296,19 @@ export class TokenManager {
       // The old token will be blacklisted on the backend, so we must ensure no requests use it
       this.invalidateCache();
       
+      // Check if user exists before attempting refresh
+      // Skip refresh during signup/login flows
+      try {
+        const userData = await storage.getJSON<any>('user', { maxRetries: 1 });
+        if (!userData) {
+          // No user data means we're in signup/login flow, skip refresh
+          return null;
+        }
+      } catch {
+        // Can't read user data, skip refresh
+        return null;
+      }
+
       const tokenData = await this.getStoredToken();
       if (!tokenData || !tokenData.refreshToken) {
         return null;
