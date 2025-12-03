@@ -32,12 +32,23 @@ export default function RootLayout() {
       // Check if this is a "Session expired" error
       const isSessionExpired = error?.message === 'Session expired' || 
                                error?.message?.includes('Session expired') ||
-                               (error as any)?.status === 401 && error?.message?.includes('Session expired') ||
-                               (error as any)?._suppressUnhandled === true ||
-                               (error as any)?._handled === true;
+                               (error as any)?.status === 401 && error?.message?.includes('Session expired');
       
-      if (isSessionExpired) {
-        // Suppress "Session expired" errors completely - they're expected after 30 days
+      // Check if this is a database/server error (500) - backend issue, not user's fault
+      const isServerError = (error as any)?.status === 500 || 
+                           (error as any)?.isServerError === true ||
+                           error?.message?.includes('Database operation failed') ||
+                           error?.message?.includes('Database') ||
+                           (error as any)?.data?.errorCode === 'DATABASE_ERROR' ||
+                           (error as any)?.data?.originalError?.includes('column') ||
+                           (error as any)?.data?.originalError?.includes('does not exist');
+      
+      // Check if error is marked as suppressed or handled
+      const isSuppressed = (error as any)?._suppressUnhandled === true ||
+                          (error as any)?._handled === true;
+      
+      if (isSessionExpired || isServerError || isSuppressed) {
+        // Suppress these errors completely - they're expected or backend issues
         // Don't call the original handler - just suppress the error
         return;
       }
@@ -70,12 +81,23 @@ export default function RootLayout() {
       // Check if this is a "Session expired" error
       const isSessionExpired = errorObj.message === 'Session expired' || 
                                errorObj.message?.includes('Session expired') ||
-                               (error?.status === 401 && errorObj.message?.includes('Session expired')) ||
-                               error?._suppressUnhandled === true ||
-                               error?._handled === true;
+                               (error?.status === 401 && errorObj.message?.includes('Session expired'));
       
-      if (isSessionExpired) {
-        // Suppress "Session expired" errors completely - they're expected after 30 days
+      // Check if this is a database/server error (500) - backend issue, not user's fault
+      const isServerError = error?.status === 500 || 
+                           error?.isServerError === true ||
+                           errorObj.message?.includes('Database operation failed') ||
+                           errorObj.message?.includes('Database') ||
+                           error?.data?.errorCode === 'DATABASE_ERROR' ||
+                           error?.data?.originalError?.includes('column') ||
+                           error?.data?.originalError?.includes('does not exist');
+      
+      // Check if error is marked as suppressed or handled
+      const isSuppressed = error?._suppressUnhandled === true ||
+                          error?._handled === true;
+      
+      if (isSessionExpired || isServerError || isSuppressed) {
+        // Suppress these errors completely - they're expected or backend issues
         // Prevent default logging by stopping propagation
         if (event?.preventDefault) {
           event.preventDefault();

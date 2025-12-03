@@ -172,16 +172,24 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
           // Skip API call if refresh token is expired (30 days) - user will be logged out anyway
           if (!refreshTokenExpired) {
             const { apiGet } = await import('@/utils/apiClient');
-            const response = await apiGet('/api/payments/labour-access-status');
+            
+            // Wrap API call in try-catch to handle errors gracefully
+            // This prevents unhandled promise rejections for database/server errors
+            try {
+              const response = await apiGet('/api/payments/labour-access-status');
 
-            if (response.ok && response.data && response.data.status === 'success') {
-              const apiData = response.data.data;
-              if (apiData) {
-                const mapped = mapApiToLabourAccessData(apiData);
-                await AsyncStorage.setItem('labour_access_status', JSON.stringify(mapped));
-                // Update state with backend data (may be same as local, but ensures consistency)
-                setLabourAccessStatus(mapped);
+              if (response.ok && response.data && response.data.status === 'success') {
+                const apiData = response.data.data;
+                if (apiData) {
+                  const mapped = mapApiToLabourAccessData(apiData);
+                  await AsyncStorage.setItem('labour_access_status', JSON.stringify(mapped));
+                  // Update state with backend data (may be same as local, but ensures consistency)
+                  setLabourAccessStatus(mapped);
+                }
               }
+            } catch (innerError: any) {
+              // Re-throw to outer catch block for proper error handling
+              throw innerError;
             }
           }
           // If refresh token is expired, skip API call - user will be logged out on next API call
@@ -196,15 +204,50 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
                                  apiError?._suppressUnhandled === true ||
                                  apiError?._handled === true;
         
+        // Handle database/server errors (500) silently - backend issue, not user's fault
+        const isServerError = apiError?.status === 500 || 
+                             apiError?.isServerError === true ||
+                             apiError?.message?.includes('Database operation failed') ||
+                             apiError?.message?.includes('Database') ||
+                             apiError?.data?.errorCode === 'DATABASE_ERROR' ||
+                             apiError?.data?.originalError?.includes('column') ||
+                             apiError?.data?.originalError?.includes('does not exist');
+        
         if (isSessionExpired) {
           // Session expired is expected behavior after 30 days - don't log as error
           // The apiClient already handles logout, we just keep using local cache
           // Suppress the error completely to prevent unhandled rejection
+          // Mark error as handled to prevent React Native from logging it
+          if (apiError && typeof apiError === 'object') {
+            (apiError as any)._handled = true;
+            (apiError as any)._suppressUnhandled = true;
+          }
+          return; // Exit early, don't log anything
+        } else if (isServerError) {
+          // Database/server errors - backend issue, not user's fault
+          // Silently use local cache - don't log or show error to user
+          // This prevents unhandled promise rejections for backend database issues
+          // Mark error as handled to prevent React Native from logging it
+          if (apiError && typeof apiError === 'object') {
+            (apiError as any)._handled = true;
+            (apiError as any)._suppressUnhandled = true;
+          }
           return; // Exit early, don't log anything
         } else {
           // Other errors (network, etc.) - log but keep using local cache
           // This is fine - local cache is still valid for offline use
-          console.warn('Error fetching labour access from API (using local cache):', apiError?.message || apiError);
+          // Only log non-critical errors that might be user-actionable
+          const isNetworkError = apiError?.isNetworkError === true || 
+                                apiError?.message?.includes('network') ||
+                                apiError?.message?.includes('Network');
+          if (!isNetworkError) {
+            // Only log non-network errors (unexpected errors)
+            console.warn('Error fetching labour access from API (using local cache):', apiError?.message || apiError);
+          }
+          // Mark error as handled to prevent unhandled rejection
+          if (apiError && typeof apiError === 'object') {
+            (apiError as any)._handled = true;
+          }
         }
         // Don't update state on error - keep using local cache that was already set
       }

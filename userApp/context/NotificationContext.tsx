@@ -259,7 +259,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchUnreadCount error on app state change (handled):', error?.message || error);
         }
       });
@@ -267,7 +273,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchNotifications error on app state change (handled):', error?.message || error);
         }
       });
@@ -297,7 +309,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchNotifications error on notification_created (handled):', error?.message || error);
         }
       });
@@ -305,7 +323,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchUnreadCount error on notification_created (handled):', error?.message || error);
         }
       });
@@ -316,7 +340,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchNotifications error on notification_updated (handled):', error?.message || error);
         }
       });
@@ -324,7 +354,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchUnreadCount error on notification_updated (handled):', error?.message || error);
         }
       });
@@ -333,9 +369,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     socket.on('notification_deleted', () => {
       fetchNotifications().catch((error) => {
         // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
-        const isSessionExpired = error?.message === 'Session expired' || 
+        const isSessionExpired = error?.message === 'Session expired' ||
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchNotifications error on notification_deleted (handled):', error?.message || error);
         }
       });
@@ -343,7 +385,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchUnreadCount error on notification_deleted (handled):', error?.message || error);
         }
       });
@@ -376,7 +424,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchUnreadCount error on initial fetch (handled):', error?.message || error);
         }
       });
@@ -384,7 +438,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR';
+        const isSuppressed = error?._suppressUnhandled === true || error?._handled === true;
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           console.warn('fetchNotifications error on initial fetch (handled):', error?.message || error);
         }
       });

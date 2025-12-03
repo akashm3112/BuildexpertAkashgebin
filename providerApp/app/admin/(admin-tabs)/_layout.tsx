@@ -12,36 +12,44 @@ export default function AdminTabLayout() {
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       // Check if we're on a nested screen (not a tab) - allow normal back navigation
-      const isNestedScreen = pathname?.includes('/admin/(admin-tabs)/') && 
-                            (pathname?.split('/').length > 4);
+      // Nested screens would have more than 4 path segments: /admin/(admin-tabs)/tab/nested
+      const pathSegments = pathname?.split('/').filter(Boolean) || [];
+      const isNestedScreen = pathSegments.length > 4 && 
+                            pathname?.includes('/admin/(admin-tabs)/');
       
       if (isNestedScreen) {
         // Allow normal back navigation for nested screens
         return false;
       }
       
-      // Only handle back navigation if we're actually on a tab screen
-      const isOnTabScreen = pathname?.startsWith('/admin/(admin-tabs)') || 
-                           segments[0] === 'admin' && segments[1] === '(admin-tabs)';
+      // Only handle back navigation if we're actually on an admin tab screen
+      // Check both pathname and segments to be sure
+      const isOnAdminTabScreen = pathname?.startsWith('/admin/(admin-tabs)') || 
+                                 pathname === '/admin/(admin-tabs)' ||
+                                 pathname === '/admin/(admin-tabs)/' ||
+                                 (segments[0] === 'admin' && segments[1] === '(admin-tabs)');
       
-      if (!isOnTabScreen) {
-        // Not on a tab screen, allow normal back navigation
+      if (!isOnAdminTabScreen) {
+        // Not on an admin tab screen, allow normal back navigation
         return false;
       }
       
-      // Get current route segments
+      // Get current route segments - use segments for more reliable detection
       const currentRoute = segments.join('/');
       
       // If we're on home tab, prevent back navigation (exit app)
       if (currentRoute === 'admin/(admin-tabs)' || 
           currentRoute === 'admin/(admin-tabs)/index' || 
           pathname === '/admin/(admin-tabs)' || 
-          pathname === '/admin/(admin-tabs)/') {
+          pathname === '/admin/(admin-tabs)/' ||
+          pathname === '/admin/(admin-tabs)/index') {
         return true; // Prevent back navigation, let Android handle app exit
       }
       
-      // If we're on any other tab, navigate to home tab
-      router.push('/admin/(admin-tabs)/index');
+      // If we're on any other tab (reports, user-reports, provider-reports, monitoring),
+      // navigate to home tab
+      // Navigate to the root of admin tabs which defaults to index
+      router.replace('/admin/(admin-tabs)');
       return true; // Prevent default back behavior
     });
 

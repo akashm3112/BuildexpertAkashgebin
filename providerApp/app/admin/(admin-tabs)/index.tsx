@@ -57,16 +57,11 @@ export default function AdminDashboard() {
     }
   }, [user?.id, user?.role, authLoading]);
 
-  useEffect(() => {
-    // Prevent back navigation from admin dashboard
-    // Stay on dashboard instead of navigating back to provider screens
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Do nothing - stay on admin dashboard
-      // Only logout button should navigate away from admin dashboard
-      return true;
-    });
-    return () => backHandler.remove();
-  }, []);
+  // NOTE: Back button handling is now managed by _layout.tsx
+  // This ensures consistent behavior across all admin tabs:
+  // - On home tab: Prevent back navigation (exit app)
+  // - On other tabs: Navigate to home tab
+  // No need for separate BackHandler here
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {

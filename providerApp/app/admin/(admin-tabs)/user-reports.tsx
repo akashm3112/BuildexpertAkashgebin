@@ -80,8 +80,6 @@ export default function UserReportsScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-
-    return () => backHandler.remove();
   }, [user?.role]);
 
   useEffect(() => {

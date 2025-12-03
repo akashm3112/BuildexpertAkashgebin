@@ -56,18 +56,29 @@ class GlobalErrorHandler {
         // Suppress "Session expired" errors - they're expected after 30 days
         const isSessionExpired = error.message === 'Session expired' || 
                                  error.message?.includes('Session expired') ||
-                                 (event.reason as any)?.status === 401 && error.message?.includes('Session expired') ||
-                                 (event.reason as any)?._suppressUnhandled === true ||
-                                 (event.reason as any)?._handled === true;
+                                 (event.reason as any)?.status === 401 && error.message?.includes('Session expired');
         
-        if (isSessionExpired) {
-          // Suppress "Session expired" errors completely - prevent default logging
+        // Check if this is a database/server error (500) - backend issue, not user's fault
+        const isServerError = (event.reason as any)?.status === 500 || 
+                             (event.reason as any)?.isServerError === true ||
+                             error.message?.includes('Database operation failed') ||
+                             error.message?.includes('Database') ||
+                             (event.reason as any)?.data?.errorCode === 'DATABASE_ERROR' ||
+                             (event.reason as any)?.data?.originalError?.includes('column') ||
+                             (event.reason as any)?.data?.originalError?.includes('does not exist');
+        
+        // Check if error is marked as suppressed or handled
+        const isSuppressed = (event.reason as any)?._suppressUnhandled === true ||
+                            (event.reason as any)?._handled === true;
+        
+        if (isSessionExpired || isServerError || isSuppressed) {
+          // Suppress these errors completely - prevent default logging
           event.preventDefault();
           event.stopPropagation();
           return; // Don't log or handle - just suppress
         }
         
-        if (!isSessionExpired) {
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           this.handleError(error, false, 'Unhandled Promise Rejection');
         }
         
@@ -98,21 +109,32 @@ class GlobalErrorHandler {
         // Suppress "Session expired" errors - they're expected after 30 days
         const isSessionExpired = error.message === 'Session expired' || 
                                  error.message?.includes('Session expired') ||
-                                 (error as any).status === 401 && error.message?.includes('Session expired') ||
-                                 (error as any)._suppressUnhandled === true ||
-                                 (error as any)._handled === true;
+                                 (error as any).status === 401 && error.message?.includes('Session expired');
         
-        if (!isSessionExpired) {
+        // Check if this is a database/server error (500) - backend issue, not user's fault
+        const isServerError = (error as any)?.status === 500 || 
+                             (error as any)?.isServerError === true ||
+                             error.message?.includes('Database operation failed') ||
+                             error.message?.includes('Database') ||
+                             (error as any)?.data?.errorCode === 'DATABASE_ERROR' ||
+                             (error as any)?.data?.originalError?.includes('column') ||
+                             (error as any)?.data?.originalError?.includes('does not exist');
+        
+        // Check if error is marked as suppressed or handled
+        const isSuppressed = (error as any)?._suppressUnhandled === true ||
+                            (error as any)?._handled === true;
+        
+        if (!isSessionExpired && !isServerError && !isSuppressed) {
           // Log the error
           this.handleError(error, isFatal || false, 'JavaScript Error');
         }
 
-        // Call original handler if it exists (but suppress console output for session expired)
+        // Call original handler if it exists (but suppress console output for suppressed errors)
         if (originalHandler) {
-          if (!isSessionExpired) {
+          if (!isSessionExpired && !isServerError && !isSuppressed) {
             originalHandler(error, isFatal);
           }
-          // For session expired errors, we still call the handler but it won't log
+          // For suppressed errors, we don't call the handler - just suppress
         }
       });
     }
@@ -140,9 +162,20 @@ class GlobalErrorHandler {
         // Suppress "Session expired" errors - they're expected after 30 days
         const isSessionExpired = error.message === 'Session expired' || 
                                  error.message?.includes('Session expired') ||
-                                 (errorArg as any).status === 401 && error.message?.includes('Session expired') ||
-                                 (errorArg as any)._suppressUnhandled === true ||
-                                 (errorArg as any)._handled === true;
+                                 (errorArg as any).status === 401 && error.message?.includes('Session expired');
+        
+        // Check if this is a database/server error (500) - backend issue, not user's fault
+        const isServerError = (errorArg as any)?.status === 500 || 
+                             (errorArg as any)?.isServerError === true ||
+                             error.message?.includes('Database operation failed') ||
+                             error.message?.includes('Database') ||
+                             (errorArg as any)?.data?.errorCode === 'DATABASE_ERROR' ||
+                             (errorArg as any)?.data?.originalError?.includes('column') ||
+                             (errorArg as any)?.data?.originalError?.includes('does not exist');
+        
+        // Check if error is marked as suppressed or handled
+        const isSuppressed = (errorArg as any)?._suppressUnhandled === true ||
+                            (errorArg as any)?._handled === true;
         
         // Suppress timeout errors during signup/login flows
         const isTokenRefreshTimeout = error.message.includes('timeout') && 
@@ -156,7 +189,7 @@ class GlobalErrorHandler {
                                      error.stack?.includes('InternalBytecode.js') ||
                                      error.message.includes('no such file or directory'));
         
-        if (!isSessionExpired && !isTokenRefreshTimeout && !isMetroBundlerError) {
+        if (!isSessionExpired && !isServerError && !isSuppressed && !isTokenRefreshTimeout && !isMetroBundlerError) {
           this.handleError(error, false, 'Console Error');
         }
         
@@ -165,8 +198,8 @@ class GlobalErrorHandler {
           return; // Suppress the console.error call entirely
         }
         
-        // For session expired errors, don't call original console.error to suppress the log
-        if (isSessionExpired) {
+        // For session expired, server errors, or suppressed errors, don't call original console.error
+        if (isSessionExpired || isServerError || isSuppressed) {
           return; // Suppress the console.error call entirely
         }
       }

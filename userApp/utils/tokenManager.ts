@@ -202,6 +202,16 @@ export class TokenManager {
         storage.getItem('refreshTokenExpiresAt', { maxRetries: 2 }),
       ]);
 
+      // Log missing tokens for debugging
+      if (!accessToken || !refreshToken || !accessTokenExpiresAtStr || !refreshTokenExpiresAtStr) {
+        console.warn('📱 TokenManager: Missing tokens in storage:', {
+          hasAccessToken: !!accessToken,
+          hasRefreshToken: !!refreshToken,
+          hasAccessTokenExpiresAt: !!accessTokenExpiresAtStr,
+          hasRefreshTokenExpiresAt: !!refreshTokenExpiresAtStr,
+        });
+      }
+
       if (accessToken && refreshToken && accessTokenExpiresAtStr && refreshTokenExpiresAtStr) {
         const accessTokenExpiresAt = parseInt(accessTokenExpiresAtStr, 10);
         const refreshTokenExpiresAt = parseInt(refreshTokenExpiresAtStr, 10);
@@ -259,19 +269,25 @@ export class TokenManager {
   }
 
   private async storeTokens(tokenData: TokenData): Promise<void> {
-    await storage.multiSet([
-      ['accessToken', tokenData.accessToken],
-      ['refreshToken', tokenData.refreshToken],
-      ['accessTokenExpiresAt', tokenData.accessTokenExpiresAt.toString()],
-      ['refreshTokenExpiresAt', tokenData.refreshTokenExpiresAt.toString()],
-      // Keep 'token' for backward compatibility
-      ['token', tokenData.accessToken]
-    ], {
+    // Store tokens with CRITICAL priority to prevent cleanup
+    // Use individual setItem calls to ensure priority is set for each token
+    const retryOptions = {
       maxRetries: 3,
-      onRetry: (attempt, error) => {
+      priority: 'critical' as const,
+      onRetry: (attempt: number, error: Error) => {
         console.log(`Storage retry attempt ${attempt}/3 for storing tokens:`, error.message);
       },
-    });
+    };
+
+    // Store all tokens with critical priority to prevent cleanup
+    await Promise.all([
+      storage.setItem('accessToken', tokenData.accessToken, retryOptions),
+      storage.setItem('refreshToken', tokenData.refreshToken, retryOptions),
+      storage.setItem('accessTokenExpiresAt', tokenData.accessTokenExpiresAt.toString(), retryOptions),
+      storage.setItem('refreshTokenExpiresAt', tokenData.refreshTokenExpiresAt.toString(), retryOptions),
+      // Keep 'token' for backward compatibility
+      storage.setItem('token', tokenData.accessToken, retryOptions),
+    ]);
   }
 
   private async refreshToken(): Promise<string | null> {

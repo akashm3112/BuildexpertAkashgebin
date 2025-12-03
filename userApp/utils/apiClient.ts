@@ -625,6 +625,15 @@ const responseInterceptor = async <T>(response: Response, config: RequestConfig,
                                  refreshError?.message?.includes('Session expired') ||
                                  refreshError?.status === 401;
         
+        // Handle database/server errors (500) silently - backend issue, not user's fault
+        const isServerError = refreshError?.status === 500 || 
+                             refreshError?.isServerError === true ||
+                             refreshError?.message?.includes('Database operation failed') ||
+                             refreshError?.message?.includes('Database') ||
+                             refreshError?.data?.errorCode === 'DATABASE_ERROR' ||
+                             refreshError?.data?.originalError?.includes('column') ||
+                             refreshError?.data?.originalError?.includes('does not exist');
+        
         if (isNetworkError) {
           // Network/backend error - don't logout, just throw error (will retry when backend is back)
           throw normalizeError({ 
@@ -633,9 +642,44 @@ const responseInterceptor = async <T>(response: Response, config: RequestConfig,
             code: 'SERVICE_UNAVAILABLE',
             isNetworkError: true
           }, response);
+        } else if (isServerError) {
+          // Database/server errors - backend issue, not user's fault
+          // Silently suppress - don't logout, don't log, just return error that will be handled gracefully
+          // Mark error as handled to prevent React Native from logging it
+          if (refreshError && typeof refreshError === 'object') {
+            (refreshError as any)._handled = true;
+            (refreshError as any)._suppressUnhandled = true;
+          }
+          // Return a suppressed promise that won't cause unhandled rejections
+          const suppressedError = normalizeError({ 
+            message: 'Backend temporarily unavailable. Will retry when connection is restored.', 
+            status: 503,
+            code: 'SERVICE_UNAVAILABLE',
+            isServerError: true
+          }, response);
+          (suppressedError as any)._handled = true;
+          (suppressedError as any)._suppressUnhandled = true;
+          
+          // Return a rejected promise with catch handler to prevent unhandled rejection
+          // This ensures the error is caught and suppressed before React Native logs it
+          const suppressedPromise = Promise.resolve().then(() => {
+            return Promise.reject(suppressedError);
+          });
+          
+          // Attach catch handler immediately to prevent unhandled rejection
+          suppressedPromise.catch(() => {
+            // Error is already handled, this catch prevents unhandled rejection
+          });
+          
+          // Return the suppressed promise instead of throwing
+          // This ensures the promise chain has a catch handler attached
+          return suppressedPromise as any;
         } else if (!isSessionExpired) {
           // Other errors - log but don't logout (might be temporary)
-          console.warn('Token refresh failed on 401:', refreshError);
+          // Only log if it's not a suppressed error
+          if (!refreshError?._suppressUnhandled && !refreshError?._handled) {
+            console.warn('Token refresh failed:', refreshError);
+          }
         }
         // Session expired errors are handled below
       }
@@ -899,18 +943,57 @@ const executeRequest = async <T = any>(
       resultPromise.catch((error: any) => {
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.message?.includes('Session expired') ||
-                                 (error?.status === 401 && error?.message?.includes('Session expired')) ||
-                                 error?._suppressUnhandled === true;
-        if (isSessionExpired) {
-          // Error is already handled (logout triggered), this catch prevents unhandled rejection
+                                 (error?.status === 401 && error?.message?.includes('Session expired'));
+        
+        // Check if this is a database/server error (500) - backend issue, not user's fault
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR' ||
+                             error?.data?.originalError?.includes('column') ||
+                             error?.data?.originalError?.includes('does not exist');
+        
+        // Check if error is marked as suppressed or handled
+        const isSuppressed = error?._suppressUnhandled === true ||
+                            error?._handled === true;
+        
+        if (isSessionExpired || isServerError || isSuppressed) {
+          // Error is already handled, mark as suppressed to prevent React Native from logging it
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
         }
       });
       
-      const result = await resultPromise;
-      
-      return result;
+      // Wrap await in try-catch to suppress server errors before React Native logs them
+      try {
+        const result = await resultPromise;
+        return result;
+      } catch (error: any) {
+        // Check if this is a suppressed error (server error, session expired, etc.)
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.message?.includes('Session expired') ||
+                                 (error?.status === 401 && error?.message?.includes('Session expired'));
+        
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Database') ||
+                             error?.data?.errorCode === 'DATABASE_ERROR' ||
+                             error?.data?.originalError?.includes('column') ||
+                             error?.data?.originalError?.includes('does not exist');
+        
+        const isSuppressed = error?._suppressUnhandled === true ||
+                            error?._handled === true;
+        
+        if (isSessionExpired || isServerError || isSuppressed) {
+          // Mark as suppressed to prevent React Native from logging it
+          (error as any)._handled = true;
+          (error as any)._suppressUnhandled = true;
+        }
+        // Re-throw the error so the caller can handle it
+        throw error;
+      }
       
     } catch (error: any) {
       // Cleanup timeout
