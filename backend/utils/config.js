@@ -92,6 +92,11 @@ class Config {
         callbackUrl: process.env.PAYTM_CALLBACK_URL
       },
       
+      // LocationIQ Configuration
+      locationiq: {
+        apiKey: process.env.LOCATIONIQ_API_KEY
+      },
+      
       // Security Configuration
       security: {
         enableDebugLogging: process.env.ENABLE_DEBUG_LOGGING === 'true',
@@ -203,6 +208,10 @@ class Config {
 
   getCloudinaryConfig() {
     return this.config.cloudinary;
+  }
+
+  getLocationIQConfig() {
+    return this.config.locationiq;
   }
 
   getSecurityConfig() {

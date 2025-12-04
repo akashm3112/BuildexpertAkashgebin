@@ -6,6 +6,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { NotificationProvider } from '@/context/NotificationContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { LabourAccessProvider } from '@/context/LabourAccessContext';
+import { LocationProvider } from '@/context/LocationContext';
 import { CallScreen } from '@/components/calls/CallScreen';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Toast from 'react-native-toast-message';
@@ -146,12 +147,14 @@ export default function RootLayout() {
         <NotificationProvider>
           <LanguageProvider>
             <LabourAccessProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="+not-found" />
-              </Stack>
-              <StatusBar style="auto" />
-              <CallScreen />
-              <Toast />
+              <LocationProvider>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="+not-found" />
+                </Stack>
+                <StatusBar style="auto" />
+                <CallScreen />
+                <Toast />
+              </LocationProvider>
             </LabourAccessProvider>
           </LanguageProvider>
         </NotificationProvider>

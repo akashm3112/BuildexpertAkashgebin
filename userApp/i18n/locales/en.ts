@@ -581,4 +581,16 @@ export default {
     noReviewsYet: 'No reviews yet',
     bookNow: 'Book Now',
   },
+
+  // Location
+  location: {
+    fetching: 'Fetching your location...',
+    errorTitle: 'Location Error',
+    errorMessage: 'Could not fetch your location. You can still proceed with booking.',
+    continue: 'Continue',
+    permissionDenied: 'Location permission denied',
+    permissionDeniedMessage: 'Please enable location permissions in your device settings to use this feature.',
+    unavailable: 'Location service unavailable',
+    unavailableMessage: 'Location services are currently unavailable. You can still proceed with booking.',
+  },
 };

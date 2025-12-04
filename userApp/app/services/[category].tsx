@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,14 @@ import {
   RefreshControl,
   StatusBar,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ArrowLeft, Search, Star, MapPin, Filter, Heart, Phone, MessageCircle, X, FileSliders as Sliders, AlertTriangle, CreditCard, Lock } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useLabourAccess } from '@/context/LabourAccessContext';
+import { useLocation } from '@/context/LocationContext';
 import Toast from 'react-native-toast-message';
 import { API_BASE_URL } from '@/constants/api';
 import { SafeView } from '@/components/SafeView';
@@ -35,6 +37,210 @@ const getResponsiveSpacing = (small: number, medium: number, large: number) => {
   if (isSmallScreen) return small;
   if (isMediumScreen) return medium;
   return large;
+};
+
+// Premium Location Loading Indicator Component - Modal Popup
+const LocationLoadingIndicator = ({ 
+  visible, 
+  text 
+}: { 
+  visible: boolean;
+  text: string;
+}) => {
+  const { t } = useLanguage();
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  useEffect(() => {
+    if (visible) {
+      // Fade in and scale up animation
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Pulse animation
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+      // Rotation animation for map pin
+      const rotate = Animated.loop(
+        Animated.timing(rotateAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        })
+      );
+
+      // Shimmer animation
+      const shimmer = Animated.loop(
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        })
+      );
+
+      pulse.start();
+      rotate.start();
+      shimmer.start();
+
+      return () => {
+        pulse.stop();
+        rotate.stop();
+        shimmer.stop();
+      };
+    } else {
+      // Fade out animation
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.9,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
+  const rotateInterpolate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const shimmerTranslateX = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-200, 200],
+  });
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="none"
+      statusBarTranslucent={true}
+      onRequestClose={() => {}} // Prevent closing by back button
+    >
+      <Animated.View
+        style={[
+          styles.locationLoadingModalBackdrop,
+          {
+            opacity: fadeAnim,
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.locationLoadingModalContainer,
+            {
+              transform: [{ scale: scaleAnim }],
+              opacity: fadeAnim,
+            },
+          ]}
+        >
+          <Animated.View
+            style={[
+              styles.locationLoadingContainer,
+              {
+                transform: [{ scale: pulseAnim }],
+              },
+            ]}
+          >
+            {/* Shimmer effect background */}
+            <Animated.View
+              style={[
+                styles.locationLoadingShimmer,
+                {
+                  transform: [{ translateX: shimmerTranslateX }],
+                },
+              ]}
+            />
+            
+            {/* Content */}
+            <View style={styles.locationLoadingContent}>
+              {/* Animated Map Pin Icon */}
+              <Animated.View
+                style={{
+                  transform: [{ rotate: rotateInterpolate }],
+                }}
+              >
+                <View style={styles.locationLoadingIconContainer}>
+                  <MapPin size={32} color="#3B82F6" fill="#3B82F6" />
+                  <View style={styles.locationLoadingPulseDot} />
+                </View>
+              </Animated.View>
+
+              {/* Text Content */}
+              <View style={styles.locationLoadingTextContainer}>
+                <Text style={styles.locationLoadingTitle}>
+                  {text}
+                </Text>
+                <Text style={styles.locationLoadingSubtitle}>
+                  {t('location.pleaseWait') || 'Please wait while we detect your location'}
+                </Text>
+              </View>
+
+              {/* Loading Dots */}
+              <View style={styles.locationLoadingDots}>
+                <Animated.View
+                  style={[
+                    styles.locationLoadingDot,
+                    {
+                      opacity: pulseAnim,
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.locationLoadingDot,
+                    {
+                      opacity: pulseAnim,
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.locationLoadingDot,
+                    {
+                      opacity: pulseAnim,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </Animated.View>
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
 };
 
 interface Provider {
@@ -81,6 +287,9 @@ export default function ServiceListingScreen() {
   
   // Use labour access context - this already uses apiClient and handles errors properly
   const { labourAccessStatus: contextLabourAccessStatus, checkLabourAccess } = useLabourAccess();
+  
+  // Location context - fetch location when service listing screen loads
+  const { location, isLoading: isLoadingLocation, error: locationError, fetchLocation } = useLocation();
 
   // Sync context status to local state
   useEffect(() => {
@@ -88,6 +297,23 @@ export default function ServiceListingScreen() {
       setLabourAccessStatus(contextLabourAccessStatus);
     }
   }, [contextLabourAccessStatus]);
+
+  // Fetch location when service listing screen loads (when user clicks on grid)
+  useEffect(() => {
+    console.log('🔵 Service listing screen mounted, fetching location...');
+    // Small delay to ensure UI is rendered
+    const timer = setTimeout(() => {
+      fetchLocation()
+        .then(() => {
+          console.log('✅ Location fetch initiated successfully in service listing');
+        })
+        .catch((err) => {
+          console.error('❌ Location fetch failed in service listing:', err);
+        });
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [fetchLocation]);
 
   useEffect(() => {
     const fetchServiceUuids = async () => {
@@ -667,6 +893,12 @@ export default function ServiceListingScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Location Loading Indicator - Modal Popup */}
+      <LocationLoadingIndicator 
+        visible={isLoadingLocation}
+        text={t('location.fetching') || 'Fetching your location...'}
+      />
+
       <View style={styles.searchContainer}>
         <Search size={20} color="#94A3B8" style={styles.searchIcon} />
         <TextInput
@@ -976,6 +1208,102 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     padding: 4,
+  },
+  locationLoadingModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locationLoadingModalContainer: {
+    width: '85%',
+    maxWidth: 400,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationLoadingContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: getResponsiveSpacing(24, 28, 32),
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    width: '100%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 12,
+      },
+      web: {
+        boxShadow: '0px 8px 24px rgba(59, 130, 246, 0.4)',
+      },
+    }),
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  locationLoadingShimmer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    width: '50%',
+  },
+  locationLoadingContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  locationLoadingIconContainer: {
+    position: 'relative',
+    marginBottom: getResponsiveSpacing(16, 20, 24),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationLoadingPulseDot: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  locationLoadingTextContainer: {
+    alignItems: 'center',
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+  },
+  locationLoadingTitle: {
+    fontSize: getResponsiveSpacing(18, 20, 22),
+    color: '#1E293B',
+    fontWeight: '700',
+    marginBottom: getResponsiveSpacing(6, 8, 10),
+    textAlign: 'center',
+  },
+  locationLoadingSubtitle: {
+    fontSize: getResponsiveSpacing(13, 14, 15),
+    color: '#64748B',
+    fontWeight: '400',
+    textAlign: 'center',
+  },
+  locationLoadingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: getResponsiveSpacing(6, 8, 10),
+  },
+  locationLoadingDot: {
+    width: getResponsiveSpacing(6, 7, 8),
+    height: getResponsiveSpacing(6, 7, 8),
+    borderRadius: getResponsiveSpacing(3, 3.5, 4),
+    backgroundColor: '#3B82F6',
   },
   searchContainer: {
     flexDirection: 'row',

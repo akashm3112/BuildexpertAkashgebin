@@ -4,6 +4,15 @@ const DatabaseOptimizer = require('../utils/databaseOptimization');
 const logger = require('../utils/logger');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { NotFoundError, ValidationError } = require('../utils/errorTypes');
+const config = require('../utils/config');
+
+// Use node-fetch if global fetch is not available (Node.js < 18)
+let fetch;
+if (typeof globalThis.fetch !== 'undefined') {
+  fetch = globalThis.fetch;
+} else {
+  fetch = require('node-fetch');
+}
 
 const router = express.Router();
 
@@ -315,6 +324,128 @@ router.get('/featured-providers', asyncHandler(async (req, res) => {
     status: 'success',
     data: { providers: providersWithRatings }
   });
+}));
+
+// @route   GET /api/public/reverse-geocode
+// @desc    Reverse geocode coordinates to get state and city using LocationIQ
+// @access  Public
+router.get('/reverse-geocode', asyncHandler(async (req, res) => {
+  const { latitude, longitude } = req.query;
+
+  // Validate inputs
+  if (!latitude || !longitude) {
+    throw new ValidationError('Latitude and longitude are required');
+  }
+
+  const lat = parseFloat(latitude);
+  const lon = parseFloat(longitude);
+
+  if (isNaN(lat) || isNaN(lon)) {
+    throw new ValidationError('Latitude and longitude must be valid numbers');
+  }
+
+  if (lat < -90 || lat > 90) {
+    throw new ValidationError('Latitude must be between -90 and 90');
+  }
+
+  if (lon < -180 || lon > 180) {
+    throw new ValidationError('Longitude must be between -180 and 180');
+  }
+
+  // Get LocationIQ API key from config
+  const locationIQConfig = config.getLocationIQConfig();
+  const apiKey = locationIQConfig?.apiKey;
+
+  if (!apiKey) {
+    logger.error('LocationIQ API key not configured');
+    throw new Error('Location service is not configured. Please contact support.');
+  }
+
+  try {
+    // Call LocationIQ reverse geocoding API
+    const locationIQUrl = `https://us1.locationiq.com/v1/reverse.php?key=${apiKey}&lat=${lat}&lon=${lon}&format=json&addressdetails=1`;
+    
+    const response = await fetch(locationIQUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = 'Failed to fetch location details';
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error || errorMessage;
+      } catch {
+        // If parsing fails, use default message
+      }
+
+      if (response.status === 429) {
+        errorMessage = 'Location service is temporarily unavailable. Please try again later.';
+      }
+
+      logger.error('LocationIQ API error', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorMessage,
+      });
+
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    
+    // Extract state and city from LocationIQ response
+    const address = data.address || {};
+    
+    // LocationIQ returns different field names for different regions
+    // For India: state, city, town, village, district
+    const state = 
+      address.state || 
+      address.region || 
+      address.province || 
+      address.state_district || 
+      '';
+    
+    const city = 
+      address.city || 
+      address.town || 
+      address.village || 
+      address.county || 
+      address.district || 
+      '';
+
+    if (!state && !city) {
+      throw new Error('Could not determine location from coordinates');
+    }
+
+    res.json({
+      status: 'success',
+      data: {
+        state: state || 'Unknown',
+        city: city || 'Unknown',
+        latitude: lat,
+        longitude: lon,
+      }
+    });
+  } catch (error) {
+    logger.error('Reverse geocoding error', {
+      latitude: lat,
+      longitude: lon,
+      error: error.message,
+    });
+
+    // Re-throw validation errors as-is
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+
+    // Wrap other errors
+    throw new Error(error.message || 'Failed to fetch location details');
+  }
 }));
 
 module.exports = router; 
