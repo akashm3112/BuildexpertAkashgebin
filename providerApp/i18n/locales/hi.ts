@@ -195,6 +195,13 @@ export default {
     'Lakshadweep': 'लक्षद्वीप',
     'Puducherry': 'पुडुचेरी',
   },
+  cities: {
+    selectCity: 'शहर चुनें',
+    selectStateFirst: 'कृपया पहले राज्य चुनें',
+    searchCity: 'शहर खोजें...',
+    citiesIn: 'शहर',
+    noCitiesAvailable: 'इस राज्य के लिए कोई शहर उपलब्ध नहीं है',
+  },
   serviceRegistration: {
     serviceNotFound: 'सेवा नहीं मिली',
     loadingServiceDetails: 'सेवा विवरण लोड हो रहा है...',
@@ -205,6 +212,8 @@ export default {
     phoneNumber: 'फोन नंबर',
     state: 'राज्य',
     statePlaceholder: 'राज्य दर्ज करें',
+    city: 'शहर',
+    cityPlaceholder: 'शहर चुनें',
     completeAddress: 'पूरा पता',
     addressPlaceholder: 'पिनकोड के साथ अपना पूरा पता दर्ज करें',
     yearsOfExperience: 'अनुभव के वर्ष',

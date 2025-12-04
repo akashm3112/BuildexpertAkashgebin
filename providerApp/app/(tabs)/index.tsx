@@ -740,7 +740,7 @@ export default function HomeScreen() {
       >
         {/* Header */}
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
             {(() => {
               let title;
@@ -1053,6 +1053,11 @@ const styles = StyleSheet.create({
     paddingTop: getResponsiveSpacing(8, 10, 12),
     paddingBottom: getResponsiveSpacing(4, 5, 6),
   },
+  headerLeft: {
+    flex: 1,
+    marginRight: getResponsiveSpacing(8, 10, 12),
+    minWidth: 0, // Important for flex shrinking
+  },
   title: {
     fontSize: getResponsiveSpacing(22, 24, 26),
     fontWeight: '700',
@@ -1063,12 +1068,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: getResponsiveSpacing(1, 2, 3),
+    flex: 1,
+    minWidth: 0, // Important for flex shrinking
   },
   locationText: {
     fontSize: getResponsiveSpacing(11, 12, 13),
     color: '#6B7280',
-    maxWidth: '85%',
+    flex: 1,
     flexShrink: 1,
+    minWidth: 0, // Important for flex shrinking
   },
   locationButton: {
     backgroundColor: '#E0E7FF',

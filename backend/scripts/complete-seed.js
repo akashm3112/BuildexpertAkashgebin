@@ -88,18 +88,21 @@ const completeSeed = async () => {
         user_phone: '9876543210',
         type: 'home',
         state: 'Karnataka',
+        city: 'Bangalore',
         full_address: '123 Main Street, Bangalore, Karnataka 560001'
       },
       {
         user_phone: '8765432109',
         type: 'home',
         state: 'Karnataka',
+        city: 'Bangalore',
         full_address: '456 Provider Lane, Bangalore, Karnataka 560002'
       },
       {
         user_phone: '9999999999',
         type: 'home',
         state: 'Karnataka',
+        city: 'Bangalore',
         full_address: '789 Test Road, Bangalore, Karnataka 560003'
       }
     ];
@@ -113,9 +116,9 @@ const completeSeed = async () => {
 
         if (addressExists.length === 0) {
           await query(`
-            INSERT INTO addresses (user_id, type, state, full_address)
-            VALUES ($1, $2, $3, $4)
-          `, [user[0].id, address.type, address.state, address.full_address]);
+            INSERT INTO addresses (user_id, type, state, city, full_address)
+            VALUES ($1, $2, $3, $4, $5)
+          `, [user[0].id, address.type, address.state, address.city, address.full_address]);
         } else {
         }
       }

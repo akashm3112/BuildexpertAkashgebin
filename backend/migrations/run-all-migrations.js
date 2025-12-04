@@ -30,6 +30,7 @@ const createBlockedIdentifiersTable = require('./016-add-blocked-identifiers-tab
 const optimizeReportStatusIndexes = require('./017-optimize-report-status-indexes');
 const addRefreshTokensTable = require('./018-add-refresh-tokens-table');
 const updatePaintingService = require('./019-update-painting-service');
+const addCityToAddresses = require('./020-add-city-to-addresses');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -165,6 +166,13 @@ const migrations = [
     description: 'Migrates painting-cleaning service to painting, ensures cleaning and borewell services exist',
     function: updatePaintingService,
     required: true // Required for service separation
+  },
+  {
+    id: '020',
+    name: 'Add City to Addresses',
+    description: 'Adds city column to addresses table for service registration',
+    function: addCityToAddresses,
+    required: true // Required for city selection in service registration
   }
 ];
 

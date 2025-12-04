@@ -217,6 +217,13 @@ export default {
     'Lakshadweep': 'ಲಕ್ಷದ್ವೀಪ',
     'Puducherry': 'ಪುದುಚೇರಿ',
   },
+  cities: {
+    selectCity: 'ನಗರವನ್ನು ಆಯ್ಕೆಮಾಡಿ',
+    selectStateFirst: 'ದಯವಿಟ್ಟು ಮೊದಲು ರಾಜ್ಯವನ್ನು ಆಯ್ಕೆಮಾಡಿ',
+    searchCity: 'ನಗರಗಳನ್ನು ಹುಡುಕಿ...',
+    citiesIn: 'ನಗರಗಳು',
+    noCitiesAvailable: 'ಈ ರಾಜ್ಯಕ್ಕೆ ಯಾವುದೇ ನಗರಗಳು ಲಭ್ಯವಿಲ್ಲ',
+  },
   serviceRegistration: {
     serviceNotFound: 'ಸೇವೆಯು ಕಂಡುಬಂದಿಲ್ಲ',
     loadingServiceDetails: 'ಸೇವೆ ವಿವರಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ...',
@@ -227,6 +234,8 @@ export default {
     phoneNumber: 'ಫೋನ್ ಸಂಖ್ಯೆ',
     state: 'ರಾಜ್ಯ',
     statePlaceholder: 'ರಾಜ್ಯವನ್ನು ನಮೂದಿಸಿ',
+    city: 'ನಗರ',
+    cityPlaceholder: 'ನಗರವನ್ನು ಆಯ್ಕೆಮಾಡಿ',
     completeAddress: 'ಪೂರ್ಣ ವಿಳಾಸ',
     addressPlaceholder: 'ಪಿನ್‌ಕೋಡ್‌ನೊಂದಿಗೆ ನಿಮ್ಮ ಪೂರ್ಣ ವಿಳಾಸವನ್ನು ನಮೂದಿಸಿ',
     yearsOfExperience: 'ಅನುಭವದ ವರ್ಷಗಳು',

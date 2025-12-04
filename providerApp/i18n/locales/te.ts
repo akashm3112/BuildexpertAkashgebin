@@ -195,6 +195,13 @@ export default {
     'Lakshadweep': 'లక్షద్వీప్',
     'Puducherry': 'పుతుచ్చేరి',
   },
+  cities: {
+    selectCity: 'నగరాన్ని ఎంచుకోండి',
+    selectStateFirst: 'దయచేసి మొదట రాష్ట్రాన్ని ఎంచుకోండి',
+    searchCity: 'నగరాలను శోధించండి...',
+    citiesIn: 'నగరాలు',
+    noCitiesAvailable: 'ఈ రాష్ట్రానికి నగరాలు అందుబాటులో లేవు',
+  },
   serviceRegistration: {
     serviceNotFound: 'సేవ కనుగొనబడలేదు',
     loadingServiceDetails: 'సేవ వివరాలు లోడ్ అవుతోంది...',
@@ -205,6 +212,8 @@ export default {
     phoneNumber: 'ఫోన్ నంబర్',
     state: 'రాష్ట్రం',
     statePlaceholder: 'రాష్ట్రాన్ని నమోదు చేయండి',
+    city: 'నగరం',
+    cityPlaceholder: 'నగరాన్ని ఎంచుకోండి',
     completeAddress: 'పూర్తి చిరునామా',
     addressPlaceholder: 'పిన్‌కోడ్‌తో మీ పూర్తి చిరునామాను నమోదు చేయండి',
     yearsOfExperience: 'అనుభవ సంవత్సరాలు',

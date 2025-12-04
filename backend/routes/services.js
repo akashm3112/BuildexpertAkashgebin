@@ -136,6 +136,7 @@ router.get('/my-registrations', asyncHandler(async (req, res) => {
       pp.engineering_certificate_url,
       ps.working_proof_urls,
       a.state,
+      a.city,
       a.full_address,
       CASE 
         WHEN ps.payment_status = 'active' AND ps.payment_end_date IS NOT NULL 
@@ -146,7 +147,7 @@ router.get('/my-registrations', asyncHandler(async (req, res) => {
     JOIN services_master sm ON ps.service_id = sm.id
     JOIN provider_profiles pp ON ps.provider_id = pp.id
     LEFT JOIN LATERAL (
-      SELECT state, full_address
+      SELECT state, city, full_address
       FROM addresses
       WHERE user_id = pp.user_id
       ORDER BY created_at DESC
@@ -328,6 +329,7 @@ router.put('/:id/providers', requireRole(['provider']), asyncHandler(async (req,
       serviceChargeValue,
       serviceChargeUnit,
       state,
+      city,
       fullAddress,
       workingProofUrls = [],
       isEngineeringProvider = false,
@@ -457,10 +459,10 @@ router.put('/:id/providers', requireRole(['provider']), asyncHandler(async (req,
   // Optionally update address (insert new address)
   if (state && fullAddress) {
       await query(`
-        INSERT INTO addresses (user_id, type, state, full_address)
-        VALUES ($1, 'home', $2, $3)
+        INSERT INTO addresses (user_id, type, state, city, full_address)
+        VALUES ($1, 'home', $2, $3, $4)
         ON CONFLICT DO NOTHING
-    `, [req.user.id, state, fullAddress]);
+    `, [req.user.id, state, city || null, fullAddress]);
   }
 
   res.json({
@@ -611,11 +613,12 @@ router.post('/:id/providers', requireRole(['provider']), [
   }
 
   // Insert address
+  const { city } = req.body;
   await query(`
-      INSERT INTO addresses (user_id, type, state, full_address)
-      VALUES ($1, 'home', $2, $3)
+      INSERT INTO addresses (user_id, type, state, city, full_address)
+      VALUES ($1, 'home', $2, $3, $4)
       ON CONFLICT DO NOTHING
-  `, [req.user.id, state, fullAddress]);
+  `, [req.user.id, state, city || null, fullAddress]);
 
   // Insert provider service with Cloudinary URLs
   let serviceResult;

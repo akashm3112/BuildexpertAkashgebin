@@ -1307,7 +1307,9 @@ export default function ProfileScreen() {
             onPress={handleReportCustomer}
           >
             <AlertTriangle size={20} color="#DC2626" />
-            <Text style={styles.reportButtonText}>{t('profile.reportCustomer')}</Text>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.reportButtonText}>{t('profile.reportCustomer')}</Text>
+            </View>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1323,7 +1325,9 @@ export default function ProfileScreen() {
             onPress={() => handleSettingsAction('edit-profile')}
           >
             <Edit size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>{t('profile.editProfile')}</Text>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonText}>{t('profile.editProfile')}</Text>
+            </View>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1334,7 +1338,9 @@ export default function ProfileScreen() {
             onPress={() => handleSettingsAction('notifications')}
           >
             <Bell size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>{t('profile.notifications')}</Text>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonText}>{t('profile.notifications')}</Text>
+            </View>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1365,7 +1371,9 @@ export default function ProfileScreen() {
             onPress={() => handleSettingsAction('sound')}
           >
             <Volume2 size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>{t('profile.soundAndVibration')}</Text>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonText}>{t('profile.soundAndVibration')}</Text>
+            </View>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1381,7 +1389,9 @@ export default function ProfileScreen() {
             onPress={() => handleSettingsAction('help')}
           >
             <HelpCircle size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>{t('profile.helpAndSupport')}</Text>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonText}>{t('profile.helpAndSupport')}</Text>
+            </View>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1392,7 +1402,9 @@ export default function ProfileScreen() {
             onPress={openReferModal}
           >
             <Gift size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>Refer a Friend</Text>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonText}>Refer a Friend</Text>
+            </View>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1403,7 +1415,9 @@ export default function ProfileScreen() {
             onPress={() => handleSettingsAction('rate')}
           >
             <Star size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>{t('profile.rateOurApp')}</Text>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonText}>{t('profile.rateOurApp')}</Text>
+            </View>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1419,7 +1433,9 @@ export default function ProfileScreen() {
             onPress={() => handleSettingsAction('terms')}
           >
             <FileText size={20} color="#6B7280" />
-            <Text style={styles.actionButtonText}>{t('profile.termsAndConditions')}</Text>
+            <View style={styles.actionButtonContent}>
+              <Text style={styles.actionButtonText}>{t('profile.termsAndConditions')}</Text>
+            </View>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
             </View>
@@ -1880,7 +1896,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   infoContent: {
-    marginLeft: getResponsiveSpacing(12, 14, 16),
+    marginLeft: getResponsiveSpacing(12, 14, 16), // Spacing between icon and content
     flex: 1,
   },
   infoLabel: {
@@ -1912,8 +1928,6 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveSpacing(14, 15, 16),
     fontFamily: 'Inter-SemiBold',
     color: '#DC2626',
-    marginLeft: getResponsiveSpacing(10, 12, 14),
-    flex: 1,
   },
   actionButton: {
     flexDirection: 'row',
@@ -1931,7 +1945,7 @@ const styles = StyleSheet.create({
   },
   actionButtonContent: {
     flex: 1,
-    marginLeft: getResponsiveSpacing(10, 12, 14),
+    marginLeft: getResponsiveSpacing(12, 14, 16), // Spacing between icon and content
   },
   actionButtonText: {
     fontSize: getResponsiveSpacing(14, 15, 16),

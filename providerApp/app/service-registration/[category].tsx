@@ -21,6 +21,7 @@ import { getServiceById } from '@/constants/serviceCategories';
 import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import StateSelector from '@/components/common/StateSelector';
+import CitySelector from '@/components/common/CitySelector';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -42,6 +43,7 @@ interface FormData {
   fullName: string;
   phone: string;
   state: string;
+  city: string;
   address: string;
   experience: string;
   charges: string;
@@ -82,6 +84,7 @@ export default function ServiceRegistration() {
     fullName: user?.fullName || '',
     phone: user?.phone || '',
     state: '',
+    city: '',
     address: '',
     experience: '',
     charges: '',
@@ -148,6 +151,7 @@ export default function ServiceRegistration() {
             fullName: user?.fullName || '',
             phone: user?.phone || '',
             state: serviceData.state || '',
+            city: serviceData.city || '',
             address: serviceData.full_address || '',
             experience: serviceData.years_of_experience?.toString() || '',
             charges: serviceData.service_charge_value?.toString() || '',
@@ -189,7 +193,14 @@ export default function ServiceRegistration() {
   const handleInputChange = (field: keyof FormData, value: string) => {
     if (field === 'fullName' || field === 'phone') return;
     if (isViewMode) return; // Don't allow changes in view mode
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    
+    // If state changes, clear city selection
+    if (field === 'state') {
+      setFormData((prev) => ({ ...prev, [field]: value, city: '' }));
+    } else {
+      setFormData((prev) => ({ ...prev, [field]: value }));
+    }
+    
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined })); // Clear error when typing
     }
@@ -404,6 +415,7 @@ export default function ServiceRegistration() {
   const handleSubmit = async () => {
     const newErrors: Partial<Record<keyof FormData, string>> = {};
     if (!formData.state.trim()) newErrors.state = 'State is required.';
+    if (!formData.city.trim()) newErrors.city = 'City is required.';
     if (!formData.address.trim()) newErrors.address = 'Address is required.';
     if (!formData.experience.trim()) newErrors.experience = 'Years of experience is required.';
     if (!formData.charges.trim()) newErrors.charges = 'Service charges are required.';
@@ -449,6 +461,7 @@ export default function ServiceRegistration() {
         serviceChargeValue: parseFloat(formData.charges),
         serviceChargeUnit: 'INR',
         state: formData.state,
+        city: formData.city,
         fullAddress: formData.address,
         workingProofUrls: workingProofUrls,
         isEngineeringProvider: isEngineerOrInterior,
@@ -623,6 +636,18 @@ export default function ServiceRegistration() {
                 onSelect={(value) => handleInputChange('state', value)}
                 placeholder={t('serviceRegistration.statePlaceholder')}
                 error={errors.state}
+                disabled={isViewMode}
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.label} numberOfLines={1} ellipsizeMode="tail">{t('serviceRegistration.city')} *</Text>
+              <CitySelector
+                value={formData.city}
+                onSelect={(value) => handleInputChange('city', value)}
+                state={formData.state}
+                placeholder={t('serviceRegistration.cityPlaceholder')}
+                error={errors.city}
                 disabled={isViewMode}
               />
             </View>

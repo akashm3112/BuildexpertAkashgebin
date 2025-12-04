@@ -301,6 +301,13 @@ export default {
     puducherry: 'പുതുച്ചേരി',
     andamanNicobar: 'അന്തമാൻ നിക്കോബാർ',
   },
+  cities: {
+    selectCity: 'നഗരം തിരഞ്ഞെടുക്കുക',
+    selectStateFirst: 'ദയവായി ആദ്യം സംസ്ഥാനം തിരഞ്ഞെടുക്കുക',
+    searchCity: 'നഗരങ്ങൾ തിരയുക...',
+    citiesIn: 'നഗരങ്ങൾ',
+    noCitiesAvailable: 'ഈ സംസ്ഥാനത്തിന് നഗരങ്ങൾ ലഭ്യമല്ല',
+  },
 
   // Service Registration
   serviceRegistration: {

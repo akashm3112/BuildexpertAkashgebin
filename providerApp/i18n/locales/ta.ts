@@ -195,6 +195,13 @@ export default {
     'Lakshadweep': 'லட்சத்தீவு',
     'Puducherry': 'புதுச்சேரி',
   },
+  cities: {
+    selectCity: 'நகரத்தைத் தேர்ந்தெடுக்கவும்',
+    selectStateFirst: 'தயவுசெய்து முதலில் மாநிலத்தைத் தேர்ந்தெடுக்கவும்',
+    searchCity: 'நகரங்களைத் தேடுங்கள்...',
+    citiesIn: 'நகரங்கள்',
+    noCitiesAvailable: 'இந்த மாநிலத்திற்கு நகரங்கள் எதுவும் கிடைக்கவில்லை',
+  },
   serviceRegistration: {
     serviceNotFound: 'சேவை கண்டுபிடிக்கப்படவில்லை',
     loadingServiceDetails: 'சேவை விவரங்கள் ஏற்றப்படுகின்றன...',
@@ -205,6 +212,8 @@ export default {
     phoneNumber: 'தொலைபேசி எண்',
     state: 'மாநிலம்',
     statePlaceholder: 'மாநிலத்தை உள்ளிடவும்',
+    city: 'நகரம்',
+    cityPlaceholder: 'நகரத்தைத் தேர்ந்தெடுக்கவும்',
     completeAddress: 'முழு முகவரி',
     addressPlaceholder: 'பின்கோடுடன் உங்கள் முழு முகவரியை உள்ளிடவும்',
     yearsOfExperience: 'அனுபவ ஆண்டுகள்',

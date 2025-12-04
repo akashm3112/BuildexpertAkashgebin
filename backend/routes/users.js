@@ -365,11 +365,12 @@ router.get('/addresses', asyncHandler(async (req, res) => {
 router.post('/addresses', [
   body('type').isIn(['home', 'office', 'other']).withMessage('Type must be home, office, or other'),
   body('state').notEmpty().withMessage('State is required'),
+  body('city').optional().notEmpty().withMessage('City cannot be empty'),
   body('fullAddress').notEmpty().withMessage('Full address is required')
 ], asyncHandler(async (req, res) => {
   validateOrThrow(req);
 
-  const { type, state, fullAddress } = req.body;
+  const { type, state, city, fullAddress } = req.body;
 
   // Check if user already has 3 addresses
   const addressCount = await getRow('SELECT COUNT(*) as count FROM addresses WHERE user_id = $1', [req.user.id]);
@@ -378,10 +379,10 @@ router.post('/addresses', [
   }
 
   const result = await query(`
-    INSERT INTO addresses (user_id, type, state, full_address)
-    VALUES ($1, $2, $3, $4)
-    RETURNING id, type, state, full_address, created_at
-  `, [req.user.id, type, state, fullAddress]);
+    INSERT INTO addresses (user_id, type, state, city, full_address)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, type, state, city, full_address, created_at
+  `, [req.user.id, type, state, city || null, fullAddress]);
 
   const newAddress = result.rows[0];
 
@@ -398,12 +399,13 @@ router.post('/addresses', [
 router.put('/addresses/:id', [
   body('type').optional().isIn(['home', 'office', 'other']).withMessage('Type must be home, office, or other'),
   body('state').optional().notEmpty().withMessage('State cannot be empty'),
+  body('city').optional().notEmpty().withMessage('City cannot be empty'),
   body('fullAddress').optional().notEmpty().withMessage('Full address cannot be empty')
 ], asyncHandler(async (req, res) => {
   validateOrThrow(req);
 
   const { id } = req.params;
-  const { type, state, fullAddress } = req.body;
+  const { type, state, city, fullAddress } = req.body;
 
   // Check if address belongs to user
   const existingAddress = await getRow('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [id, req.user.id]);
@@ -427,6 +429,12 @@ router.put('/addresses/:id', [
     paramCount++;
   }
 
+  if (city !== undefined) {
+    updateFields.push(`city = $${paramCount}`);
+    updateValues.push(city || null);
+    paramCount++;
+  }
+
   if (fullAddress) {
     updateFields.push(`full_address = $${paramCount}`);
     updateValues.push(fullAddress);
@@ -442,7 +450,7 @@ router.put('/addresses/:id', [
     UPDATE addresses 
     SET ${updateFields.join(', ')}
     WHERE id = $${paramCount} AND user_id = $${paramCount + 1}
-    RETURNING id, type, state, full_address, created_at
+    RETURNING id, type, state, city, full_address, created_at
   `, updateValues);
 
   const updatedAddress = result.rows[0];
