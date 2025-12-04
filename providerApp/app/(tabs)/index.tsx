@@ -236,9 +236,17 @@ export default function HomeScreen() {
     if (user?.id) {
       // Wait a bit to ensure tokens are loaded
       const timer = setTimeout(() => {
-        fetchRegisteredServices().catch((error) => {
-          console.error('Error fetching registered services:', error);
-          globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
+        fetchRegisteredServices().catch((error: any) => {
+          // Suppress "Session expired" and server errors - they're expected or backend issues
+          const isSessionExpired = error?.message === 'Session expired' || 
+                                   error?.status === 401 && error?.message?.includes('Session expired') ||
+                                   error?._suppressUnhandled === true ||
+                                   error?._handled === true;
+          const isServerError = error?.status === 500 || error?.isServerError === true;
+          if (!isSessionExpired && !isServerError) {
+            console.error('Error fetching registered services:', error);
+            globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
+          }
         });
         // Initial earnings fetch (only once on mount)
         fetchEarnings().catch((error) => {
@@ -338,9 +346,17 @@ export default function HomeScreen() {
     React.useCallback(() => {
       if (user?.id) {
         // Only fetch registered services on focus, earnings are handled by sockets
-        fetchRegisteredServices().catch((error) => {
-          console.error('Error fetching registered services on focus:', error);
-          globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
+        fetchRegisteredServices().catch((error: any) => {
+          // Suppress "Session expired" and server errors - they're expected or backend issues
+          const isSessionExpired = error?.message === 'Session expired' || 
+                                   error?.status === 401 && error?.message?.includes('Session expired') ||
+                                   error?._suppressUnhandled === true ||
+                                   error?._handled === true;
+          const isServerError = error?.status === 500 || error?.isServerError === true;
+          if (!isSessionExpired && !isServerError) {
+            console.error('Error fetching registered services on focus:', error);
+            globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
+          }
         });
       }
       // Reload location preferences when screen comes into focus
@@ -525,8 +541,23 @@ export default function HomeScreen() {
         // Handle API errors silently - don't show error for home screen
         console.error('Error fetching registered services:', apiError);
       }
-    } catch (error) {
-      console.error('Error fetching registered services:', error);
+    } catch (error: any) {
+      // Suppress "Session expired" errors - they're expected after 30 days
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired') ||
+                               error?._suppressUnhandled === true ||
+                               error?._handled === true;
+      
+      // Suppress server/database errors - backend issue, not user's fault
+      const isServerError = error?.status === 500 || 
+                          error?.isServerError === true ||
+                          error?.message?.includes('Database operation failed') ||
+                          error?.message?.includes('Database') ||
+                          error?.data?.errorCode === 'DATABASE_ERROR';
+      
+      if (!isSessionExpired && !isServerError) {
+        console.error('Error fetching registered services:', error);
+      }
     } finally {
       setIsLoadingServices(false);
     }
