@@ -363,18 +363,22 @@ const recordMigration = async (migration, success, errorMessage = null, executio
  * Each migration runs in its own transaction for atomicity
  */
 const runMigration = async (migration, options = {}) => {
-  const { force = false } = options;
+  const { force = false, skipLock = false } = options;
   const startTime = Date.now();
   let lockClient = null;
   
   try {
-    // Acquire advisory lock for this migration
-    lockClient = await acquireAdvisoryLock();
+    // Only acquire advisory lock if not already held by caller
+    if (!skipLock) {
+      lockClient = await acquireAdvisoryLock();
+    }
     
     // Check if already executed (before transaction to avoid unnecessary transaction)
     const status = await isMigrationExecuted(migration.id);
     if (status.executed && status.success && !force) {
-      await releaseAdvisoryLock(lockClient);
+      if (lockClient) {
+        await releaseAdvisoryLock(lockClient);
+      }
       return { success: true, skipped: true, executionTime: 0 };
     }
     
@@ -404,13 +408,15 @@ const runMigration = async (migration, options = {}) => {
       return { success: true, skipped: false, executionTime };
     }, { name: `migration-${migration.id}`, retries: 0 }); // No retries for migrations
     
-    // Release lock
-    await releaseAdvisoryLock(lockClient);
-    lockClient = null;
+    // Release lock only if we acquired it
+    if (lockClient) {
+      await releaseAdvisoryLock(lockClient);
+      lockClient = null;
+    }
     
     return result;
   } catch (error) {
-    // Release lock on error
+    // Release lock on error only if we acquired it
     if (lockClient) {
       await releaseAdvisoryLock(lockClient);
     }
@@ -485,9 +491,9 @@ const runAllMigrations = async (options = {}) => {
         continue;
       }
 
-      // Run the migration
+      // Run the migration (skip lock acquisition since we already have the lock)
       console.log(`🔄 Running ${migration.id}: ${migration.name}...`);
-      const result = await runMigration(migration, { force });
+      const result = await runMigration(migration, { force, skipLock: true });
       results.push({ migration, result });
       
       if (result.success) {
