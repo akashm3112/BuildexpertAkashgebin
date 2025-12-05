@@ -69,14 +69,24 @@ class GlobalErrorHandler {
         const isSuppressed = (event.reason as any)?._suppressUnhandled === true ||
                             (event.reason as any)?._handled === true;
         
-        if (isSessionExpired || isServerError || isSuppressed) {
+        // Suppress websocket/socket connection errors - these are expected when backend is off
+        const isSocketError = error.message?.toLowerCase().includes('websocket') ||
+                             error.message?.toLowerCase().includes('socket') ||
+                             error.message?.toLowerCase().includes('transport') ||
+                             error.message?.toLowerCase().includes('engine.io') ||
+                             (event.reason as any)?.type === 'TransportError' ||
+                             error.stack?.includes('engine.io-client') ||
+                             error.stack?.includes('websocket') ||
+                             error.stack?.includes('transport.js');
+        
+        if (isSessionExpired || isServerError || isSuppressed || isSocketError) {
           // Suppress these errors completely - prevent default logging
           event.preventDefault();
           event.stopPropagation();
           return; // Don't log or handle - just suppress
         }
         
-        if (!isSessionExpired && !isServerError && !isSuppressed) {
+        if (!isSessionExpired && !isServerError && !isSuppressed && !isSocketError) {
           this.handleError(error, false, 'Unhandled Promise Rejection');
         }
         
@@ -122,14 +132,25 @@ class GlobalErrorHandler {
         const isSuppressed = (error as any)?._suppressUnhandled === true ||
                             (error as any)?._handled === true;
         
-        if (!isSessionExpired && !isServerError && !isSuppressed) {
+        // Suppress websocket/socket connection errors - these are expected when backend is off
+        const isSocketError = error.message?.toLowerCase().includes('websocket') ||
+                             error.message?.toLowerCase().includes('socket') ||
+                             error.message?.toLowerCase().includes('transport') ||
+                             error.message?.toLowerCase().includes('engine.io') ||
+                             error.type === 'TransportError' ||
+                             (error as any)?.type === 'TransportError' ||
+                             error.stack?.includes('engine.io-client') ||
+                             error.stack?.includes('websocket') ||
+                             error.stack?.includes('transport.js');
+        
+        if (!isSessionExpired && !isServerError && !isSuppressed && !isSocketError) {
           // Log the error
           this.handleError(error, isFatal || false, 'JavaScript Error');
         }
 
         // Call original handler if it exists (but suppress console output for suppressed errors)
         if (originalHandler) {
-          if (!isSessionExpired && !isServerError && !isSuppressed) {
+          if (!isSessionExpired && !isServerError && !isSuppressed && !isSocketError) {
             originalHandler(error, isFatal);
           }
           // For suppressed errors, we don't call the handler - just suppress
@@ -187,12 +208,31 @@ class GlobalErrorHandler {
                                      error.stack?.includes('InternalBytecode.js') ||
                                      error.message.includes('no such file or directory'));
         
-        if (!isSessionExpired && !isServerError && !isSuppressed && !isTokenRefreshTimeout && !isMetroBundlerError) {
+        // Suppress websocket/socket connection errors - these are expected when backend is off
+        const isSocketError = error.message?.toLowerCase().includes('websocket') ||
+                             error.message?.toLowerCase().includes('socket') ||
+                             error.message?.toLowerCase().includes('transport') ||
+                             error.message?.toLowerCase().includes('engine.io') ||
+                             error.type === 'TransportError' ||
+                             (errorArg as any)?.type === 'TransportError' ||
+                             error.stack?.includes('engine.io-client') ||
+                             error.stack?.includes('websocket') ||
+                             error.stack?.includes('transport.js') ||
+                             args.some((arg: any) => 
+                               typeof arg === 'string' && (
+                                 arg.includes('🔌 Socket') ||
+                                 arg.includes('Socket connection error') ||
+                                 arg.includes('Socket reconnection error') ||
+                                 arg.includes('websocket error')
+                               )
+                             );
+        
+        if (!isSessionExpired && !isServerError && !isSuppressed && !isTokenRefreshTimeout && !isMetroBundlerError && !isSocketError) {
           this.handleError(error, false, 'Console Error');
         }
         
-        // For Metro bundler errors, suppress completely (harmless development issue)
-        if (isMetroBundlerError) {
+        // For Metro bundler errors and socket errors, suppress completely (harmless development/backend issues)
+        if (isMetroBundlerError || isSocketError) {
           return; // Suppress the console.error call entirely
         }
         

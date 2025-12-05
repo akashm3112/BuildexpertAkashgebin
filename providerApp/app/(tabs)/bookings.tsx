@@ -153,8 +153,10 @@ export default function BookingsScreen() {
       
       // Setup socket connection
       const socket = socketIOClient(`${API_BASE_URL}`);
-      socket.on('connect', () => console.log('Socket connected:', socket.id));
-      socket.emit('join', user.id);
+      socket.on('connect', () => {
+        // Socket connected successfully
+        socket.emit('join', user.id);
+      });
       socket.on('booking_created', (data) => {
         if (data && data.booking) {
           setBookings(prev => [data.booking, ...prev]); // Prepend new booking for instant UI
@@ -165,7 +167,17 @@ export default function BookingsScreen() {
       socket.on('booking_updated', () => {
         loadBookings(false);
       });
-      socket.on('disconnect', () => console.log('Socket disconnected'));
+      socket.on('disconnect', () => {
+        // Socket disconnected - expected when backend is off
+      });
+      socket.on('connect_error', (error: any) => {
+        // Suppress socket connection errors - they're expected when backend is off
+        // Don't log or show errors to user
+      });
+      socket.on('error', (error: any) => {
+        // Suppress socket errors - they're expected when backend is off
+        // Don't log or show errors to user
+      });
       return () => {
         socket.disconnect();
       };

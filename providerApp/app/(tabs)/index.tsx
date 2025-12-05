@@ -283,12 +283,9 @@ export default function HomeScreen() {
         });
 
         socketRef.current.on('connect_error', (error: any) => {
-          console.error('🔌 Socket connection error:', error);
+          // Suppress socket connection errors - they're expected when backend is off
+          // Don't log or show errors to user
           setSocketConnected(false);
-          
-          // Show user-friendly error message only for persistent errors
-          if (error.type === 'TransportError' || error.message.includes('xhr poll error')) {
-          }
         });
 
         socketRef.current.on('reconnect', (attemptNumber: number) => {
@@ -296,11 +293,13 @@ export default function HomeScreen() {
         });
 
         socketRef.current.on('reconnect_error', (error: any) => {
-          console.error('🔌 Socket reconnection error:', error);
+          // Suppress socket reconnection errors - they're expected when backend is off
+          // Don't log or show errors to user
         });
 
         socketRef.current.on('reconnect_failed', () => {
-          console.error('🔌 Socket reconnection failed after all attempts');
+          // Suppress socket reconnection failed errors - they're expected when backend is off
+          // Don't log or show errors to user
           setSocketConnected(false);
         });
         

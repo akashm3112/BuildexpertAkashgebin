@@ -67,7 +67,17 @@ export default function RootLayout() {
         const isSuppressed = (error as any)?._suppressUnhandled === true ||
                             (error as any)?._handled === true;
         
-        if (isSessionExpired || isServerError || isSuppressed) {
+        // Suppress websocket/socket connection errors - these are expected when backend is off
+        const isSocketError = error?.message?.toLowerCase().includes('websocket') ||
+                             error?.message?.toLowerCase().includes('socket') ||
+                             error?.message?.toLowerCase().includes('transport') ||
+                             error?.message?.toLowerCase().includes('engine.io') ||
+                             (error as any)?.type === 'TransportError' ||
+                             error?.stack?.includes('engine.io-client') ||
+                             error?.stack?.includes('websocket') ||
+                             error?.stack?.includes('transport.js');
+        
+        if (isSessionExpired || isServerError || isSuppressed || isSocketError) {
           // Suppress these errors completely - they're expected or backend issues
           // Don't call the original handler - just suppress the error
           return;

@@ -271,10 +271,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('disconnect', () => {
+      // Socket disconnected - expected when backend is off
+    });
+
+    socket.on('connect_error', (error: any) => {
+      // Suppress socket connection errors - they're expected when backend is off
+      // Don't log or show errors to user
     });
 
     socket.on('error', (error) => {
-      console.error('Notification socket error:', error);
+      // Suppress socket errors - they're expected when backend is off
+      // Don't log or show errors to user
     });
 
     return () => {

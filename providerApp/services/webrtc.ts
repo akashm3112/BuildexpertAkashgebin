@@ -119,18 +119,26 @@ class WebRTCService {
     });
 
     this.socket.on('error', (error) => {
+      // Suppress socket errors - they're expected when backend is off
+      // Don't log or show errors to user
       this.handleSocketError(error);
     });
 
+    this.socket.on('connect_error', (error: any) => {
+      // Suppress socket connection errors - they're expected when backend is off
+      // Don't log or show errors to user
+    });
+
     this.socket.on('reconnect', () => {
-      console.log('📞 Socket reconnected');
+      // Socket reconnected successfully
       if (this.userId) {
         this.socket?.emit('join', this.userId);
       }
     });
 
     this.socket.on('reconnect_error', (error) => {
-      console.error('📞 Socket reconnection error:', error);
+      // Suppress socket reconnection errors - they're expected when backend is off
+      // Don't log or show errors to user
     });
 
     this.setupSocketListeners();
@@ -858,11 +866,9 @@ class WebRTCService {
    * Handle socket error
    */
   private handleSocketError(error: any) {
-    console.error('📞 Socket error:', error);
-    
-    const socketError = new Error('Socket connection error');
-    (socketError as any).code = 'SOCKET_ERROR';
-    this.handleError(socketError, 'socket_error');
+    // Suppress socket errors - they're expected when backend is off
+    // Don't log or show errors to user
+    // The global error handler will also suppress these errors
   }
 
   /**
