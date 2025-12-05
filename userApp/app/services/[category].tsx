@@ -298,6 +298,9 @@ export default function ServiceListingScreen() {
     }
   }, [contextLabourAccessStatus]);
 
+  // Track if location error has been shown to user (prevent duplicate toasts)
+  const [locationErrorShown, setLocationErrorShown] = useState(false);
+
   // Fetch location when service listing screen loads (when user clicks on grid)
   useEffect(() => {
     console.log('🔵 Service listing screen mounted, fetching location...');
@@ -308,12 +311,29 @@ export default function ServiceListingScreen() {
           console.log('✅ Location fetch initiated successfully in service listing');
         })
         .catch((err) => {
-          console.error('❌ Location fetch failed in service listing:', err);
+          // Error is already handled in LocationContext - this catch is just for logging
+          console.warn('⚠️ Location fetch completed with error (handled gracefully):', err);
         });
     }, 100);
 
     return () => clearTimeout(timer);
   }, [fetchLocation]);
+
+  // Show user-friendly error message when location fetch fails (only once)
+  useEffect(() => {
+    if (locationError && !locationErrorShown && !isLoadingLocation) {
+      setLocationErrorShown(true);
+      // Show non-intrusive toast message - app continues to work
+      Toast.show({
+        type: 'info',
+        text1: t('location.errorTitle') || 'Location Unavailable',
+        text2: locationError || (t('location.errorMessage') || 'Location services are unavailable. You can still browse and book services.'),
+        visibilityTime: 4000,
+        autoHide: true,
+        position: 'top',
+      });
+    }
+  }, [locationError, locationErrorShown, isLoadingLocation, t]);
 
   useEffect(() => {
     const fetchServiceUuids = async () => {

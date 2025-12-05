@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { Storage } from '@/utils/storage';
+import { API_BASE_URL } from '@/constants/api';
 
 export interface LocationData {
   state: string;
@@ -13,11 +14,31 @@ interface CachedLocationData extends LocationData {
   cachedAt: number;
 }
 
+// Custom error types for better error handling
+export class LocationPermissionError extends Error {
+  constructor(message: string = 'Location permission denied') {
+    super(message);
+    this.name = 'LocationPermissionError';
+  }
+}
+
+export class LocationServiceError extends Error {
+  constructor(message: string = 'Location service error') {
+    super(message);
+    this.name = 'LocationServiceError';
+  }
+}
+
+export class LocationNetworkError extends Error {
+  constructor(message: string = 'Network error while fetching location') {
+    super(message);
+    this.name = 'LocationNetworkError';
+  }
+}
+
 const CACHE_KEY = 'user_location_cache';
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 const LOCATION_COORDINATE_THRESHOLD = 0.01; // ~1km - if user moves more than this, invalidate cache
-
-import { API_BASE_URL } from '@/constants/api';
 
 /**
  * Calculate distance between two coordinates (Haversine formula)
@@ -115,8 +136,21 @@ const reverseGeocodeWithLocationIQ = async (
         error.message.includes('Failed to fetch')
       ) {
         const delay = baseDelay * Math.pow(2, retryCount);
+        console.log(`🔄 Retrying reverse geocode (attempt ${retryCount + 1}/${MAX_RETRIES}) after ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return reverseGeocodeWithLocationIQ(latitude, longitude, retryCount + 1);
+      }
+    }
+    
+    // Wrap error in LocationNetworkError for network issues
+    if (error instanceof Error) {
+      if (
+        error.message.includes('Network') ||
+        error.message.includes('fetch') ||
+        error.message.includes('timeout') ||
+        error.message.includes('Failed to fetch')
+      ) {
+        throw new LocationNetworkError(error.message);
       }
     }
     
@@ -194,49 +228,55 @@ const cacheLocation = async (location: LocationData): Promise<void> => {
 
 /**
  * Get current location with caching and retry logic
+ * Handles all errors gracefully and falls back to cache when possible
  */
 export const getCurrentLocation = async (
   forceRefresh: boolean = false
 ): Promise<LocationData> => {
   console.log('🔵 getCurrentLocation called, forceRefresh:', forceRefresh);
+  
+  // Always check cache first (even before permission check) - allows graceful degradation
+  if (!forceRefresh) {
+    console.log('🔵 Checking cache first...');
+    const cached = await getCachedLocation();
+    if (cached) {
+      console.log('🔵 Found cached location:', cached.state, cached.city);
+      const cacheAge = Date.now() - cached.cachedAt;
+      const cacheAgeHours = (cacheAge / (1000 * 60 * 60)).toFixed(2);
+      console.log(`🔵 Cache age: ${cacheAgeHours} hours`);
+      
+      // Use cached location if it exists and is within 24 hours
+      console.log('✅ ✅ ✅ USING CACHED LOCATION - NO API CALL TO LOCATIONIQ ✅ ✅ ✅');
+      console.log('📍 Cached location:', {
+        state: cached.state,
+        city: cached.city,
+        cachedAt: new Date(cached.cachedAt).toISOString(),
+        ageHours: cacheAgeHours,
+      });
+      return {
+        state: cached.state,
+        city: cached.city,
+        latitude: cached.latitude,
+        longitude: cached.longitude,
+        timestamp: cached.timestamp,
+      };
+    }
+  }
+
   try {
     // Request location permissions
     console.log('🔵 Requesting location permissions...');
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    console.log('🔵 Location permission status:', status);
-    if (status !== 'granted') {
-      console.error('❌ Location permission denied');
-      throw new Error('Location permission denied');
-    }
-
-    // Get current position
-    console.log('🔵 Getting current position...');
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced, // Balanced accuracy for better battery life
-      maximumAge: 60000, // Accept cached location up to 1 minute old
-    });
-
-    const { latitude, longitude } = location.coords;
-    console.log('🔵 Got coordinates:', latitude, longitude);
-
-    // Check cache first (unless force refresh)
-    if (!forceRefresh) {
-      console.log('🔵 Checking cache...');
+    let permissionStatus;
+    try {
+      const permissionResult = await Location.requestForegroundPermissionsAsync();
+      permissionStatus = permissionResult.status;
+      console.log('🔵 Location permission status:', permissionStatus);
+    } catch (permissionError) {
+      console.warn('⚠️ Error requesting location permission:', permissionError);
+      // Check cache before throwing error
       const cached = await getCachedLocation();
       if (cached) {
-        console.log('🔵 Found cached location:', cached.state, cached.city);
-        const cacheAge = Date.now() - cached.cachedAt;
-        const cacheAgeHours = (cacheAge / (1000 * 60 * 60)).toFixed(2);
-        console.log(`🔵 Cache age: ${cacheAgeHours} hours`);
-        
-        // Use cached location if it exists and is within 24 hours (no distance check)
-        console.log('✅ ✅ ✅ USING CACHED LOCATION - NO API CALL TO LOCATIONIQ ✅ ✅ ✅');
-        console.log('📍 Cached location:', {
-          state: cached.state,
-          city: cached.city,
-          cachedAt: new Date(cached.cachedAt).toISOString(),
-          ageHours: cacheAgeHours,
-        });
+        console.log('✅ Using cached location due to permission request error');
         return {
           state: cached.state,
           city: cached.city,
@@ -244,20 +284,90 @@ export const getCurrentLocation = async (
           longitude: cached.longitude,
           timestamp: cached.timestamp,
         };
-      } else {
-        console.log('🔵 No cached location found');
-        console.log('🌐 Will call LocationIQ API to fetch new location');
       }
-    } else {
-      console.log('🔵 Force refresh requested - skipping cache');
-      console.log('🌐 Will call LocationIQ API to fetch new location');
+      throw new LocationPermissionError('Unable to request location permission. Please enable location access in your device settings.');
     }
+
+    if (permissionStatus !== 'granted') {
+      console.warn('⚠️ Location permission denied or not granted');
+      // Check cache before throwing error
+      const cached = await getCachedLocation();
+      if (cached) {
+        console.log('✅ Using cached location - permission denied but cache available');
+        return {
+          state: cached.state,
+          city: cached.city,
+          latitude: cached.latitude,
+          longitude: cached.longitude,
+          timestamp: cached.timestamp,
+        };
+      }
+      throw new LocationPermissionError('Location permission is required to detect your location. You can still use the app without location services.');
+    }
+
+    // Get current position
+    console.log('🔵 Getting current position...');
+    let location;
+    try {
+      location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced, // Balanced accuracy for better battery life
+        maximumAge: 60000, // Accept cached location up to 1 minute old
+        timeout: 15000, // 15 second timeout
+      });
+    } catch (positionError: any) {
+      console.warn('⚠️ Error getting current position:', positionError);
+      // Check cache before throwing error
+      const cached = await getCachedLocation();
+      if (cached) {
+        console.log('✅ Using cached location - position error but cache available');
+        return {
+          state: cached.state,
+          city: cached.city,
+          latitude: cached.latitude,
+          longitude: cached.longitude,
+          timestamp: cached.timestamp,
+        };
+      }
+      throw new LocationServiceError('Unable to get your current location. Please check your GPS settings and try again.');
+    }
+
+    const { latitude, longitude } = location.coords;
+    console.log('🔵 Got coordinates:', latitude, longitude);
 
     // Reverse geocode to get state and city
     console.log('🌐 🌐 🌐 CALLING LOCATIONIQ API (reverse geocoding)... 🌐 🌐 🌐');
-    const { state, city } = await reverseGeocodeWithLocationIQ(latitude, longitude);
-    console.log('✅ ✅ ✅ LOCATIONIQ API CALL SUCCESSFUL ✅ ✅ ✅');
-    console.log('📍 LocationIQ response:', { state, city });
+    let state: string;
+    let city: string;
+    try {
+      const geocodeResult = await reverseGeocodeWithLocationIQ(latitude, longitude);
+      state = geocodeResult.state;
+      city = geocodeResult.city;
+      console.log('✅ ✅ ✅ LOCATIONIQ API CALL SUCCESSFUL ✅ ✅ ✅');
+      console.log('📍 LocationIQ response:', { state, city });
+    } catch (geocodeError: any) {
+      console.warn('⚠️ Error reverse geocoding:', geocodeError);
+      // Check cache before throwing error
+      const cached = await getCachedLocation();
+      if (cached) {
+        console.log('✅ Using cached location - geocoding error but cache available');
+        return {
+          state: cached.state,
+          city: cached.city,
+          latitude: cached.latitude,
+          longitude: cached.longitude,
+          timestamp: cached.timestamp,
+        };
+      }
+      
+      // Determine error type
+      if (geocodeError instanceof LocationNetworkError) {
+        throw geocodeError;
+      } else if (geocodeError.message?.includes('Network') || geocodeError.message?.includes('fetch') || geocodeError.message?.includes('timeout')) {
+        throw new LocationNetworkError('Network error while fetching location. Please check your internet connection.');
+      } else {
+        throw new LocationServiceError('Unable to determine your location. Please try again later.');
+      }
+    }
 
     const locationData: LocationData = {
       state,
@@ -269,15 +379,20 @@ export const getCurrentLocation = async (
 
     // Cache the result
     console.log('💾 Caching location data for 24 hours...');
-    await cacheLocation(locationData);
-    console.log('✅ Location cached successfully');
+    try {
+      await cacheLocation(locationData);
+      console.log('✅ Location cached successfully');
+    } catch (cacheError) {
+      // Don't fail if caching fails - location data is still valid
+      console.warn('⚠️ Error caching location (non-critical):', cacheError);
+    }
 
     return locationData;
   } catch (error) {
-    // If we have cached data, return it even if fresh fetch failed
+    // Final fallback: check cache one more time
     const cached = await getCachedLocation();
     if (cached) {
-      console.warn('Using cached location due to fetch error:', error);
+      console.log('✅ Final fallback: Using cached location due to error');
       return {
         state: cached.state,
         city: cached.city,
@@ -287,8 +402,20 @@ export const getCurrentLocation = async (
       };
     }
 
-    // Re-throw error if no cache available
-    throw error;
+    // If no cache and error occurred, re-throw with proper error type
+    if (error instanceof LocationPermissionError || error instanceof LocationServiceError || error instanceof LocationNetworkError) {
+      throw error;
+    }
+    
+    // Wrap unknown errors
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    if (errorMessage.includes('permission') || errorMessage.includes('Permission')) {
+      throw new LocationPermissionError('Location permission is required. You can still use the app without location services.');
+    } else if (errorMessage.includes('Network') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
+      throw new LocationNetworkError('Network error while fetching location. Please check your internet connection.');
+    } else {
+      throw new LocationServiceError(`Unable to fetch location: ${errorMessage}`);
+    }
   }
 };
 

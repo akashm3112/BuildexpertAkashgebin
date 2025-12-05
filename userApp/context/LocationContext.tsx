@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { getCurrentLocation, LocationData, clearLocationCache } from '@/services/locationService';
+import { 
+  getCurrentLocation, 
+  LocationData, 
+  clearLocationCache,
+  LocationPermissionError,
+  LocationServiceError,
+  LocationNetworkError
+} from '@/services/locationService';
 
 interface LocationContextType {
   location: LocationData | null;
@@ -54,8 +61,22 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       setLocation(locationData);
       setError(null);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch location';
-      console.error('❌ LocationContext: Location fetch error:', err);
+      // Handle different error types with user-friendly messages
+      let errorMessage: string;
+      
+      if (err instanceof LocationPermissionError) {
+        errorMessage = 'Location permission is required. You can still use the app without location services.';
+        console.warn('⚠️ LocationContext: Permission error (non-critical):', err.message);
+      } else if (err instanceof LocationNetworkError) {
+        errorMessage = 'Network error while fetching location. Please check your internet connection.';
+        console.warn('⚠️ LocationContext: Network error:', err.message);
+      } else if (err instanceof LocationServiceError) {
+        errorMessage = 'Unable to fetch location. You can still use the app without location services.';
+        console.warn('⚠️ LocationContext: Service error:', err.message);
+      } else {
+        errorMessage = err instanceof Error ? err.message : 'Failed to fetch location. You can still use the app.';
+        console.warn('⚠️ LocationContext: Unknown error:', err);
+      }
       
       // Calculate elapsed time and wait if needed
       const elapsedTime = Date.now() - startTime;
@@ -65,8 +86,12 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
         await new Promise(resolve => setTimeout(resolve, remainingTime));
       }
       
+      // Set error but don't block app functionality - location is optional
       setError(errorMessage);
       setLocation(null);
+      
+      // Note: We don't throw the error - the app continues to work without location
+      // This is production-level error handling - graceful degradation
     } finally {
       setIsLoading(false);
       console.log('🔵 LocationContext: fetchLocation completed, isLoading set to false');

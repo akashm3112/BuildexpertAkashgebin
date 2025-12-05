@@ -20,6 +20,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useLabourAccess } from '@/context/LabourAccessContext';
 import { Modal } from '@/components/common/Modal';
 import { SafeView } from '@/components/SafeView';
+import Toast from 'react-native-toast-message';
+import * as Location from 'expo-location';
 
 import ServiceCategoryGrid from '@/components/home/ServiceCategoryGrid';
 import FeaturedProviders from '@/components/home/FeaturedProviders';
@@ -90,6 +92,7 @@ export default function HomeScreen() {
   const [locationName, setLocationName] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
   const [showAlertModal, setShowAlertModal] = useState(false);
+  const [isFetchingCurrentLocation, setIsFetchingCurrentLocation] = useState(false);
   
   // Enhanced search state management
   const [search, setSearch] = useState('');
@@ -120,28 +123,117 @@ export default function HomeScreen() {
     setShowLocationModal(false);
   };
 
-  const handleUseCurrentLocation = () => {
-    showAlert(
-      t('home.locationAccess'),
-      t('home.locationAccessMessage'),
-      'info',
-      [
-        {
-          text: t('home.cancel'),
-          onPress: () => setShowAlertModal(false),
-          style: 'secondary',
-        },
-        {
-          text: t('home.allow'),
-          onPress: () => {
-            setSelectedLocation(SAVED_LOCATIONS[2]);
-            setShowLocationModal(false);
-            setShowAlertModal(false);
-          },
-          style: 'primary',
-        },
-      ]
-    );
+  const handleUseCurrentLocation = async () => {
+    try {
+      setIsFetchingCurrentLocation(true);
+      
+      // Check if location services are enabled
+      const isEnabled = await Location.hasServicesEnabledAsync();
+      if (!isEnabled) {
+        setIsFetchingCurrentLocation(false);
+        Toast.show({
+          type: 'error',
+          text1: t('location.errorTitle') || 'Location Services Disabled',
+          text2: t('location.servicesDisabled') || 'Please enable location services in your device settings and try again.',
+          visibilityTime: 4000,
+        });
+        return;
+      }
+      
+      // Request location permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        setIsFetchingCurrentLocation(false);
+        Toast.show({
+          type: 'error',
+          text1: t('location.errorTitle') || 'Location Permission Denied',
+          text2: t('location.permissionDenied') || 'Location permission is required. Please enable it in your device settings.',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      // Get current position using expo-location only
+      let locationData;
+      try {
+        locationData = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          maximumAge: 60000, // Accept cached location up to 1 minute old
+          timeout: 15000, // 15 second timeout
+        });
+      } catch (positionError: any) {
+        // Handle specific location errors
+        setIsFetchingCurrentLocation(false);
+        let errorMessage = t('location.errorMessage') || 'Could not fetch your location. Please try again.';
+        
+        if (positionError?.message) {
+          const errorMsg = positionError.message.toLowerCase();
+          if (errorMsg.includes('unavailable') || errorMsg.includes('location services')) {
+            errorMessage = t('location.servicesDisabled') || 'Location services are unavailable. Please enable location services in your device settings.';
+          } else if (errorMsg.includes('timeout')) {
+            errorMessage = t('location.timeout') || 'Location request timed out. Please try again.';
+          } else if (errorMsg.includes('permission')) {
+            errorMessage = t('location.permissionDenied') || 'Location permission is required. Please enable it in your device settings.';
+          } else {
+            errorMessage = positionError.message;
+          }
+        }
+        
+        Toast.show({
+          type: 'error',
+          text1: t('location.errorTitle') || 'Location Error',
+          text2: errorMessage,
+          visibilityTime: 4000,
+        });
+        return;
+      }
+
+      const { latitude, longitude } = locationData.coords;
+      
+      // Update selected location with current location data
+      // Display coordinates or a generic message since we're not reverse geocoding
+      const currentLocationData = {
+        id: '3',
+        name: 'Current Location',
+        address: `Lat: ${latitude.toFixed(6)}, Lon: ${longitude.toFixed(6)}`,
+      };
+      
+      setSelectedLocation(currentLocationData);
+      setShowLocationModal(false);
+      setIsFetchingCurrentLocation(false);
+      
+      Toast.show({
+        type: 'success',
+        text1: t('home.locationUpdated') || 'Location Updated',
+        text2: t('home.currentLocationSet') || 'Current location has been set',
+        visibilityTime: 2000,
+      });
+    } catch (error) {
+      console.error('Error fetching current location:', error);
+      setIsFetchingCurrentLocation(false);
+      
+      let errorMessage = t('location.errorMessage') || 'Could not fetch your location. Please try again.';
+      if (error instanceof Error) {
+        const errorMsg = error.message.toLowerCase();
+        if (errorMsg.includes('unavailable') || errorMsg.includes('location services')) {
+          errorMessage = t('location.servicesDisabled') || 'Location services are unavailable. Please enable location services in your device settings.';
+        } else if (errorMsg.includes('permission') || errorMsg.includes('Permission')) {
+          errorMessage = t('location.permissionDenied') || 'Location permission is required. Please enable it in your device settings.';
+        } else if (errorMsg.includes('timeout')) {
+          errorMessage = t('location.timeout') || 'Location request timed out. Please try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Toast.show({
+        type: 'error',
+        text1: t('location.errorTitle') || 'Location Error',
+        text2: errorMessage,
+        visibilityTime: 4000,
+      });
+    }
   };
 
   const handleEditLocation = (location: typeof SAVED_LOCATIONS[0]) => {
@@ -379,11 +471,19 @@ export default function HomeScreen() {
               </View>
 
               <TouchableOpacity 
-                style={styles.currentLocationButton}
+                style={[styles.currentLocationButton, isFetchingCurrentLocation && styles.currentLocationButtonDisabled]}
                 onPress={handleUseCurrentLocation}
+                disabled={isFetchingCurrentLocation}
               >
-                <Navigation size={20} color="#3B82F6" />
-                <Text style={styles.currentLocationText}>{t('home.useCurrentLocation')}</Text>
+                <Navigation size={20} color={isFetchingCurrentLocation ? "#94A3B8" : "#3B82F6"} />
+                <Text style={[styles.currentLocationText, isFetchingCurrentLocation && styles.currentLocationTextDisabled]}>
+                  {isFetchingCurrentLocation 
+                    ? (t('location.fetching') || 'Fetching location...') 
+                    : (t('home.useCurrentLocation') || 'Use Current Location')}
+                </Text>
+                {isFetchingCurrentLocation && (
+                  <Text style={styles.loadingSpinnerText}>⟳</Text>
+                )}
               </TouchableOpacity>
 
               <View style={styles.savedLocationsContainer}>
@@ -912,16 +1012,34 @@ const styles = StyleSheet.create({
   currentLocationButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
     padding: 16,
+    backgroundColor: '#F0F9FF',
     borderRadius: 12,
     marginBottom: 20,
-    gap: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  currentLocationButtonDisabled: {
+    backgroundColor: '#F9FAFB',
+    borderColor: '#E5E7EB',
+    opacity: 0.7,
   },
   currentLocationText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#3B82F6',
+    marginLeft: 12,
+    flex: 1,
+  },
+  currentLocationTextDisabled: {
+    color: '#94A3B8',
+  },
+  loadingSpinner: {
+    marginLeft: 8,
+  },
+  loadingSpinnerText: {
+    fontSize: 18,
+    color: '#94A3B8',
   },
   savedLocationsContainer: {
     marginTop: 8,
