@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -259,6 +259,7 @@ interface Provider {
   averageRating?: number;
   totalReviews?: number;
   state: string;
+  city?: string;
 }
 
 export default function ServiceListingScreen() {
@@ -267,8 +268,12 @@ export default function ServiceListingScreen() {
   const { t } = useLanguage();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalProviders, setTotalProviders] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -401,19 +406,53 @@ export default function ServiceListingScreen() {
 
   useEffect(() => {
     if (serviceId) {
-      fetchProviders();
+      // Wait for location to be fetched (or timeout) before fetching providers
+      // This ensures we have location data for sorting
+      if (isLoadingLocation) {
+        // Location is still loading, wait a bit
+        const timer = setTimeout(() => {
+          // Fetch providers even if location is still loading (will use default sorting)
+          fetchProviders(1, false);
+        }, 2000); // Max 2 seconds wait for location
+        
+        return () => clearTimeout(timer);
+      } else {
+        // Location loaded (or failed), fetch providers now
+        fetchProviders(1, false);
+      }
     } else if (!isLoading) {
       setError('Service not found. Please try again from the home screen.');
     }
-  }, [serviceId]);
+  }, [serviceId, location, isLoadingLocation, fetchProviders]);
 
-  const fetchProviders = async () => {
+  const fetchProviders = useCallback(async (page: number = 1, append: boolean = false) => {
     if (!serviceId) return;
     try {
-      setIsLoading(true);
+      if (append) {
+        setIsLoadingMore(true);
+      } else {
+        setIsLoading(true);
+        setCurrentPage(1);
+        setHasMore(true);
+      }
       setError(null);
 
-      const url = `${API_BASE_URL}/api/public/services/${serviceId}/providers`;
+      // Build URL with location parameters if available
+      const urlParams = new URLSearchParams();
+      if (location?.city) {
+        urlParams.append('userCity', location.city);
+      }
+      if (location?.state) {
+        urlParams.append('userState', location.state);
+      }
+      // Use smaller batches for better performance and infinite scroll
+      const pageSize = 30; // Load 30 providers at a time
+      urlParams.append('limit', pageSize.toString());
+      urlParams.append('page', page.toString());
+      
+      const queryString = urlParams.toString();
+      const url = `${API_BASE_URL}/api/public/services/${serviceId}/providers?${queryString}`;
+      
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -426,53 +465,109 @@ export default function ServiceListingScreen() {
         
         if (data.status === 'success' && Array.isArray(data.data.providers)) {
           const rawProviders = data.data.providers;
+          const pagination = data.data.pagination || {};
+          
+          // Update pagination state
+          setTotalProviders(pagination.total || 0);
+          setHasMore(pagination.currentPage < pagination.totalPages);
           
           // If no providers found, set empty array instead of error
           if (rawProviders.length === 0) {
-            setProviders([]);
+            if (page === 1) {
+              setProviders([]);
+            }
+            setHasMore(false);
             setIsLoading(false);
+            setIsLoadingMore(false);
             return;
           }
           
-          // Fetch ratings for each provider
-          const providersWithRatings = await Promise.all(
-            rawProviders.map(async (provider: Provider) => {
-              try {
-                const ratingResponse = await fetch(
-                  `${API_BASE_URL}/api/public/services/${serviceId}/providers/${provider.provider_service_id}`,
-                  {
-                    method: 'GET',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                  }
-                );
+          // Progressive loading: Display providers immediately, then fetch ratings in background
+          // For pagination: append new providers to existing list
+          const newProviders = rawProviders.map((provider: Provider) => ({
+            ...provider,
+            averageRating: 0,
+            totalReviews: 0,
+          }));
+          
+          if (page === 1) {
+            // First page: replace all providers
+            setProviders(newProviders);
+            setCurrentPage(1);
+          } else {
+            // Subsequent pages: append to existing providers
+            setProviders((prev) => [...prev, ...newProviders]);
+            setCurrentPage(page);
+          }
+          
+          setIsLoading(false);
+          setIsLoadingMore(false);
+          
+          // Fetch ratings in background for newly loaded providers only
+          // Batch rating fetches to avoid overwhelming the server
+          const batchSize = 10; // Fetch 10 ratings at a time
+          for (let i = 0; i < rawProviders.length; i += batchSize) {
+            const batch = rawProviders.slice(i, i + batchSize);
+            
+            Promise.allSettled(
+              batch.map(async (provider: Provider) => {
+                try {
+                  const ratingResponse = await fetch(
+                    `${API_BASE_URL}/api/public/services/${serviceId}/providers/${provider.provider_service_id}`,
+                    {
+                      method: 'GET',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                    }
+                  );
 
-                if (ratingResponse.ok) {
-                  const ratingData = await ratingResponse.json();
+                  if (ratingResponse.ok) {
+                    const ratingData = await ratingResponse.json();
+                    return {
+                      providerId: provider.provider_service_id,
+                      averageRating: ratingData.data.provider.averageRating || 0,
+                      totalReviews: ratingData.data.provider.totalReviews || 0,
+                    };
+                  }
                   return {
-                    ...provider,
-                    averageRating: ratingData.data.provider.averageRating || 0,
-                    totalReviews: ratingData.data.provider.totalReviews || 0,
+                    providerId: provider.provider_service_id,
+                    averageRating: 0,
+                    totalReviews: 0,
+                  };
+                } catch (error) {
+                  console.error('Error fetching ratings for provider:', provider.provider_service_id);
+                  return {
+                    providerId: provider.provider_service_id,
+                    averageRating: 0,
+                    totalReviews: 0,
                   };
                 }
-                return {
-                  ...provider,
-                  averageRating: 0,
-                  totalReviews: 0,
-                };
-              } catch (error) {
-                console.error('Error fetching ratings for provider:', provider.provider_service_id);
-                return {
-                  ...provider,
-                  averageRating: 0,
-                  totalReviews: 0,
-                };
-              }
-            })
-          );
-
-          setProviders(providersWithRatings);
+              })
+            ).then((results) => {
+              // Update providers with ratings as they come in
+              setProviders((prevProviders) => {
+                return prevProviders.map((provider) => {
+                  const result = results.find(
+                    (r) => r.status === 'fulfilled' && r.value.providerId === provider.provider_service_id
+                  );
+                  if (result && result.status === 'fulfilled') {
+                    return {
+                      ...provider,
+                      averageRating: result.value.averageRating,
+                      totalReviews: result.value.totalReviews,
+                    };
+                  }
+                  return provider;
+                });
+              });
+            });
+            
+            // Small delay between batches to avoid overwhelming the server
+            if (i + batchSize < rawProviders.length) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          }
         } else {
           setError('Invalid response format from server');
         }
@@ -490,12 +585,22 @@ export default function ServiceListingScreen() {
       setError('Network error. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
-  };
+  }, [serviceId, location]);
+
+  // Load more providers when user scrolls to bottom
+  const loadMoreProviders = useCallback(() => {
+    if (!isLoadingMore && hasMore && !isLoading) {
+      fetchProviders(currentPage + 1, true);
+    }
+  }, [isLoadingMore, hasMore, isLoading, currentPage, fetchProviders]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchProviders();
+    setCurrentPage(1);
+    setHasMore(true);
+    await fetchProviders(1, false);
     setRefreshing(false);
   };
 
@@ -791,7 +896,11 @@ export default function ServiceListingScreen() {
           </View>
           <View style={styles.locationRow}>
             <MapPin size={14} color="#64748B" />
-            <Text style={styles.location}>{item.state}</Text>
+            <Text style={styles.location} numberOfLines={1}>
+              {item.city && item.state 
+                ? `${item.city}, ${item.state}` 
+                : item.city || item.state || 'Location not available'}
+            </Text>
           </View>
         </View>
         <TouchableOpacity
@@ -978,11 +1087,25 @@ export default function ServiceListingScreen() {
         keyExtractor={(item) => item.provider_service_id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        onEndReached={loadMoreProviders}
+        onEndReachedThreshold={0.5}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>{t('serviceListing.noResultsFound', { category: categoryName.toLowerCase() })}</Text>
             <Text style={styles.emptySubtext}>{t('serviceListing.tryAdjustingSearch')}</Text>
           </View>
+        }
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={styles.loadingMoreContainer}>
+              <ActivityIndicator size="small" color="#3B82F6" />
+              <Text style={styles.loadingMoreText}>{t('serviceListing.loadingMore') || 'Loading more providers...'}</Text>
+            </View>
+          ) : hasMore ? null : providers.length > 0 ? (
+            <View style={styles.endOfListContainer}>
+              <Text style={styles.endOfListText}>{t('serviceListing.allProvidersLoaded') || 'All providers loaded'}</Text>
+            </View>
+          ) : null
         }
         refreshControl={
           <RefreshControl
@@ -1909,5 +2032,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#374151',
+  },
+  loadingMoreContainer: {
+    paddingVertical: getResponsiveSpacing(16, 20, 24),
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: getResponsiveSpacing(8, 10, 12),
+  },
+  loadingMoreText: {
+    fontSize: getResponsiveSpacing(13, 14, 15),
+    color: '#64748B',
+    fontFamily: 'Inter-Medium',
+  },
+  endOfListContainer: {
+    paddingVertical: getResponsiveSpacing(16, 20, 24),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endOfListText: {
+    fontSize: getResponsiveSpacing(12, 13, 14),
+    color: '#94A3B8',
+    fontFamily: 'Inter-Regular',
   },
 });

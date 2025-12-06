@@ -31,6 +31,7 @@ const optimizeReportStatusIndexes = require('./017-optimize-report-status-indexe
 const addRefreshTokensTable = require('./018-add-refresh-tokens-table');
 const updatePaintingService = require('./019-update-painting-service');
 const addCityToAddresses = require('./020-add-city-to-addresses');
+const addLocationIndexes = require('./021-add-location-indexes');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -173,6 +174,13 @@ const migrations = [
     description: 'Adds city column to addresses table for service registration',
     function: addCityToAddresses,
     required: true // Required for city selection in service registration
+  },
+  {
+    id: '021',
+    name: 'Add Location Indexes',
+    description: 'Adds indexes on addresses.city and addresses.state for optimized location-based sorting',
+    function: addLocationIndexes,
+    required: true // Required for fast location-based provider sorting
   }
 ];
 

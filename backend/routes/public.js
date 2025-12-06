@@ -65,11 +65,11 @@ router.get('/services', asyncHandler(async (req, res) => {
 }));
 
 // @route   GET /api/public/services/:id/providers
-// @desc    Get providers for a specific service (public)
+// @desc    Get providers for a specific service (public) - sorted by location priority
 // @access  Public
 router.get('/services/:id/providers', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { page = 1, limit = 10, state } = req.query;
+  const { page = 1, limit = 10, state, userCity, userState } = req.query;
   const offset = (page - 1) * limit;
 
   let whereClause = 'WHERE ps.service_id = $1 AND ps.payment_status = $2';
@@ -77,9 +77,82 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
   let paramCount = 3;
 
   if (state) {
-    whereClause += ` AND a.state = $${paramCount}`;
+    whereClause += ` AND LOWER(TRIM(COALESCE(a.state, ''))) = LOWER(TRIM($${paramCount}))`;
     queryParams.push(state);
     paramCount++;
+  }
+
+  // Helper function to normalize city names (handles common variations)
+  const normalizeCityName = (cityName) => {
+    if (!cityName) return null;
+    const normalized = (cityName || '').trim().toLowerCase();
+    
+    // Map common variations to standard names for consistent matching
+    const cityVariations = {
+      'bangalore': 'bengaluru',
+      'bombay': 'mumbai',
+      'calcutta': 'kolkata',
+      'madras': 'chennai',
+      'puna': 'pune',
+    };
+    
+    return cityVariations[normalized] || normalized;
+  };
+
+  // Build location-based sorting with case-insensitive matching and variation handling
+  // Priority: 1. Same city (and same state), 2. Same state (different city), 3. Others
+  // Within each group: Sort by experience DESC, then created_at DESC
+  let orderByClause = '';
+  if (userCity && userState) {
+    // Normalize user city/state for comparison
+    const normalizedUserCity = normalizeCityName(userCity);
+    const normalizedUserState = (userState || '').trim().toLowerCase();
+    
+    // Use CASE statement for location-based sorting
+    // Priority 0 = same city AND same state, 1 = same state (different city), 2 = others
+    // Handle city variations: check both normalized and original names
+    orderByClause = `
+      ORDER BY 
+        CASE 
+          WHEN (
+            LOWER(TRIM(COALESCE(a.city, ''))) = $${paramCount}
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'bengaluru' AND $${paramCount} = 'bangalore')
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'bangalore' AND $${paramCount} = 'bengaluru')
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'bombay' AND $${paramCount} = 'mumbai')
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'mumbai' AND $${paramCount} = 'bombay')
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'calcutta' AND $${paramCount} = 'kolkata')
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'kolkata' AND $${paramCount} = 'calcutta')
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'madras' AND $${paramCount} = 'chennai')
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'chennai' AND $${paramCount} = 'madras')
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'puna' AND $${paramCount} = 'pune')
+            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'pune' AND $${paramCount} = 'puna')
+          )
+          AND LOWER(TRIM(COALESCE(a.state, ''))) = $${paramCount + 1} THEN 0
+          WHEN LOWER(TRIM(COALESCE(a.state, ''))) = $${paramCount + 1} THEN 1
+          ELSE 2
+        END,
+        pp.years_of_experience DESC,
+        ps.created_at DESC
+    `;
+    queryParams.push(normalizedUserCity, normalizedUserState);
+    paramCount += 2;
+  } else if (userState) {
+    // Only state available, sort by same state first
+    const normalizedUserState = (userState || '').trim().toLowerCase();
+    orderByClause = `
+      ORDER BY 
+        CASE 
+          WHEN LOWER(TRIM(COALESCE(a.state, ''))) = $${paramCount} THEN 0
+          ELSE 1
+        END,
+        pp.years_of_experience DESC,
+        ps.created_at DESC
+    `;
+    queryParams.push(normalizedUserState);
+    paramCount++;
+  } else {
+    // No location info, use default sorting
+    orderByClause = 'ORDER BY pp.years_of_experience DESC, ps.created_at DESC';
   }
 
   const providers = await getRows(`
@@ -97,6 +170,7 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
       ps.payment_start_date,
       ps.payment_end_date,
       a.state as state,
+      a.city as city,
       sm.name as service_name
     FROM provider_services ps
     JOIN provider_profiles pp ON ps.provider_id = pp.id
@@ -104,7 +178,7 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
     JOIN services_master sm ON ps.service_id = sm.id
     LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
     ${whereClause}
-    ORDER BY pp.years_of_experience DESC, ps.created_at DESC
+    ${orderByClause}
     LIMIT $${paramCount} OFFSET $${paramCount + 1}
   `, [...queryParams, limit, offset]);
 
@@ -133,7 +207,13 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
     service_description: serviceDescriptions[provider.service_name] || provider.service_description
   }));
 
-  // Get total count
+  // Get total count - use only WHERE clause parameters (not ORDER BY parameters)
+  // Create a separate params array for count query that excludes location sorting params
+  const countQueryParams = [id, 'active'];
+  if (state) {
+    countQueryParams.push(state);
+  }
+  
   const countResult = await getRow(`
     SELECT COUNT(*) as total
     FROM provider_services ps
@@ -142,7 +222,7 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
     JOIN services_master sm ON ps.service_id = sm.id
     LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
     ${whereClause}
-  `, queryParams);
+  `, countQueryParams);
 
   const total = parseInt(countResult.total);
   const totalPages = Math.ceil(total / limit);

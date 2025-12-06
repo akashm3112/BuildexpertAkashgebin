@@ -38,29 +38,6 @@ export class LocationNetworkError extends Error {
 
 const CACHE_KEY = 'user_location_cache';
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
-const LOCATION_COORDINATE_THRESHOLD = 0.01; // ~1km - if user moves more than this, invalidate cache
-
-/**
- * Calculate distance between two coordinates (Haversine formula)
- */
-const calculateDistance = (
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number => {
-  const R = 6371; // Earth's radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distance in km
-};
 
 /**
  * Reverse geocode coordinates to get state and city using backend API (which proxies LocationIQ)
@@ -188,24 +165,8 @@ const getCachedLocation = async (): Promise<CachedLocationData | null> => {
   }
 };
 
-/**
- * Check if cached location is still valid based on current coordinates
- */
-const isCachedLocationValid = (
-  cached: CachedLocationData,
-  currentLat: number,
-  currentLon: number
-): boolean => {
-  const distance = calculateDistance(
-    cached.latitude,
-    cached.longitude,
-    currentLat,
-    currentLon
-  );
-
-  // If user moved more than threshold, cache is invalid
-  return distance <= LOCATION_COORDINATE_THRESHOLD * 111; // Convert to km (1 degree ≈ 111 km)
-};
+// Removed unused functions: calculateDistance and isCachedLocationValid
+// Cache is now time-based only (24 hours) as per user requirements
 
 /**
  * Cache location data
