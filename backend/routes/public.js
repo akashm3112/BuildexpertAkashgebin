@@ -171,13 +171,23 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
       ps.payment_end_date,
       a.state as state,
       a.city as city,
-      sm.name as service_name
+      sm.name as service_name,
+      COALESCE(ROUND(AVG(r.rating)::numeric, 1), 0) as average_rating,
+      COUNT(r.id) as total_reviews
     FROM provider_services ps
     JOIN provider_profiles pp ON ps.provider_id = pp.id
     JOIN users u ON pp.user_id = u.id
     JOIN services_master sm ON ps.service_id = sm.id
     LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
+    LEFT JOIN bookings b ON b.provider_service_id = ps.id
+    LEFT JOIN ratings r ON r.booking_id = b.id
     ${whereClause}
+    GROUP BY 
+      u.id, u.full_name, u.phone, u.profile_pic_url,
+      pp.years_of_experience, pp.service_description,
+      ps.id, ps.service_charge_value, ps.service_charge_unit,
+      ps.working_proof_urls, ps.payment_start_date, ps.payment_end_date,
+      ps.created_at, a.state, a.city, sm.name
     ${orderByClause}
     LIMIT $${paramCount} OFFSET $${paramCount + 1}
   `, [...queryParams, limit, offset]);
@@ -201,10 +211,12 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
     'borewell': 'Borewell Drilling, Pump Installation, Maintenance, Water Testing'
   };
 
-  // Update service descriptions based on service category
+  // Update service descriptions based on service category and normalize rating fields
   const updatedProviders = providers.map(provider => ({
     ...provider,
-    service_description: serviceDescriptions[provider.service_name] || provider.service_description
+    service_description: serviceDescriptions[provider.service_name] || provider.service_description,
+    averageRating: parseFloat(provider.average_rating) || 0,
+    totalReviews: parseInt(provider.total_reviews) || 0
   }));
 
   // Get total count - use only WHERE clause parameters (not ORDER BY parameters)

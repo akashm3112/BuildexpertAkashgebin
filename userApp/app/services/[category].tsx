@@ -466,12 +466,12 @@ export default function ServiceListingScreen() {
             return;
           }
           
-          // Progressive loading: Display providers immediately, then fetch ratings in background
-          // For pagination: append new providers to existing list
-          const newProviders = rawProviders.map((provider: Provider) => ({
+          // Providers now include ratings from backend (averageRating, totalReviews)
+          // Map providers and ensure rating fields are properly typed
+          const newProviders = rawProviders.map((provider: any) => ({
             ...provider,
-            averageRating: 0,
-            totalReviews: 0,
+            averageRating: provider.averageRating || 0,
+            totalReviews: provider.totalReviews || 0,
           }));
           
           if (page === 1) {
@@ -486,72 +486,6 @@ export default function ServiceListingScreen() {
           
           setIsLoading(false);
           setIsLoadingMore(false);
-          
-          // Fetch ratings in background for newly loaded providers only
-          // Batch rating fetches to avoid overwhelming the server
-          const batchSize = 10; // Fetch 10 ratings at a time
-          for (let i = 0; i < rawProviders.length; i += batchSize) {
-            const batch = rawProviders.slice(i, i + batchSize);
-            
-            Promise.allSettled(
-              batch.map(async (provider: Provider) => {
-                try {
-                  const ratingResponse = await fetch(
-                    `${API_BASE_URL}/api/public/services/${serviceId}/providers/${provider.provider_service_id}`,
-                    {
-                      method: 'GET',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                    }
-                  );
-
-                  if (ratingResponse.ok) {
-                    const ratingData = await ratingResponse.json();
-                    return {
-                      providerId: provider.provider_service_id,
-                      averageRating: ratingData.data.provider.averageRating || 0,
-                      totalReviews: ratingData.data.provider.totalReviews || 0,
-                    };
-                  }
-                  return {
-                    providerId: provider.provider_service_id,
-                    averageRating: 0,
-                    totalReviews: 0,
-                  };
-                } catch (error) {
-                  console.error('Error fetching ratings for provider:', provider.provider_service_id);
-                  return {
-                    providerId: provider.provider_service_id,
-                    averageRating: 0,
-                    totalReviews: 0,
-                  };
-                }
-              })
-            ).then((results) => {
-              // Update providers with ratings as they come in
-              setProviders((prevProviders) => {
-                return prevProviders.map((provider) => {
-                  const result = results.find(
-                    (r) => r.status === 'fulfilled' && r.value.providerId === provider.provider_service_id
-                  );
-                  if (result && result.status === 'fulfilled') {
-                    return {
-                      ...provider,
-                      averageRating: result.value.averageRating,
-                      totalReviews: result.value.totalReviews,
-                    };
-                  }
-                  return provider;
-                });
-              });
-            });
-            
-            // Small delay between batches to avoid overwhelming the server
-            if (i + batchSize < rawProviders.length) {
-              await new Promise(resolve => setTimeout(resolve, 100));
-            }
-          }
         } else {
           setError('Invalid response format from server');
         }
