@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   StatusBar,
   Dimensions,
   Animated,
+  Pressable,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ArrowLeft, Search, Star, MapPin, Filter, Heart, Phone, MessageCircle, X, FileSliders as Sliders, AlertTriangle, CreditCard, Lock } from 'lucide-react-native';
@@ -279,12 +280,15 @@ export default function ServiceListingScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState({
     minRating: 0,
-    maxPrice: 5000, // Increased to accommodate higher price ranges
     experience: 0,
-    verified: false,
-    availability: 'all'
+    city: ''
   });
   const [tempFilters, setTempFilters] = useState(filters);
+  const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
+  const cityInputRef = useRef<TextInput>(null);
+  const citySuggestionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isSelectingCityRef = useRef(false); // Track when user is selecting from suggestions
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState<string>('Services');
   const [labourAccessStatus, setLabourAccessStatus] = useState<any>(null);
@@ -604,10 +608,44 @@ export default function ServiceListingScreen() {
     setRefreshing(false);
   };
 
-  // Remove duplicate providers by provider_service_id
-  const uniqueProviders = Array.from(
-    new Map(providers.map(p => [p.provider_service_id, p])).values()
-  );
+  // Remove duplicate providers by provider_service_id (memoized to prevent infinite loops)
+  const uniqueProviders = useMemo(() => {
+    return Array.from(
+      new Map(providers.map(p => [p.provider_service_id, p])).values()
+    );
+  }, [providers]);
+
+  // Get all available cities from providers for city filter suggestions
+  const availableCities = useMemo(() => {
+    const cities = new Set<string>();
+    uniqueProviders.forEach(provider => {
+      if (provider.city && provider.city.trim()) {
+        cities.add(provider.city.trim());
+      }
+    });
+    return Array.from(cities).sort();
+  }, [uniqueProviders]);
+
+  // Update city suggestions when user types (but not when selecting from suggestions)
+  useEffect(() => {
+    // Skip if user is selecting from suggestions to prevent interference
+    if (isSelectingCityRef.current) {
+      isSelectingCityRef.current = false; // Reset flag
+      return;
+    }
+
+    if (tempFilters.city && tempFilters.city.trim().length >= 2) {
+      const query = tempFilters.city.toLowerCase().trim();
+      const suggestions = availableCities.filter(city =>
+        city.toLowerCase().includes(query)
+      ).slice(0, 5); // Limit to 5 suggestions
+      setCitySuggestions(suggestions);
+      setShowCitySuggestions(suggestions.length > 0);
+    } else {
+      setCitySuggestions([]);
+      setShowCitySuggestions(false);
+    }
+  }, [tempFilters.city, availableCities]);
 
   const filteredProviders = uniqueProviders.filter(provider => {
     // Search filter
@@ -617,19 +655,14 @@ export default function ServiceListingScreen() {
     // Rating filter
     const matchesRating = (provider.averageRating || 0) >= filters.minRating;
 
-    // Price filter
-    const matchesPrice = provider.service_charge_value <= filters.maxPrice;
-
     // Experience filter
     const matchesExperience = provider.years_of_experience >= filters.experience;
 
-    // Verified filter (assuming all providers are verified if they have active services)
-    const matchesVerified = !filters.verified || true;
+    // City filter (case-insensitive)
+    const matchesCity = !filters.city || 
+      (provider.city && provider.city.toLowerCase().trim() === filters.city.toLowerCase().trim());
 
-    // Availability filter (simplified - assuming all are available)
-    const matchesAvailability = filters.availability === 'all' || true;
-
-    return matchesSearch && matchesRating && matchesPrice && matchesExperience && matchesVerified && matchesAvailability;
+    return matchesSearch && matchesRating && matchesExperience && matchesCity;
   });
 
  
@@ -667,13 +700,13 @@ export default function ServiceListingScreen() {
   const resetFilters = () => {
     const defaultFilters = {
       minRating: 0,
-      maxPrice: 5000, // Increased to accommodate higher price ranges
       experience: 0,
-      verified: false,
-      availability: 'all'
+      city: ''
     };
     setTempFilters(defaultFilters);
     setFilters(defaultFilters);
+    setCitySuggestions([]);
+    setShowCitySuggestions(false);
   };
 
   // Get proper service options based on provider category
@@ -1115,40 +1148,212 @@ export default function ServiceListingScreen() {
         }
       />
 
-      {/* Filter Modal */}
+      {/* Modern Filter Modal */}
       <Modal
         visible={showFilterModal}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setShowFilterModal(false)}
       >
-        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+        <SafeView style={styles.modalContainer} backgroundColor="#F8FAFC">
+          {/* Modern Header */}
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-              <X size={24} color="#64748B" />
+            <TouchableOpacity 
+              style={styles.modalCloseButton}
+              onPress={() => setShowFilterModal(false)}
+              activeOpacity={0.7}
+            >
+              <X size={getResponsiveSpacing(22, 24, 26)} color="#64748B" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{t('serviceListing.filters')}</Text>
-            <TouchableOpacity onPress={resetFilters}>
+            <View style={styles.modalTitleContainer}>
+              <Filter size={getResponsiveSpacing(20, 22, 24)} color="#3B82F6" />
+              <Text style={styles.modalTitle}>{t('serviceListing.filters')}</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.resetButton}
+              onPress={resetFilters}
+              activeOpacity={0.7}
+            >
               <Text style={styles.resetText}>{t('serviceListing.reset')}</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView 
+            style={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.modalContentContainer}
+          >
+            {/* City Filter - Text Input with Autocomplete */}
+            <View style={styles.filterSection}>
+              <View style={styles.filterSectionHeader}>
+                <MapPin size={getResponsiveSpacing(18, 20, 22)} color="#3B82F6" fill="#3B82F6" />
+                <Text style={styles.filterTitle}>Filter by City</Text>
+              </View>
+              <View style={styles.cityInputWrapper}>
+                <View style={styles.cityInputContainer}>
+                  <MapPin 
+                    size={getResponsiveSpacing(18, 20, 22)} 
+                    color="#94A3B8" 
+                    style={styles.cityInputIcon}
+                  />
+                  <TextInput
+                    ref={cityInputRef}
+                    style={styles.cityInput}
+                    placeholder="Enter city name (e.g., Bangalore, Mumbai)"
+                    placeholderTextColor="#94A3B8"
+                    value={tempFilters.city}
+                    onChangeText={(text) => {
+                      // Always allow user typing - the flag only prevents useEffect interference
+                      setTempFilters(prev => ({ ...prev, city: text }));
+                      // Clear any pending timeout
+                      if (citySuggestionTimeoutRef.current) {
+                        clearTimeout(citySuggestionTimeoutRef.current);
+                      }
+                      // Only show suggestions if user is typing (not selecting)
+                      if (!isSelectingCityRef.current) {
+                        if (text.trim().length >= 2) {
+                          setShowCitySuggestions(true);
+                        } else {
+                          setShowCitySuggestions(false);
+                        }
+                      }
+                    }}
+                    onFocus={() => {
+                      // Clear any pending timeout
+                      if (citySuggestionTimeoutRef.current) {
+                        clearTimeout(citySuggestionTimeoutRef.current);
+                      }
+                      if (tempFilters.city && tempFilters.city.trim().length >= 2 && citySuggestions.length > 0) {
+                        setShowCitySuggestions(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Clear any existing timeout
+                      if (citySuggestionTimeoutRef.current) {
+                        clearTimeout(citySuggestionTimeoutRef.current);
+                      }
+                      // Use a longer delay to ensure suggestion tap registers first
+                      citySuggestionTimeoutRef.current = setTimeout(() => {
+                        // Double check if suggestions are still visible before hiding
+                        if (showCitySuggestions) {
+                          setShowCitySuggestions(false);
+                        }
+                        citySuggestionTimeoutRef.current = null;
+                      }, 400);
+                    }}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                  {tempFilters.city ? (
+                    <TouchableOpacity
+                      style={styles.cityInputClearButton}
+                      onPress={() => {
+                        setTempFilters(prev => ({ ...prev, city: '' }));
+                        setCitySuggestions([]);
+                        setShowCitySuggestions(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <X size={getResponsiveSpacing(16, 18, 20)} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                
+                {/* City Suggestions Dropdown */}
+                {showCitySuggestions && citySuggestions.length > 0 && (
+                  <View 
+                    style={styles.citySuggestionsContainer}
+                    onTouchStart={(e) => {
+                      // Prevent the TextInput blur event from firing
+                      e.stopPropagation();
+                    }}
+                    onStartShouldSetResponder={() => true}
+                    onMoveShouldSetResponder={() => true}
+                    onResponderGrant={() => {
+                      // Clear timeout when user starts interacting with suggestions
+                      if (citySuggestionTimeoutRef.current) {
+                        clearTimeout(citySuggestionTimeoutRef.current);
+                        citySuggestionTimeoutRef.current = null;
+                      }
+                    }}
+                  >
+                    {citySuggestions.map((city, index) => (
+                      <Pressable
+                        key={`${city}-${index}`}
+                        style={({ pressed }) => [
+                          styles.citySuggestionItem,
+                          pressed && styles.citySuggestionItemPressed
+                        ]}
+                        onPress={() => {
+                          // Mark that we're selecting from suggestions to prevent useEffect interference
+                          isSelectingCityRef.current = true;
+                          
+                          // Clear the timeout to prevent hiding suggestions
+                          if (citySuggestionTimeoutRef.current) {
+                            clearTimeout(citySuggestionTimeoutRef.current);
+                            citySuggestionTimeoutRef.current = null;
+                          }
+                          
+                          // Update the city filter with the full city name
+                          // Use a function to ensure we get the latest state
+                          setTempFilters(prev => {
+                            const updated = { ...prev, city: city };
+                            return updated;
+                          });
+                          
+                          // Clear suggestions list and hide dropdown immediately
+                          setCitySuggestions([]);
+                          setShowCitySuggestions(false);
+                          
+                          // Blur the input to dismiss keyboard
+                          // Use requestAnimationFrame to ensure state update completes first
+                          requestAnimationFrame(() => {
+                            setTimeout(() => {
+                              cityInputRef.current?.blur();
+                              // Reset flag after a short delay to allow state to settle
+                              setTimeout(() => {
+                                isSelectingCityRef.current = false;
+                              }, 100);
+                            }, 50);
+                          });
+                        }}
+                      >
+                        <MapPin size={getResponsiveSpacing(16, 18, 20)} color="#3B82F6" />
+                        <Text style={styles.citySuggestionText}>{city}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+
             {/* Rating Filter */}
             <View style={styles.filterSection}>
-              <Text style={styles.filterTitle}>{t('serviceListing.minimumRating')}</Text>
-              <View style={styles.ratingOptions}>
+              <View style={styles.filterSectionHeader}>
+                <Star size={getResponsiveSpacing(18, 20, 22)} color="#F59E0B" fill="#F59E0B" />
+                <Text style={styles.filterTitle}>{t('serviceListing.minimumRating')}</Text>
+              </View>
+              <View style={styles.filterOptionsContainer}>
                 {[0, 3, 4, 4.5].map((rating) => (
                   <TouchableOpacity
                     key={rating}
                     style={[
-                      styles.ratingOption,
-                      tempFilters.minRating === rating && styles.selectedOption
+                      styles.modernFilterOption,
+                      styles.ratingOptionModern,
+                      tempFilters.minRating === rating && styles.selectedFilterOption
                     ]}
                     onPress={() => setTempFilters(prev => ({ ...prev, minRating: rating }))}
+                    activeOpacity={0.7}
                   >
-                    <Star size={16} color="#F59E0B" fill="#F59E0B" />
-                    <Text style={styles.ratingOptionText}>
+                    <Star 
+                      size={getResponsiveSpacing(14, 16, 18)} 
+                      color={tempFilters.minRating === rating ? "#FFFFFF" : "#F59E0B"} 
+                      fill={tempFilters.minRating === rating ? "#FFFFFF" : "#F59E0B"} 
+                    />
+                    <Text style={[
+                      styles.modernFilterOptionText,
+                      tempFilters.minRating === rating && styles.selectedFilterOptionText
+                    ]}>
                       {rating === 0 ? t('serviceListing.any') : `${rating}+`}
                     </Text>
                   </TouchableOpacity>
@@ -1156,89 +1361,48 @@ export default function ServiceListingScreen() {
               </View>
             </View>
 
-            {/* Price Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterTitle}>{t('serviceListing.maximumPrice')}</Text>
-              <View style={styles.priceOptions}>
-                {[500, 750, 1000, 1500].map((price) => (
-                  <TouchableOpacity
-                    key={price}
-                    style={[
-                      styles.priceOption,
-                      tempFilters.maxPrice === price && styles.selectedOption
-                    ]}
-                    onPress={() => setTempFilters(prev => ({ ...prev, maxPrice: price }))}
-                  >
-                    <Text style={styles.priceOptionText}>₹{price}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
             {/* Experience Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterTitle}>{t('serviceListing.minimumExperience')}</Text>
-              <View style={styles.experienceOptions}>
-                {[0, 2, 5, 10].map((exp) => (
+            <View style={styles.filterSectionLast}>
+              <View style={styles.filterSectionHeader}>
+                <View style={styles.experienceIconContainer}>
+                  <Text style={styles.experienceIconText}>👤</Text>
+                </View>
+                <Text style={styles.filterTitle}>{t('serviceListing.minimumExperience')}</Text>
+              </View>
+              <View style={styles.filterOptionsContainer}>
+                {[0, 2, 5, 10, 15].map((exp) => (
                   <TouchableOpacity
                     key={exp}
                     style={[
-                      styles.experienceOption,
-                      tempFilters.experience === exp && styles.selectedOption
+                      styles.modernFilterOption,
+                      tempFilters.experience === exp && styles.selectedFilterOption
                     ]}
                     onPress={() => setTempFilters(prev => ({ ...prev, experience: exp }))}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.experienceOptionText}>
+                    <Text style={[
+                      styles.modernFilterOptionText,
+                      tempFilters.experience === exp && styles.selectedFilterOptionText
+                    ]}>
                       {exp === 0 ? t('serviceListing.any') : `${exp}+ ${t('serviceListing.years')}`}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
-
-            {/* Verified Filter */}
-            <View style={styles.filterSection}>
-              <TouchableOpacity
-                style={styles.verifiedFilter}
-                onPress={() => setTempFilters(prev => ({ ...prev, verified: !prev.verified }))}
-              >
-                <View style={[
-                  styles.checkbox,
-                  tempFilters.verified && styles.checkedBox
-                ]}>
-                  {tempFilters.verified && <Text style={styles.checkmark}>✓</Text>}
-                </View>
-                <Text style={styles.verifiedText}>{t('serviceListing.verifiedProvidersOnly')}</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Availability Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterTitle}>{t('serviceListing.availability')}</Text>
-              <View style={styles.availabilityOptions}>
-                {[
-                  { key: 'all', label: t('serviceListing.all') },
-                  { key: 'today', label: t('serviceListing.availableToday') },
-                  { key: 'tomorrow', label: t('serviceListing.availableTomorrow') }
-                ].map((option) => (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[
-                      styles.availabilityOption,
-                      tempFilters.availability === option.key && styles.selectedOption
-                    ]}
-                    onPress={() => setTempFilters(prev => ({ ...prev, availability: option.key }))}
-                  >
-                    <Text style={styles.availabilityOptionText}>{option.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
           </ScrollView>
 
+          {/* Modern Footer with Apply Button */}
           <View style={styles.modalFooter}>
-            <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
-              <Text style={styles.applyButtonText}>{t('serviceListing.applyFilters')}</Text>
+            <TouchableOpacity 
+              style={styles.modernApplyButton} 
+              onPress={applyFilters}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modernApplyButtonText}>{t('serviceListing.applyFilters')}</Text>
+              <View style={styles.applyButtonIcon}>
+                <Text style={styles.applyButtonArrow}>→</Text>
+              </View>
             </TouchableOpacity>
           </View>
         </SafeView>
@@ -1680,7 +1844,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#94A3B8',
   },
-  // Modal Styles
+  // Modern Modal Styles
   modalContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -1689,149 +1853,300 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: getResponsiveSpacing(20, 24, 28),
+    paddingVertical: getResponsiveSpacing(18, 20, 22),
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  modalCloseButton: {
+    width: getResponsiveSpacing(36, 40, 44),
+    height: getResponsiveSpacing(36, 40, 44),
+    borderRadius: getResponsiveSpacing(18, 20, 22),
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: getResponsiveSpacing(8, 10, 12),
+    flex: 1,
+    justifyContent: 'center',
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1E293B',
+    fontSize: getResponsiveSpacing(18, 20, 22),
+    fontFamily: 'Inter-Bold',
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  resetButton: {
+    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingVertical: getResponsiveSpacing(6, 8, 10),
+    borderRadius: getResponsiveSpacing(8, 10, 12),
+    backgroundColor: '#EFF6FF',
   },
   resetText: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: getResponsiveSpacing(14, 15, 16),
+    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
     color: '#3B82F6',
   },
   modalContent: {
     flex: 1,
-    paddingHorizontal: 20,
+  },
+  modalContentContainer: {
+    paddingHorizontal: getResponsiveSpacing(20, 24, 28),
+    paddingTop: getResponsiveSpacing(24, 28, 32),
+    paddingBottom: getResponsiveSpacing(100, 120, 140), // Extra padding for footer
   },
   filterSection: {
-    marginVertical: 20,
+    marginBottom: getResponsiveSpacing(32, 36, 40),
+    paddingBottom: getResponsiveSpacing(24, 28, 32),
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  filterSectionLast: {
+    marginBottom: getResponsiveSpacing(32, 36, 40),
+    paddingBottom: 0,
+    borderBottomWidth: 0,
+  },
+  filterSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: getResponsiveSpacing(10, 12, 14),
+    marginBottom: getResponsiveSpacing(16, 18, 20),
   },
   filterTitle: {
-    fontSize: 16,
+    fontSize: getResponsiveSpacing(16, 18, 20),
+    fontFamily: 'Inter-SemiBold',
     fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 12,
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
-  ratingOptions: {
+  filterOptionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: getResponsiveSpacing(10, 12, 14),
   },
-  ratingOption: {
+  modernFilterOption: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  selectedOption: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
-  },
-  ratingOptionText: {
-    fontSize: 14,
-    color: '#64748B',
-    marginLeft: 4,
-  },
-  priceOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  priceOption: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  priceOptionText: {
-    fontSize: 14,
-    color: '#64748B',
-  },
-  experienceOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  experienceOption: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  experienceOptionText: {
-    fontSize: 14,
-    color: '#64748B',
-  },
-  verifiedFilter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
+    paddingHorizontal: getResponsiveSpacing(16, 18, 20),
+    paddingVertical: getResponsiveSpacing(12, 14, 16),
+    borderRadius: getResponsiveSpacing(12, 14, 16),
     borderWidth: 2,
     borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    minHeight: getResponsiveSpacing(44, 48, 52),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#CBD5E1',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
   },
-  checkedBox: {
+  selectedFilterOption: {
     backgroundColor: '#3B82F6',
     borderColor: '#3B82F6',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
-  checkmark: {
+  modernFilterOptionText: {
+    fontSize: getResponsiveSpacing(14, 15, 16),
+    fontFamily: 'Inter-Medium',
+    fontWeight: '500',
+    color: '#475569',
+    marginLeft: getResponsiveSpacing(6, 8, 10),
+  },
+  selectedFilterOptionText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
     fontWeight: '600',
   },
-  availabilityOptions: {
-    gap: 8,
+  ratingOptionModern: {
+    gap: getResponsiveSpacing(6, 8, 10),
   },
-  availabilityOption: {
+  experienceIconContainer: {
+    width: getResponsiveSpacing(20, 22, 24),
+    height: getResponsiveSpacing(20, 22, 24),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  experienceIconText: {
+    fontSize: getResponsiveSpacing(16, 18, 20),
+  },
+  // City Filter Styles
+  cityInputWrapper: {
+    position: 'relative',
+    zIndex: 10,
+  },
+  cityInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: getResponsiveSpacing(14, 16, 18),
+    paddingVertical: getResponsiveSpacing(4, 6, 8),
+    minHeight: getResponsiveSpacing(48, 52, 56),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#CBD5E1',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
+  },
+  cityInputIcon: {
+    marginRight: getResponsiveSpacing(10, 12, 14),
+  },
+  cityInput: {
+    flex: 1,
+    fontSize: getResponsiveSpacing(15, 16, 17),
+    fontFamily: 'Inter-Regular',
+    fontWeight: '400',
+    color: '#1E293B',
+    paddingVertical: getResponsiveSpacing(8, 10, 12),
+  },
+  cityInputClearButton: {
+    padding: getResponsiveSpacing(4, 6, 8),
+    marginLeft: getResponsiveSpacing(8, 10, 12),
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    backgroundColor: '#F1F5F9',
+  },
+  citySuggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: getResponsiveSpacing(4, 6, 8),
+    backgroundColor: '#FFFFFF',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    maxHeight: getResponsiveSpacing(200, 240, 280),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+    zIndex: 1000,
   },
-  availabilityOptionText: {
-    fontSize: 14,
-    color: '#64748B',
+  citySuggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: getResponsiveSpacing(14, 16, 18),
+    paddingVertical: getResponsiveSpacing(12, 14, 16),
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+    gap: getResponsiveSpacing(10, 12, 14),
+  },
+  citySuggestionItemPressed: {
+    backgroundColor: '#F1F5F9',
+  },
+  citySuggestionText: {
+    fontSize: getResponsiveSpacing(15, 16, 17),
+    fontFamily: 'Inter-Medium',
+    fontWeight: '500',
+    color: '#1E293B',
+    flex: 1,
   },
   modalFooter: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: getResponsiveSpacing(20, 24, 28),
+    paddingTop: getResponsiveSpacing(16, 18, 20),
+    paddingBottom: getResponsiveSpacing(20, 24, 28),
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
-  applyButton: {
+  modernApplyButton: {
     backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    paddingVertical: 16,
+    borderRadius: getResponsiveSpacing(14, 16, 18),
+    paddingVertical: getResponsiveSpacing(16, 18, 20),
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: getResponsiveSpacing(10, 12, 14),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  modernApplyButtonText: {
+    fontSize: getResponsiveSpacing(16, 17, 18),
+    fontFamily: 'Inter-Bold',
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  applyButtonIcon: {
+    width: getResponsiveSpacing(24, 26, 28),
+    height: getResponsiveSpacing(24, 26, 28),
+    borderRadius: getResponsiveSpacing(12, 13, 14),
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  applyButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  applyButtonArrow: {
+    fontSize: getResponsiveSpacing(16, 18, 20),
     color: '#FFFFFF',
+    fontWeight: '700',
   },
   loadingContainer: {
     flex: 1,

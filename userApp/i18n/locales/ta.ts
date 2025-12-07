@@ -462,6 +462,8 @@ export default {
     bookNow: 'இப்போது பதிவு செய்',
     reviews: 'விமர்சனங்கள்',
     years: 'ஆண்டுகள்',
+    loadingMore: 'மேலும் வழங்குநர்கள் ஏற்றப்படுகிறது...',
+    allProvidersLoaded: 'அனைத்து வழங்குநர்களும் ஏற்றப்பட்டன',
   },
 
   // Service Options

@@ -504,6 +504,8 @@ export default {
     bookNow: 'अभी बुक करें',
     reviews: 'समीक्षाएं',
     years: 'वर्ष',
+    loadingMore: 'अधिक प्रदाता लोड हो रहे हैं...',
+    allProvidersLoaded: 'सभी प्रदाता लोड हो गए',
   },
 
   // Service Options

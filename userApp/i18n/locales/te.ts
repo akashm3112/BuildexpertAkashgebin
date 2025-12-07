@@ -462,6 +462,8 @@ export default {
     bookNow: 'ఇప్పుడు బుక్ చేయండి',
     reviews: 'సమీక్షలు',
     years: 'సంవత్సరాలు',
+    loadingMore: 'మరిన్ని ప్రదాతలను లోడ్ చేస్తోంది...',
+    allProvidersLoaded: 'అన్ని ప్రదాతలు లోడ్ అయ్యాయి',
   },
 
   // Service Options
