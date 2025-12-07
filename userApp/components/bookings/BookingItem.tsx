@@ -18,8 +18,6 @@ import WebRTCCallButton from '@/components/calls/WebRTCCallButton';
 import { format, parseISO } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '@/constants/api';
 
 interface BookingProps {
   booking: {
@@ -232,36 +230,27 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
     if (!selectedReason || (selectedReason === t('bookingItem.other') && !otherReason.trim())) return;
     setIsCancelling(true);
     try {
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
-      if (!token) {
-        showAlert('Error', t('alerts.error.noToken'), 'error');
-        setIsCancelling(false);
-        return;
-      }
-      const response = await fetch(`${API_BASE_URL}/api/bookings/${booking.id}/cancel`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ cancellationReason: selectedReason === t('bookingItem.other') ? otherReason : selectedReason })
+      // Use centralized API client so token refresh and reconnection are handled globally
+      const { apiPut } = await import('@/utils/apiClient');
+      
+      const response = await apiPut(`/api/bookings/${booking.id}/cancel`, {
+        cancellationReason: selectedReason === t('bookingItem.other') ? otherReason : selectedReason
       });
-      const data = await response.json();
-      if (response.ok && data.status === 'success') {
+
+      if (response.ok && response.data && response.data.status === 'success') {
         if (onStatusChange) onStatusChange(booking.id, 'cancelled');
         setShowCancelModal(false);
         setSelectedReason('');
         setOtherReason('');
         showAlert(t('bookingItem.bookingCancelled'), t('bookingItem.bookingCancelledSuccess'), 'success');
       } else {
-        showAlert('Error', data.message || t('alerts.error.generic'), 'error');
+        const errorMessage = response.data?.message || t('alerts.error.generic');
+        showAlert('Error', errorMessage, 'error');
       }
-    } catch (err) {
-      showAlert('Error', t('alerts.error.generic'), 'error');
+    } catch (err: any) {
+      // apiClient already handled token refresh / logout; show user-friendly error
+      const errorMessage = err?.message || err?.data?.message || t('alerts.error.generic');
+      showAlert('Error', errorMessage, 'error');
     } finally {
       setIsCancelling(false);
     }
@@ -279,29 +268,15 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
     
     setIsReporting(true);
     try {
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
-      if (!token) {
-        showAlert('Error', t('alerts.error.noToken'), 'error');
-        setIsReporting(false);
-        return;
-      }
-      const response = await fetch(`${API_BASE_URL}/api/bookings/${booking.id}/report`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          reportReason: selectedReportReason,
-          reportDescription: selectedReportReason === t('bookingItem.other') ? otherReportReason : selectedReportReason
-        })
+      // Use centralized API client so token refresh and reconnection are handled globally
+      const { apiPost } = await import('@/utils/apiClient');
+      
+      const response = await apiPost(`/api/bookings/${booking.id}/report`, {
+        reportReason: selectedReportReason,
+        reportDescription: selectedReportReason === t('bookingItem.other') ? otherReportReason : selectedReportReason
       });
-      const data = await response.json();
-      if (response.ok && data.status === 'success') {
+
+      if (response.ok && response.data && response.data.status === 'success') {
         setShowReportModal(false);
         setSelectedReportReason('');
         setOtherReportReason('');
@@ -311,10 +286,13 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
           onBookingReported(booking.id);
         }
       } else {
-        showAlert('Error', data.message || t('alerts.error.generic'), 'error');
+        const errorMessage = response.data?.message || t('alerts.error.generic');
+        showAlert('Error', errorMessage, 'error');
       }
-    } catch (err) {
-      showAlert('Error', t('alerts.error.generic'), 'error');
+    } catch (err: any) {
+      // apiClient already handled token refresh / logout; show user-friendly error
+      const errorMessage = err?.message || err?.data?.message || t('alerts.error.generic');
+      showAlert('Error', errorMessage, 'error');
     } finally {
       setIsReporting(false);
     }
@@ -328,26 +306,15 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
 
     setIsSubmitting(true);
     try {
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
-      if (!token) {
-        showAlert('Error', t('alerts.error.noToken'), 'error');
-        setIsSubmitting(false);
-        return;
-      }
-      const response = await fetch(`${API_BASE_URL}/api/bookings/${booking.id}/rate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ rating, review: comment })
+      // Use centralized API client so token refresh and reconnection are handled globally
+      const { apiPost } = await import('@/utils/apiClient');
+      
+      const response = await apiPost(`/api/bookings/${booking.id}/rate`, {
+        rating,
+        review: comment || null
       });
-      const data = await response.json();
-      if (response.ok && data.status === 'success') {
+
+      if (response.ok && response.data && response.data.status === 'success') {
         setShowRatingModal(false);
         setRating(0);
         setComment('');
@@ -364,10 +331,13 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
           onBookingReported(booking.id);
         }
       } else {
-        showAlert('Error', data.message || t('alerts.error.generic'), 'error');
+        const errorMessage = response.data?.message || t('alerts.error.generic');
+        showAlert('Error', errorMessage, 'error');
       }
-    } catch (error) {
-      showAlert('Error', t('alerts.error.generic'), 'error');
+    } catch (err: any) {
+      // apiClient already handled token refresh / logout; show user-friendly error
+      const errorMessage = err?.message || err?.data?.message || t('alerts.error.generic');
+      showAlert('Error', errorMessage, 'error');
     } finally {
       setIsSubmitting(false);
     }

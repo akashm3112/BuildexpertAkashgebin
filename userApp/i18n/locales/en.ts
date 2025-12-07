@@ -559,6 +559,8 @@ export default {
     bookNow: 'Book Now',
     reviews: 'reviews',
     years: 'years',
+    loadingMore: 'Loading more providers...',
+    allProvidersLoaded: 'All providers loaded',
   },
 
   // Provider Detail Screen

@@ -251,6 +251,8 @@ export default {
     bookNow: 'ഇപ്പോൾ ബുക്ക് ചെയ്യുക',
     reviews: 'അവലോകനങ്ങൾ',
     years: 'വർഷങ്ങൾ',
+    loadingMore: 'കൂടുതൽ സേവന ദാതാക്കളെ ലോഡ് ചെയ്യുന്നു...',
+    allProvidersLoaded: 'എല്ലാ സേവന ദാതാക്കളും ലോഡ് ചെയ്തു',
   },
 
   // Provider Detail Screen

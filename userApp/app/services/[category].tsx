@@ -404,27 +404,6 @@ export default function ServiceListingScreen() {
     return () => subscription?.remove();
   }, []);
 
-  useEffect(() => {
-    if (serviceId) {
-      // Wait for location to be fetched (or timeout) before fetching providers
-      // This ensures we have location data for sorting
-      if (isLoadingLocation) {
-        // Location is still loading, wait a bit
-        const timer = setTimeout(() => {
-          // Fetch providers even if location is still loading (will use default sorting)
-          fetchProviders(1, false);
-        }, 2000); // Max 2 seconds wait for location
-        
-        return () => clearTimeout(timer);
-      } else {
-        // Location loaded (or failed), fetch providers now
-        fetchProviders(1, false);
-      }
-    } else if (!isLoading) {
-      setError('Service not found. Please try again from the home screen.');
-    }
-  }, [serviceId, location, isLoadingLocation, fetchProviders]);
-
   const fetchProviders = useCallback(async (page: number = 1, append: boolean = false) => {
     if (!serviceId) return;
     try {
@@ -588,6 +567,27 @@ export default function ServiceListingScreen() {
       setIsLoadingMore(false);
     }
   }, [serviceId, location]);
+
+  useEffect(() => {
+    if (serviceId) {
+      // Wait for location to be fetched (or timeout) before fetching providers
+      // This ensures we have location data for sorting
+      if (isLoadingLocation) {
+        // Location is still loading, wait a bit
+        const timer = setTimeout(() => {
+          // Fetch providers even if location is still loading (will use default sorting)
+          fetchProviders(1, false);
+        }, 2000); // Max 2 seconds wait for location
+        
+        return () => clearTimeout(timer);
+      } else {
+        // Location loaded (or failed), fetch providers now
+        fetchProviders(1, false);
+      }
+    } else if (!isLoading) {
+      setError('Service not found. Please try again from the home screen.');
+    }
+  }, [serviceId, location, isLoadingLocation, fetchProviders]);
 
   // Load more providers when user scrolls to bottom
   const loadMoreProviders = useCallback(() => {
@@ -884,7 +884,15 @@ export default function ServiceListingScreen() {
         />
         <View style={styles.providerInfo}>
           <View style={styles.nameRow}>
-            <Text style={styles.providerName}>{item.full_name}</Text>
+            <View style={styles.nameContainer}>
+              <Text 
+                style={styles.providerName} 
+                numberOfLines={1} 
+                ellipsizeMode="tail"
+              >
+                {item.full_name}
+              </Text>
+            </View>
             <View style={styles.verifiedBadge}>
               <Text style={styles.verifiedText}>✓</Text>
             </View>
@@ -995,7 +1003,7 @@ export default function ServiceListingScreen() {
           <AlertTriangle size={48} color="#EF4444" />
           <Text style={styles.errorTitle}>{t('serviceListing.errorLoadingProviders')}</Text>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchProviders}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchProviders(1, false)}>
             <Text style={styles.retryButtonText}>{t('serviceListing.tryAgain')}</Text>
           </TouchableOpacity>
         </View>
@@ -1528,17 +1536,22 @@ const styles = StyleSheet.create({
   },
   providerInfo: {
     flex: 1,
+    minWidth: 0, // Allow flex children to shrink below their content size
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
   },
+  nameContainer: {
+    flex: 1,
+    minWidth: 0, // Critical: allows text to truncate properly
+    marginRight: getResponsiveSpacing(6, 8, 10),
+  },
   providerName: {
     fontSize: getResponsiveSpacing(14, 16, 18),
     fontWeight: '600',
     color: '#1E293B',
-    marginRight: getResponsiveSpacing(6, 8, 10),
   },
   verifiedBadge: {
     backgroundColor: '#10B981',
@@ -1547,6 +1560,7 @@ const styles = StyleSheet.create({
     height: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0, // Prevent badge from shrinking
   },
   verifiedText: {
     fontSize: getResponsiveSpacing(12, 14, 16),
@@ -1580,6 +1594,8 @@ const styles = StyleSheet.create({
   },
   favoriteButton: {
     padding: 8,
+    marginLeft: getResponsiveSpacing(4, 6, 8),
+    flexShrink: 0, // Prevent heart icon from shrinking
   },
   cardBody: {
     paddingHorizontal: getResponsiveSpacing(12, 16, 20),

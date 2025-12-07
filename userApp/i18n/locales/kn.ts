@@ -462,6 +462,8 @@ export default {
     bookNow: 'ಈಗ ಬುಕ್ ಮಾಡಿ',
     reviews: 'ವಿಮರ್ಶೆಗಳು',
     years: 'ವರ್ಷಗಳು',
+    loadingMore: 'ಹೆಚ್ಚಿನ ಪ್ರದಾತರನ್ನು ಲೋಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ...',
+    allProvidersLoaded: 'ಎಲ್ಲಾ ಪ್ರದಾತರು ಲೋಡ್ ಆಗಿದ್ದಾರೆ',
   },
 
   // Service Options
