@@ -287,8 +287,9 @@ export default function ServiceListingScreen() {
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const cityInputRef = useRef<TextInput>(null);
-  const citySuggestionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const citySuggestionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSelectingCityRef = useRef(false); // Track when user is selecting from suggestions
+  const selectedCityRef = useRef<string | null>(null); // Track the selected city to prevent useEffect interference
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState<string>('Services');
   const [labourAccessStatus, setLabourAccessStatus] = useState<any>(null);
@@ -407,27 +408,6 @@ export default function ServiceListingScreen() {
 
     return () => subscription?.remove();
   }, []);
-
-  useEffect(() => {
-    if (serviceId) {
-      // Wait for location to be fetched (or timeout) before fetching providers
-      // This ensures we have location data for sorting
-      if (isLoadingLocation) {
-        // Location is still loading, wait a bit
-        const timer = setTimeout(() => {
-          // Fetch providers even if location is still loading (will use default sorting)
-          fetchProviders(1, false);
-        }, 2000); // Max 2 seconds wait for location
-        
-        return () => clearTimeout(timer);
-      } else {
-        // Location loaded (or failed), fetch providers now
-        fetchProviders(1, false);
-      }
-    } else if (!isLoading) {
-      setError('Service not found. Please try again from the home screen.');
-    }
-  }, [serviceId, location, isLoadingLocation, fetchProviders]);
 
   const fetchProviders = useCallback(async (page: number = 1, append: boolean = false) => {
     if (!serviceId) return;
@@ -593,6 +573,27 @@ export default function ServiceListingScreen() {
     }
   }, [serviceId, location]);
 
+  useEffect(() => {
+    if (serviceId) {
+      // Wait for location to be fetched (or timeout) before fetching providers
+      // This ensures we have location data for sorting
+      if (isLoadingLocation) {
+        // Location is still loading, wait a bit
+        const timer = setTimeout(() => {
+          // Fetch providers even if location is still loading (will use default sorting)
+          fetchProviders(1, false);
+        }, 2000); // Max 2 seconds wait for location
+        
+        return () => clearTimeout(timer);
+      } else {
+        // Location loaded (or failed), fetch providers now
+        fetchProviders(1, false);
+      }
+    } else if (!isLoading) {
+      setError('Service not found. Please try again from the home screen.');
+    }
+  }, [serviceId, location, isLoadingLocation, fetchProviders]);
+
   // Load more providers when user scrolls to bottom
   const loadMoreProviders = useCallback(() => {
     if (!isLoadingMore && hasMore && !isLoading) {
@@ -626,21 +627,48 @@ export default function ServiceListingScreen() {
     return Array.from(cities).sort();
   }, [uniqueProviders]);
 
-  // Update city suggestions when user types (but not when selecting from suggestions)
+  // Sync tempFilters with filters when modal opens (but not when user is selecting)
   useEffect(() => {
-    // Skip if user is selecting from suggestions to prevent interference
-    if (isSelectingCityRef.current) {
-      isSelectingCityRef.current = false; // Reset flag
+    if (showFilterModal && !isSelectingCityRef.current) {
+      setTempFilters(filters);
+    }
+  }, [showFilterModal]);
+
+  // Update city suggestions when user types - simple like home screen
+  useEffect(() => {
+    // Skip if user just selected a city from suggestions
+    if (isSelectingCityRef.current || selectedCityRef.current) {
+      selectedCityRef.current = null; // Reset after one cycle
       return;
     }
 
+    // Check if the current city value is an exact match (user selected a city)
+    if (tempFilters.city) {
+      const exactMatch = availableCities.some(c => 
+        c.toLowerCase().trim() === tempFilters.city.toLowerCase().trim()
+      );
+      // If it's an exact match, don't show suggestions (user already selected)
+      if (exactMatch) {
+        setCitySuggestions([]);
+        setShowCitySuggestions(false);
+        return;
+      }
+    }
+
+    // Show suggestions only when user is typing (2+ characters, not an exact match)
     if (tempFilters.city && tempFilters.city.trim().length >= 2) {
       const query = tempFilters.city.toLowerCase().trim();
       const suggestions = availableCities.filter(city =>
         city.toLowerCase().includes(query)
       ).slice(0, 5); // Limit to 5 suggestions
-      setCitySuggestions(suggestions);
-      setShowCitySuggestions(suggestions.length > 0);
+      
+      if (suggestions.length > 0) {
+        setCitySuggestions(suggestions);
+        setShowCitySuggestions(true);
+      } else {
+        setCitySuggestions([]);
+        setShowCitySuggestions(false);
+      }
     } else {
       setCitySuggestions([]);
       setShowCitySuggestions(false);
@@ -693,8 +721,16 @@ export default function ServiceListingScreen() {
   };
 
   const applyFilters = () => {
-    setFilters(tempFilters);
+    // Ensure city is properly trimmed when applying filters
+    const filtersToApply = {
+      ...tempFilters,
+      city: tempFilters.city ? tempFilters.city.trim() : ''
+    };
+    setFilters(filtersToApply);
     setShowFilterModal(false);
+    // Clear suggestions when filters are applied
+    setCitySuggestions([]);
+    setShowCitySuggestions(false);
   };
 
   const resetFilters = () => {
@@ -917,7 +953,15 @@ export default function ServiceListingScreen() {
         />
         <View style={styles.providerInfo}>
           <View style={styles.nameRow}>
-            <Text style={styles.providerName}>{item.full_name}</Text>
+            <View style={styles.nameContainer}>
+              <Text 
+                style={styles.providerName} 
+                numberOfLines={1} 
+                ellipsizeMode="tail"
+              >
+                {item.full_name}
+              </Text>
+            </View>
             <View style={styles.verifiedBadge}>
               <Text style={styles.verifiedText}>✓</Text>
             </View>
@@ -1028,7 +1072,7 @@ export default function ServiceListingScreen() {
           <AlertTriangle size={48} color="#EF4444" />
           <Text style={styles.errorTitle}>{t('serviceListing.errorLoadingProviders')}</Text>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchProviders}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchProviders(1, false)}>
             <Text style={styles.retryButtonText}>{t('serviceListing.tryAgain')}</Text>
           </TouchableOpacity>
         </View>
@@ -1182,6 +1226,7 @@ export default function ServiceListingScreen() {
             style={styles.modalContent}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.modalContentContainer}
+            keyboardShouldPersistTaps="handled"
           >
             {/* City Filter - Text Input with Autocomplete */}
             <View style={styles.filterSection}>
@@ -1201,21 +1246,27 @@ export default function ServiceListingScreen() {
                     style={styles.cityInput}
                     placeholder="Enter city name (e.g., Bangalore, Mumbai)"
                     placeholderTextColor="#94A3B8"
-                    value={tempFilters.city}
+                    value={tempFilters.city || ''}
                     onChangeText={(text) => {
-                      // Always allow user typing - the flag only prevents useEffect interference
+                      // Don't update if user is selecting from suggestions
+                      if (isSelectingCityRef.current) {
+                        return;
+                      }
+                      
+                      // Update state when user types - simple like home screen
                       setTempFilters(prev => ({ ...prev, city: text }));
+                      
                       // Clear any pending timeout
                       if (citySuggestionTimeoutRef.current) {
                         clearTimeout(citySuggestionTimeoutRef.current);
                       }
-                      // Only show suggestions if user is typing (not selecting)
-                      if (!isSelectingCityRef.current) {
-                        if (text.trim().length >= 2) {
-                          setShowCitySuggestions(true);
-                        } else {
-                          setShowCitySuggestions(false);
-                        }
+                      
+                      // Show suggestions if user is typing (2+ characters)
+                      if (text.trim().length >= 2) {
+                        setShowCitySuggestions(true);
+                      } else {
+                        setShowCitySuggestions(false);
+                        setCitySuggestions([]);
                       }
                     }}
                     onFocus={() => {
@@ -1228,18 +1279,11 @@ export default function ServiceListingScreen() {
                       }
                     }}
                     onBlur={() => {
-                      // Clear any existing timeout
-                      if (citySuggestionTimeoutRef.current) {
-                        clearTimeout(citySuggestionTimeoutRef.current);
-                      }
-                      // Use a longer delay to ensure suggestion tap registers first
+                      // Use a longer delay to allow suggestion tap to register first
                       citySuggestionTimeoutRef.current = setTimeout(() => {
-                        // Double check if suggestions are still visible before hiding
-                        if (showCitySuggestions) {
-                          setShowCitySuggestions(false);
-                        }
+                        setShowCitySuggestions(false);
                         citySuggestionTimeoutRef.current = null;
-                      }, 400);
+                      }, 300);
                     }}
                     autoCapitalize="words"
                     autoCorrect={false}
@@ -1263,64 +1307,47 @@ export default function ServiceListingScreen() {
                 {showCitySuggestions && citySuggestions.length > 0 && (
                   <View 
                     style={styles.citySuggestionsContainer}
-                    onTouchStart={(e) => {
-                      // Prevent the TextInput blur event from firing
-                      e.stopPropagation();
-                    }}
-                    onStartShouldSetResponder={() => true}
-                    onMoveShouldSetResponder={() => true}
-                    onResponderGrant={() => {
-                      // Clear timeout when user starts interacting with suggestions
-                      if (citySuggestionTimeoutRef.current) {
-                        clearTimeout(citySuggestionTimeoutRef.current);
-                        citySuggestionTimeoutRef.current = null;
-                      }
-                    }}
                   >
                     {citySuggestions.map((city, index) => (
-                      <Pressable
+                      <TouchableOpacity
                         key={`${city}-${index}`}
-                        style={({ pressed }) => [
-                          styles.citySuggestionItem,
-                          pressed && styles.citySuggestionItemPressed
-                        ]}
+                        style={styles.citySuggestionItem}
+                        activeOpacity={0.7}
                         onPress={() => {
-                          // Mark that we're selecting from suggestions to prevent useEffect interference
-                          isSelectingCityRef.current = true;
+                          // Get the full city name
+                          const selectedCity = city.trim();
                           
-                          // Clear the timeout to prevent hiding suggestions
+                          // Set flags to prevent useEffect interference
+                          isSelectingCityRef.current = true;
+                          selectedCityRef.current = selectedCity;
+                          
+                          // Clear the blur timeout to prevent hiding suggestions
                           if (citySuggestionTimeoutRef.current) {
                             clearTimeout(citySuggestionTimeoutRef.current);
                             citySuggestionTimeoutRef.current = null;
                           }
                           
-                          // Update the city filter with the full city name
-                          // Use a function to ensure we get the latest state
-                          setTempFilters(prev => {
-                            const updated = { ...prev, city: city };
-                            return updated;
-                          });
+                          // Update the state with the selected city - use functional form to get latest state
+                          setTempFilters(prev => ({
+                            ...prev,
+                            city: selectedCity
+                          }));
                           
-                          // Clear suggestions list and hide dropdown immediately
+                          // Clear suggestions immediately
                           setCitySuggestions([]);
                           setShowCitySuggestions(false);
                           
-                          // Blur the input to dismiss keyboard
-                          // Use requestAnimationFrame to ensure state update completes first
-                          requestAnimationFrame(() => {
-                            setTimeout(() => {
-                              cityInputRef.current?.blur();
-                              // Reset flag after a short delay to allow state to settle
-                              setTimeout(() => {
-                                isSelectingCityRef.current = false;
-                              }, 100);
-                            }, 50);
-                          });
+                          // Reset flag after state update completes
+                          setTimeout(() => {
+                            isSelectingCityRef.current = false;
+                            // Blur the input
+                            cityInputRef.current?.blur();
+                          }, 200);
                         }}
                       >
                         <MapPin size={getResponsiveSpacing(16, 18, 20)} color="#3B82F6" />
                         <Text style={styles.citySuggestionText}>{city}</Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 )}
@@ -1692,17 +1719,22 @@ const styles = StyleSheet.create({
   },
   providerInfo: {
     flex: 1,
+    minWidth: 0, // Allow flex children to shrink below their content size
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
   },
+  nameContainer: {
+    flex: 1,
+    minWidth: 0, // Critical: allows text to truncate properly
+    marginRight: getResponsiveSpacing(6, 8, 10),
+  },
   providerName: {
     fontSize: getResponsiveSpacing(14, 16, 18),
     fontWeight: '600',
     color: '#1E293B',
-    marginRight: getResponsiveSpacing(6, 8, 10),
   },
   verifiedBadge: {
     backgroundColor: '#10B981',
@@ -1711,6 +1743,7 @@ const styles = StyleSheet.create({
     height: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0, // Prevent badge from shrinking
   },
   verifiedText: {
     fontSize: getResponsiveSpacing(12, 14, 16),
@@ -1744,6 +1777,8 @@ const styles = StyleSheet.create({
   },
   favoriteButton: {
     padding: 8,
+    marginLeft: getResponsiveSpacing(4, 6, 8),
+    flexShrink: 0, // Prevent heart icon from shrinking
   },
   cardBody: {
     paddingHorizontal: getResponsiveSpacing(12, 16, 20),
