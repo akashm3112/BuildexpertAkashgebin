@@ -12,6 +12,13 @@ const { logSecurityEvent } = require('../utils/securityAudit');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { NotFoundError, ValidationError } = require('../utils/errorTypes');
 const { validateOrThrow, throwIfMissing } = require('../utils/errorHelpers');
+const {
+  validateUpdateProfile,
+  validateCreateAddress,
+  validateUpdateAddress,
+  validateDeleteAddress,
+  validatePagination
+} = require('../middleware/validators');
 
 const router = express.Router();
 
@@ -160,13 +167,7 @@ router.get('/profile', asyncHandler(async (req, res) => {
 // @route   PUT /api/users/profile
 // @desc    Update user profile
 // @access  Private
-router.put('/profile', [
-  profileUpdateLimiter,
-  body('fullName').optional().trim().isLength({ min: 2 }).withMessage('Full name must be at least 2 characters'),
-  body('email').optional().isEmail().withMessage('Please enter a valid email'),
-  body('profilePicUrl').optional().isString().withMessage('Profile picture URL must be a string')
-], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
+router.put('/profile', [profileUpdateLimiter, ...validateUpdateProfile], asyncHandler(async (req, res) => {
 
   const { fullName, email, profilePicUrl } = req.body;
   const updateFields = [];
@@ -312,19 +313,11 @@ router.put('/profile', [
 // @route   GET /api/users/addresses
 // @desc    Get user addresses with pagination
 // @access  Private
-router.get('/addresses', asyncHandler(async (req, res) => {
+router.get('/addresses', validatePagination, asyncHandler(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const pageNum = parseInt(page, 10);
   const limitNum = parseInt(limit, 10);
   const offset = (pageNum - 1) * limitNum;
-
-  // Validate pagination
-  if (isNaN(pageNum) || pageNum < 1) {
-    throw new ValidationError('page must be a positive integer');
-  }
-  if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
-    throw new ValidationError('limit must be a positive integer between 1 and 100');
-  }
 
   // Get total count
   const countResult = await getRow(`
@@ -362,13 +355,7 @@ router.get('/addresses', asyncHandler(async (req, res) => {
 // @route   POST /api/users/addresses
 // @desc    Add new address
 // @access  Private
-router.post('/addresses', [
-  body('type').isIn(['home', 'office', 'other']).withMessage('Type must be home, office, or other'),
-  body('state').notEmpty().withMessage('State is required'),
-  body('city').optional().notEmpty().withMessage('City cannot be empty'),
-  body('fullAddress').notEmpty().withMessage('Full address is required')
-], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
+router.post('/addresses', [...validateCreateAddress], asyncHandler(async (req, res) => {
 
   const { type, state, city, fullAddress } = req.body;
 
@@ -396,13 +383,7 @@ router.post('/addresses', [
 // @route   PUT /api/users/addresses/:id
 // @desc    Update address
 // @access  Private
-router.put('/addresses/:id', [
-  body('type').optional().isIn(['home', 'office', 'other']).withMessage('Type must be home, office, or other'),
-  body('state').optional().notEmpty().withMessage('State cannot be empty'),
-  body('city').optional().notEmpty().withMessage('City cannot be empty'),
-  body('fullAddress').optional().notEmpty().withMessage('Full address cannot be empty')
-], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
+router.put('/addresses/:id', [...validateUpdateAddress], asyncHandler(async (req, res) => {
 
   const { id } = req.params;
   const { type, state, city, fullAddress } = req.body;
@@ -465,7 +446,7 @@ router.put('/addresses/:id', [
 // @route   DELETE /api/users/addresses/:id
 // @desc    Delete address
 // @access  Private
-router.delete('/addresses/:id', asyncHandler(async (req, res) => {
+router.delete('/addresses/:id', [...validateDeleteAddress], asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   // Check if address belongs to user

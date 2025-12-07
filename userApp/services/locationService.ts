@@ -225,6 +225,25 @@ export const getCurrentLocation = async (
   }
 
   try {
+    // Check if location services are enabled first
+    const isLocationEnabled = await Location.hasServicesEnabledAsync();
+    if (!isLocationEnabled) {
+      console.warn('⚠️ Location services are disabled');
+      // Check cache before throwing error
+      const cached = await getCachedLocation();
+      if (cached) {
+        console.log('✅ Using cached location - location services disabled but cache available');
+        return {
+          state: cached.state,
+          city: cached.city,
+          latitude: cached.latitude,
+          longitude: cached.longitude,
+          timestamp: cached.timestamp,
+        };
+      }
+      throw new LocationServiceError('Location services are disabled. Please enable location services in your device settings.');
+    }
+
     // Request location permissions
     console.log('🔵 Requesting location permissions...');
     let permissionStatus;

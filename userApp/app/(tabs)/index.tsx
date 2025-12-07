@@ -210,7 +210,8 @@ export default function HomeScreen() {
         visibilityTime: 2000,
       });
     } catch (error) {
-      console.error('Error fetching current location:', error);
+      // Error is handled gracefully with user-friendly Toast message
+      // Using console.warn instead of console.error to avoid triggering global error handler
       setIsFetchingCurrentLocation(false);
       
       let errorMessage = t('location.errorMessage') || 'Could not fetch your location. Please try again.';
@@ -226,6 +227,9 @@ export default function HomeScreen() {
           errorMessage = error.message;
         }
       }
+      
+      // Log as warning since error is handled gracefully
+      console.warn('⚠️ Location fetch error (handled gracefully):', error instanceof Error ? error.message : error);
       
       Toast.show({
         type: 'error',

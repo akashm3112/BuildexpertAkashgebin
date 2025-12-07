@@ -62,20 +62,27 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       setError(null);
     } catch (err) {
       // Handle different error types with user-friendly messages
+      // All errors are handled gracefully - using console.warn to avoid triggering global error handler
       let errorMessage: string;
       
       if (err instanceof LocationPermissionError) {
         errorMessage = 'Location permission is required. You can still use the app without location services.';
-        console.warn('⚠️ LocationContext: Permission error (non-critical):', err.message);
+        console.warn('⚠️ LocationContext: Permission error (handled gracefully):', err.message);
       } else if (err instanceof LocationNetworkError) {
         errorMessage = 'Network error while fetching location. Please check your internet connection.';
-        console.warn('⚠️ LocationContext: Network error:', err.message);
+        console.warn('⚠️ LocationContext: Network error (handled gracefully):', err.message);
       } else if (err instanceof LocationServiceError) {
         errorMessage = 'Unable to fetch location. You can still use the app without location services.';
-        console.warn('⚠️ LocationContext: Service error:', err.message);
+        console.warn('⚠️ LocationContext: Service error (handled gracefully):', err.message);
       } else {
-        errorMessage = err instanceof Error ? err.message : 'Failed to fetch location. You can still use the app.';
-        console.warn('⚠️ LocationContext: Unknown error:', err);
+        // Handle expo-location specific errors
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        if (errorMsg.includes('unavailable') || errorMsg.includes('Location services')) {
+          errorMessage = 'Location services are unavailable. Please enable location services in your device settings.';
+        } else {
+          errorMessage = 'Failed to fetch location. You can still use the app.';
+        }
+        console.warn('⚠️ LocationContext: Unknown error (handled gracefully):', errorMsg);
       }
       
       // Calculate elapsed time and wait if needed

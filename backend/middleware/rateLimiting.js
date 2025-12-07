@@ -1,5 +1,7 @@
 const rateLimit = require('express-rate-limit');
 const logger = require('../utils/logger');
+const { RateLimitError } = require('../utils/errorTypes');
+const { formatErrorResponse } = require('./errorHandler');
 
 /**
  * Standard API rate limiter - general endpoints
@@ -17,10 +19,9 @@ const standardLimiter = rateLimit({
       url: req.url,
       userId: req.user?.id
     });
-    res.status(429).json({
-      status: 'error',
-      message: 'Too many requests. Please try again in 15 minutes.'
-    });
+    const error = new RateLimitError('Too many requests. Please try again in 15 minutes.', 900000);
+    const response = formatErrorResponse(error, req);
+    res.status(429).json(response);
   }
 });
 
@@ -40,10 +41,9 @@ const strictLimiter = rateLimit({
       url: req.url,
       userId: req.user?.id
     });
-    res.status(429).json({
-      status: 'error',
-      message: 'Too many requests for this operation. Please try again in 15 minutes.'
-    });
+    const error = new RateLimitError('Too many requests for this operation. Please try again in 15 minutes.', 900000);
+    const response = formatErrorResponse(error, req);
+    res.status(429).json(response);
   }
 });
 
@@ -66,10 +66,9 @@ const bookingCreationLimiter = rateLimit({
       ip: req.ip,
       userId: req.user?.id
     });
-    res.status(429).json({
-      status: 'error',
-      message: 'Too many booking requests in a short period. Please try again later.'
-    });
+    const error = new RateLimitError('Too many booking requests in a short period. Please try again later.', 3600000);
+    const response = formatErrorResponse(error, req);
+    res.status(429).json(response);
   }
 });
 
@@ -91,10 +90,9 @@ const serviceRegistrationLimiter = rateLimit({
       ip: req.ip,
       userId: req.user?.id
     });
-    res.status(429).json({
-      status: 'error',
-      message: 'Too many service registrations. Please try again tomorrow.'
-    });
+    const error = new RateLimitError('Too many service registrations. Please try again tomorrow.', 86400000);
+    const response = formatErrorResponse(error, req);
+    res.status(429).json(response);
   }
 });
 
@@ -191,10 +189,9 @@ const reportLimiter = rateLimit({
       ip: req.ip,
       userId: req.user?.id
     });
-    res.status(429).json({
-      status: 'error',
-      message: 'Too many reports submitted. Please try again tomorrow.'
-    });
+    const error = new RateLimitError('Too many reports submitted. Please try again tomorrow.', 86400000);
+    const response = formatErrorResponse(error, req);
+    res.status(429).json(response);
   }
 });
 
@@ -214,10 +211,9 @@ const callInitiationLimiter = rateLimit({
       ip: req.ip,
       userId: req.user?.id
     });
-    res.status(429).json({
-      status: 'error',
-      message: 'Too many call attempts. Please wait before trying again.'
-    });
+    const error = new RateLimitError('Too many call attempts. Please wait before trying again.', 60000);
+    const response = formatErrorResponse(error, req);
+    res.status(429).json(response);
   }
 });
 
@@ -278,10 +274,9 @@ const accountDeletionLimiter = rateLimit({
       ip: req.ip,
       userId: req.user?.id
     });
-    res.status(429).json({
-      status: 'error',
-      message: 'Too many account deletion requests. Please contact support if you need assistance.'
-    });
+    const error = new RateLimitError('Too many account deletion requests. Please contact support if you need assistance.', 86400000);
+    const response = formatErrorResponse(error, req);
+    res.status(429).json(response);
   }
 });
 

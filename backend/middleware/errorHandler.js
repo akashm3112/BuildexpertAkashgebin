@@ -111,13 +111,35 @@ const determineErrorCategory = (error) => {
   return 'LOGIC_ERROR';
 };
 
+/**
+ * Standardized error response format
+ * All errors MUST follow this format for consistency
+ * 
+ * Standard Format:
+ * {
+ *   status: 'error',
+ *   message: string,           // User-friendly error message
+ *   errorCode: string,         // Machine-readable error code
+ *   errorCategory: string,     // LOGIC_ERROR | NETWORK_ERROR | EXTERNAL_SERVICE_ERROR
+ *   errors?: array,            // Validation errors (for ValidationError)
+ *   details?: object|array,    // Additional error details
+ *   retryable?: boolean,       // Whether error is retryable
+ *   retryAfter?: number,       // Milliseconds to wait before retry
+ *   resource?: string,         // Resource name (for 404 errors)
+ *   stack?: string,            // Stack trace (development only)
+ *   originalError?: string,    // Original error message (development only)
+ *   requestId?: string         // Request ID (development only)
+ * }
+ */
 const formatErrorResponse = (error, req) => {
   const isDevelopment = config.isDevelopment();
   
+  // Base response structure - ALWAYS follows this format
   const response = {
     status: 'error',
     message: getUserFriendlyMessage(error),
-    errorCode: error.errorCode || 'INTERNAL_ERROR'
+    errorCode: error.errorCode || 'INTERNAL_ERROR',
+    errorCategory: determineErrorCategory(error)
   };
   
   // Add additional info for specific error types
@@ -142,8 +164,6 @@ const formatErrorResponse = (error, req) => {
   if (error.retryAfter) {
     response.retryAfter = error.retryAfter;
   }
-
-  response.errorCategory = determineErrorCategory(error);
   
   if (error.resource) {
     response.resource = error.resource;

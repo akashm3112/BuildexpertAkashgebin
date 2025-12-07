@@ -40,14 +40,12 @@ const paymentInitiationLimiter = rateLimit({
       userId: req.user?.id,
       ip: req.ip
     });
-    // Rate limiter middleware must respond directly, but use error type for consistency
-    const error = new RateLimitError('Too many payment attempts. Please try again in 15 minutes.', 900000); // 15 minutes in ms
-    res.status(429).json({
-      status: 'error',
-      message: error.message,
-      errorCode: error.errorCode,
-      retryAfter: error.retryAfter
-    });
+    // Rate limiter middleware must respond directly, but use standardized error format
+    const { RateLimitError } = require('../utils/errorTypes');
+    const { formatErrorResponse } = require('../middleware/errorHandler');
+    const error = new RateLimitError('Too many payment attempts. Please try again in 15 minutes.', 900000);
+    const response = formatErrorResponse(error, req);
+    res.status(429).json(response);
   }
 });
 

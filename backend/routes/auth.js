@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { body, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const { query, getRow } = require('../database/connection');
 const { auth } = require('../middleware/auth');
 const { formatNotificationTimestamp } = require('../utils/timezone');
@@ -37,6 +37,16 @@ const { blacklistToken, blacklistAllUserTokens } = require('../utils/tokenBlackl
 const { createSession, invalidateSession, invalidateAllUserSessions, invalidateSessionById, getUserSessions } = require('../utils/sessionManager');
 const { logSecurityEvent, logLoginAttempt, getRecentFailedAttempts, shouldBlockIP } = require('../utils/securityAudit');
 const { generateTokenPair, refreshAccessToken, revokeRefreshToken, revokeAllUserRefreshTokens } = require('../utils/refreshToken');
+const {
+  validateSignup,
+  validateLogin,
+  validateOTP,
+  validateResendOTP,
+  validateRefreshToken,
+  validatePasswordReset,
+  validatePasswordResetConfirm,
+  handleValidationErrors
+} = require('../middleware/validators');
 
 // Admin bypass only allowed in development mode for testing
 // In production, admins must follow normal security checks
@@ -59,50 +69,6 @@ const {
 } = require('../utils/blocklist');
 
 const router = express.Router();
-
-// Helper function to validate phone numbers (supports both US and Indian formats)
-const validatePhoneNumber = (value) => {
-  // Remove any existing country code or special characters
-  const cleanNumber = value.replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '');
-  
-  // Check if it's a valid 10-digit number
-  if (!/^\d{10}$/.test(cleanNumber)) {
-    return false;
-  }
-  
-  // For Indian numbers: should start with 6, 7, 8, or 9
-  if (/^[6-9]/.test(cleanNumber)) {
-    return true;
-  }
-  
-  // For US numbers: should start with 2-9 (area codes don't start with 0 or 1)
-  if (/^[2-9]/.test(cleanNumber)) {
-    return true;
-  }
-  
-  return false;
-};
-
-// Validation middleware
-const validateSignup = [
-  body('fullName').trim().isLength({ min: 2 }).withMessage('Full name must be at least 2 characters'),
-  body('email').isEmail().withMessage('Please enter a valid email'),
-  body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['user', 'provider']).withMessage('Role must be either user or provider'),
-  body('profilePicUrl').optional({ nullable: true, checkFalsy: true }).isString().withMessage('Profile picture URL must be a string')
-];
-
-const validateLogin = [
-  body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number'),
-  body('password').notEmpty().withMessage('Password is required'),
-  body('role').isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
-];
-
-const validateOTP = [
-  body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number'),
-  body('otp').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits')
-];
 
 // ============================================================================
 // COMPREHENSIVE RATE LIMITING
@@ -209,10 +175,11 @@ const tokenRefreshLimiter = rateLimit({
       userAgent: req.headers['user-agent'],
       hasToken: !!req.body?.refreshToken
     });
-    res.status(429).json({
-      status: 'error',
-      message: 'Too many token refresh requests. Please try again in 15 minutes.'
-    });
+    const { RateLimitError } = require('../utils/errorTypes');
+    const { formatErrorResponse } = require('../middleware/errorHandler');
+    const error = new RateLimitError('Too many token refresh requests. Please try again in 15 minutes.', 900000);
+    const response = formatErrorResponse(error, req);
+    res.status(429).json(response);
   }
 });
 
@@ -291,8 +258,6 @@ const getClientIP = (req) => {
 // @desc    Register a new user
 // @access  Public
 router.post('/signup', [signupLimiter, ...validateSignup], asyncHandler(async (req, res) => {
-  // Validate input - throws ValidationError if invalid
-  validateOrThrow(req);
 
   const { fullName, email, password, role, profilePicUrl } = req.body;
 
@@ -392,9 +357,15 @@ router.post('/signup', [signupLimiter, ...validateSignup], asyncHandler(async (r
 // @desc    Send OTP to phone number
 // @access  Public
 router.post('/send-otp', [otpRequestLimiter,
-  body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number')
+  body('phone').custom((value) => {
+    const cleanNumber = value?.replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '');
+    if (!/^\d{10}$/.test(cleanNumber)) return false;
+    if (/^[6-9]/.test(cleanNumber)) return true;
+    if (/^[2-9]/.test(cleanNumber)) return true;
+    return false;
+  }).withMessage('Please enter a valid 10-digit mobile number'),
+  handleValidationErrors
 ], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
 
   // Clean phone number by removing any country code prefix
   const phone = normalizePhoneNumber(req.body.phone);
@@ -439,7 +410,6 @@ router.post('/send-otp', [otpRequestLimiter,
 // @desc    Verify OTP and complete signup
 // @access  Public
 router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
 
   const { otp } = req.body;
   // Clean phone number by removing any country code prefix
@@ -678,10 +648,7 @@ router.post('/verify-otp', [...validateOTP, otpVerifyLimiter], asyncHandler(asyn
 // @route   POST /api/auth/resend-otp
 // @desc    Resend OTP to phone number
 // @access  Public
-router.post('/resend-otp', [otpRequestLimiter,
-  body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number')
-], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
+router.post('/resend-otp', [otpRequestLimiter, ...validateResendOTP], asyncHandler(async (req, res) => {
 
   const phone = normalizePhoneNumber(req.body.phone);
 
@@ -704,11 +671,10 @@ router.post('/resend-otp', [otpRequestLimiter,
 // @route   POST /api/auth/forgot-password
 // @desc    Start forgot password - send OTP to phone
 // @access  Public
-router.post('/forgot-password', [passwordResetLimiter, otpRequestLimiter,
-  body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number'),
-  body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
+router.post('/forgot-password', [passwordResetLimiter, otpRequestLimiter, ...validatePasswordReset,
+  body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin'),
+  handleValidationErrors
 ], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
   
   // Clean phone number by removing any country code prefix
   const phone = normalizePhoneNumber(req.body.phone);
@@ -748,9 +714,9 @@ router.post('/forgot-password', [passwordResetLimiter, otpRequestLimiter,
 // @desc    Verify OTP and create password reset session token
 // @access  Public
 router.post('/forgot-password/verify', [otpVerifyLimiter, ...validateOTP,
-  body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
+  body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin'),
+  handleValidationErrors
 ], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
   
   const { otp } = req.body;
   // Clean phone number by removing any country code prefix
@@ -790,12 +756,20 @@ router.post('/forgot-password/verify', [otpVerifyLimiter, ...validateOTP,
 // @desc    Reset password using reset token (revokes all existing sessions)
 // @access  Public
 router.post('/forgot-password/reset', [passwordResetLimiter,
-  body('phone').custom(validatePhoneNumber).withMessage('Please enter a valid 10-digit mobile number'),
+  body('phone').custom((value) => {
+    const cleanNumber = value?.replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '');
+    if (!/^\d{10}$/.test(cleanNumber)) return false;
+    if (/^[6-9]/.test(cleanNumber)) return true;
+    if (/^[2-9]/.test(cleanNumber)) return true;
+    return false;
+  }).withMessage('Please enter a valid 10-digit mobile number'),
   body('resetToken').notEmpty().withMessage('Reset token is required'),
-  body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin')
+  body('newPassword').isLength({ min: 6, max: 128 }).withMessage('Password must be between 6 and 128 characters')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, and one number'),
+  body('role').optional().isIn(['user', 'provider', 'admin']).withMessage('Role must be either user, provider, or admin'),
+  handleValidationErrors
 ], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
   
   const { resetToken, newPassword } = req.body;
   // Clean phone number by removing any country code prefix
@@ -852,13 +826,9 @@ router.post('/forgot-password/reset', [passwordResetLimiter,
 // @route   POST /api/auth/refresh
 // @desc    Refresh access token using refresh token (implements token rotation)
 // @access  Public (requires refresh token in body)
-router.post('/refresh', [tokenRefreshLimiter,
-  body('refreshToken').notEmpty().withMessage('Refresh token is required')
-], asyncHandler(async (req, res) => {
+router.post('/refresh', [tokenRefreshLimiter, ...validateRefreshToken], asyncHandler(async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
-  
-  validateOrThrow(req);
 
   const { refreshToken } = req.body;
   
@@ -873,17 +843,14 @@ router.post('/refresh', [tokenRefreshLimiter,
                       error?.message?.includes('connection');
     
     if (isDbError) {
-      // Database error - return 503 (Service Unavailable) instead of 401
+      // Database error - throw ServiceUnavailableError to go through error handler
       // This tells the client it's a temporary issue, not an authentication issue
       logger.error('Database error during token refresh', {
         error: error.message,
         ipAddress
       });
-      return res.status(503).json({
-        status: 'error',
-        message: 'Service temporarily unavailable. Please try again in a moment.',
-        code: 'SERVICE_UNAVAILABLE'
-      });
+      const { ServiceUnavailableError } = require('../utils/errorTypes');
+      throw new ServiceUnavailableError('Database', 'Service temporarily unavailable. Please try again in a moment.');
     }
     
     // Token error - return 401 (Unauthorized)
@@ -1256,16 +1223,14 @@ router.get('/sessions', auth, asyncHandler(async (req, res) => {
 // @route   DELETE /api/auth/sessions/:sessionId
 // @desc    Revoke a specific session by ID
 // @access  Private
-router.delete('/sessions/:sessionId', auth, asyncHandler(async (req, res) => {
+router.delete('/sessions/:sessionId', auth, [
+  param('sessionId').isInt({ min: 1 }).withMessage('Session ID must be a positive integer'),
+  handleValidationErrors
+], asyncHandler(async (req, res) => {
   const ipAddress = getClientIP(req);
   const userAgent = req.headers['user-agent'] || '';
   
   const sessionId = parseInt(req.params.sessionId, 10);
-  
-  if (isNaN(sessionId)) {
-    const { ValidationError } = require('../utils/errorTypes');
-    throw new ValidationError('Invalid session ID');
-  }
   
   // Get session details before invalidating
   const session = await getRow(

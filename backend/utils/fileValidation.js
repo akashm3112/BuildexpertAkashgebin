@@ -33,20 +33,22 @@ const IMAGE_SIGNATURES = {
   'image/bmp': [
     [0x42, 0x4D], // BM
   ],
-  'image/tiff': [
-    [0x49, 0x49, 0x2A, 0x00], // TIFF (little-endian)
-    [0x4D, 0x4D, 0x00, 0x2A], // TIFF (big-endian)
-  ],
+  // TIFF removed from allowed formats for security (can contain embedded scripts)
+  // 'image/tiff': [
+  //   [0x49, 0x49, 0x2A, 0x00], // TIFF (little-endian)
+  //   [0x4D, 0x4D, 0x00, 0x2A], // TIFF (big-endian)
+  // ],
 };
 
-// Allowed MIME types
+// Allowed MIME types - STRICT WHITELIST (only safe image formats)
 const ALLOWED_MIME_TYPES = [
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/tiff',
+  'image/jpeg',  // JPEG images
+  'image/jpg',   // JPEG (alternative)
+  'image/png',   // PNG images
+  'image/gif',   // GIF images
+  'image/webp',  // WebP images
+  // Note: TIFF removed from whitelist as it can contain embedded scripts
+  // 'image/tiff', // TIFF images - REMOVED for security
 ];
 
 // Maximum file size (5MB)
@@ -130,20 +132,59 @@ function detectFileType(buffer) {
 }
 
 /**
- * Check for suspicious content patterns (single pass, optimized)
+ * Check for suspicious content patterns (enhanced with binary detection)
  */
 function checkSuspiciousContent(buffer) {
   if (!buffer || buffer.length === 0) {
     return null;
   }
 
-  // Safely decode buffer for pattern matching
-  const bufferString = safeBufferToString(buffer, 1024);
+  // Check binary patterns first (executables) - most dangerous
+  // PE executable (Windows) - MZ header
+  if (buffer.length >= 2 && buffer[0] === 0x4D && buffer[1] === 0x5A) {
+    // Check if it's actually a PE file (offset 0x3C contains PE offset)
+    if (buffer.length > 64) {
+      try {
+        const peOffset = buffer.readUInt32LE(0x3C);
+        if (peOffset < buffer.length - 4) {
+          const peSignature = buffer.slice(peOffset, peOffset + 2);
+          if (peSignature[0] === 0x50 && peSignature[1] === 0x45) {
+            return 'PE_EXECUTABLE_DETECTED';
+          }
+        }
+      } catch (e) {
+        // Invalid offset, but MZ header is suspicious
+        return 'SUSPICIOUS_MZ_HEADER';
+      }
+    }
+  }
+
+  // ELF executable (Linux) - 0x7F ELF
+  if (buffer.length >= 4 && buffer[0] === 0x7F && 
+      buffer[1] === 0x45 && buffer[2] === 0x4C && buffer[3] === 0x46) {
+    return 'ELF_EXECUTABLE_DETECTED';
+  }
+
+  // Mach-O executable (macOS) - 0xCAFEBABE or 0xFEEDFACE
+  if (buffer.length >= 4) {
+    try {
+      const magic = buffer.readUInt32BE(0);
+      if (magic === 0xCAFEBABE || magic === 0xFEEDFACE || magic === 0xFEEDFACF) {
+        return 'MACHO_EXECUTABLE_DETECTED';
+      }
+    } catch (e) {
+      // Continue to text pattern checking
+    }
+  }
+
+  // Safely decode buffer for text pattern matching (increased to 2KB for better detection)
+  const bufferString = safeBufferToString(buffer, 2048);
   
   if (!bufferString) {
     return null; // Could not decode, skip pattern check
   }
 
+  // Check text-based suspicious patterns
   for (const pattern of SUSPICIOUS_PATTERNS) {
     if (pattern.test(bufferString)) {
       return pattern.toString();

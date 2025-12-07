@@ -73,6 +73,20 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
       console.log('Processing file path or buffer...');
     }
 
+    // Determine optimization profile based on folder
+    let optimizationProfile = 'general';
+    if (folder.includes('profile') || folder.includes('profile-pictures')) {
+      optimizationProfile = 'profile';
+    } else if (folder.includes('working-proof') || folder.includes('working-proofs')) {
+      optimizationProfile = 'workingProof';
+    } else if (folder.includes('certificate') || folder.includes('certificates')) {
+      optimizationProfile = 'certificate';
+    }
+    
+    // Get optimized transformations based on profile
+    const { getCloudinaryTransformations } = require('./imageOptimization');
+    const transformations = getCloudinaryTransformations(optimizationProfile);
+    
     // Upload with circuit breaker and retry logic
     const uploadWithProtection = async () => {
       return await breakers.cloudinary.execute(
@@ -80,12 +94,21 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
           const result = await cloudinary.uploader.upload(uploadData, {
             folder: folder,
             resource_type: 'auto',
-            transformation: [
-              { width: 1280, crop: 'limit' },
-              { quality: 'auto:good' },
-              { fetch_format: 'auto' }
+            transformation: transformations,
+            timeout: 60000, // 60 second timeout
+            // Additional optimization flags
+            flags: 'progressive',
+            // Generate optimized versions for common sizes (eager transformations)
+            eager: [
+              { width: 400, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' },
+              { width: 800, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' },
+              { width: 1280, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }
             ],
-            timeout: 60000 // 60 second timeout
+            eager_async: false,
+            // Enable automatic format optimization
+            format: 'auto',
+            // Enable automatic quality optimization
+            quality: 'auto:good'
           });
           
           console.log('Upload successful:', result.secure_url);

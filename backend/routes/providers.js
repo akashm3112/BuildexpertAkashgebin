@@ -15,6 +15,9 @@ const { sanitizeBody, sanitizeQuery } = require('../middleware/inputSanitization
 const { asyncHandler } = require('../middleware/errorHandler');
 const { NotFoundError, ValidationError, AuthorizationError } = require('../utils/errorTypes');
 const { validateOrThrow, throwIfMissing } = require('../utils/errorHelpers');
+const {
+  validateUpdateProviderProfile
+} = require('../middleware/validators');
 
 const router = express.Router();
 
@@ -55,14 +58,7 @@ router.get('/profile', asyncHandler(async (req, res) => {
 // @route   PUT /api/providers/profile
 // @desc    Update provider profile
 // @access  Private
-router.put('/profile', [
-  profileUpdateLimiter,
-  body('yearsOfExperience').optional().isInt({ min: 0 }).withMessage('Years of experience must be a positive number'),
-  body('serviceDescription').optional().notEmpty().withMessage('Service description cannot be empty'),
-  body('isEngineeringProvider').optional().isBoolean().withMessage('isEngineeringProvider must be a boolean'),
-  body('engineeringCertificateUrl').optional().isString().withMessage('Engineering certificate URL must be a string')
-], asyncHandler(async (req, res) => {
-  validateOrThrow(req);
+router.put('/profile', [profileUpdateLimiter, ...validateUpdateProviderProfile], asyncHandler(async (req, res) => {
 
   const {
     yearsOfExperience,

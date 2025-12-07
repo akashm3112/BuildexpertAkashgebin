@@ -15,6 +15,13 @@ const { createQueuedRateLimiter } = require('../utils/rateLimiterQueue');
 const { ServiceUnavailableError, DatabaseConnectionError, RateLimitError } = require('../utils/errorTypes');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { ValidationError, NotFoundError } = require('../utils/errorTypes');
+const {
+  validateCreateBooking,
+  validateUpdateBooking,
+  validateCancelBooking,
+  validateReportBooking,
+  validateRateBooking
+} = require('../middleware/validators');
 
 /**
  * Normalize appointment time to a standard format for comparison.
@@ -98,13 +105,12 @@ const bookingTrafficShaper = createQueuedRateLimiter({
       userId: req.user?.id,
       ip: req.ip
     });
-    // Rate limiter middleware must respond directly, but use error type for consistency
-    const error = new RateLimitError('Booking demand is very high right now. Please wait a moment and try again.');
-    return res.status(429).json({
-      status: 'error',
-      message: error.message,
-      errorCode: error.errorCode
-    });
+    // Rate limiter middleware must respond directly, but use standardized error format
+    const { RateLimitError } = require('../utils/errorTypes');
+    const { formatErrorResponse } = require('../middleware/errorHandler');
+    const error = new RateLimitError('Booking demand is very high right now. Please wait a moment and try again.', 60000);
+    const response = formatErrorResponse(error, req);
+    return res.status(429).json(response);
   }
 });
 
@@ -119,18 +125,7 @@ router.use(sanitizeBody());
 // @route   POST /api/bookings
 // @desc    Create a new booking
 // @access  Private
-router.post('/', [
-  bookingTrafficShaper,
-  bookingCreationLimiter,
-  body('providerServiceId').isUUID().withMessage('Valid provider service ID is required'),
-  body('selectedService').notEmpty().withMessage('Selected service is required'),
-  body('appointmentDate').isDate().withMessage('Valid appointment date is required'),
-  body('appointmentTime').notEmpty().withMessage('Appointment time is required')
-], asyncHandler(async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    throw new ValidationError('Validation failed', { errors: errors.array() });
-  }
+router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreateBooking], asyncHandler(async (req, res) => {
 
     const { providerServiceId, selectedService, appointmentDate, appointmentTime } = req.body;
 
