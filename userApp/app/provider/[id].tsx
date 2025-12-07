@@ -32,6 +32,24 @@ import { useLanguage } from '@/context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
+// Responsive design utilities
+const screenWidth = Dimensions.get('window').width;
+const isSmallScreen = screenWidth < 375;
+const isMediumScreen = screenWidth >= 375 && screenWidth < 414;
+const isLargeScreen = screenWidth >= 414;
+
+const getResponsiveSpacing = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
+
+const getResponsiveFontSize = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
+
 export default function ProviderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useLanguage();
@@ -190,9 +208,13 @@ export default function ProviderDetailScreen() {
             <Image source={{ uri: provider.profile_pic_url || 'https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=600' }} style={styles.providerImage} />
             <View style={styles.providerInfo}>
               <View style={styles.nameRow}>
-                <Text style={styles.providerName}>{provider.full_name}</Text>
+                <View style={styles.nameContainer}>
+                  <Text style={styles.providerName}>
+                    {provider.full_name}
+                  </Text>
+                </View>
                 <View style={styles.verifiedBadge}>
-                  <Shield size={16} color="#10B981" />
+                  <Shield size={getResponsiveSpacing(14, 16, 18)} color="#10B981" />
                 </View>
               </View>
               <Text style={styles.businessName}>{provider.is_engineering_provider ? t('providerDetail.engineeringProvider') : t('providerDetail.serviceProvider')}</Text>
@@ -210,21 +232,33 @@ export default function ProviderDetailScreen() {
           </View>
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
-              <Award size={20} color="#3B82F6" />
-              <Text style={styles.statValue}>{provider.years_of_experience} {t('serviceListing.years')}</Text>
-              <Text style={styles.statLabel}>{t('providerDetail.experience')}</Text>
+              <Award size={getResponsiveSpacing(18, 20, 22)} color="#3B82F6" />
+              <Text style={styles.statValue}>
+                {provider.years_of_experience} {t('serviceListing.years')}
+              </Text>
+              <Text style={styles.statLabel}>
+                {t('providerDetail.experience')}
+              </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Clock size={20} color="#10B981" />
-              <Text style={styles.statValue}>₹{provider.service_charge_value}/{provider.service_charge_unit}</Text>
-              <Text style={styles.statLabel}>{t('providerDetail.startingPrice')}</Text>
+              <Clock size={getResponsiveSpacing(18, 20, 22)} color="#10B981" />
+              <Text style={styles.statValue}>
+                ₹{provider.service_charge_value}/{provider.service_charge_unit}
+              </Text>
+              <Text style={styles.statLabel}>
+                {t('providerDetail.startingPrice')}
+              </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Calendar size={20} color="#F59E0B" />
-              <Text style={styles.statValue}>{t('providerDetail.available')}</Text>
-              <Text style={styles.statLabel}>{t('serviceListing.availability')}</Text>
+              <Calendar size={getResponsiveSpacing(18, 20, 22)} color="#F59E0B" />
+              <Text style={styles.statValue}>
+                {t('providerDetail.available')}
+              </Text>
+              <Text style={styles.statLabel}>
+                {t('serviceListing.availability')}
+              </Text>
             </View>
           </View>
         </View>
@@ -330,9 +364,9 @@ const styles = StyleSheet.create({
   },
   providerCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginVertical: 16,
+    borderRadius: getResponsiveSpacing(14, 16, 18),
+    padding: getResponsiveSpacing(16, 20, 24),
+    marginVertical: getResponsiveSpacing(12, 16, 20),
     ...Platform.select({
       ios: {
         shadowColor: '#CBD5E1',
@@ -353,35 +387,42 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   providerImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginRight: 16,
+    width: getResponsiveSpacing(70, 80, 90),
+    height: getResponsiveSpacing(70, 80, 90),
+    borderRadius: getResponsiveSpacing(35, 40, 45),
+    marginRight: getResponsiveSpacing(12, 16, 20),
   },
   providerInfo: {
     flex: 1,
+    minWidth: 0, // Allow flex children to shrink below their content size
   },
   nameRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 4,
+    flexWrap: 'wrap',
+  },
+  nameContainer: {
+    flex: 1,
+    marginRight: getResponsiveSpacing(6, 8, 10),
   },
   providerName: {
-    fontSize: 20,
+    fontSize: getResponsiveFontSize(18, 20, 22),
     fontWeight: '700',
     color: '#1E293B',
-    marginRight: 8,
   },
   verifiedBadge: {
     backgroundColor: '#ECFDF5',
-    borderRadius: 12,
-    padding: 4,
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+    padding: getResponsiveSpacing(4, 5, 6),
+    flexShrink: 0, // Prevent badge from shrinking
+    marginTop: 2, // Align with first line of text when wrapping
   },
   businessName: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(14, 16, 18),
     fontWeight: '500',
     color: '#3B82F6',
-    marginBottom: 4,
+    marginBottom: getResponsiveSpacing(4, 5, 6),
   },
   specialty: {
     fontSize: 14,
@@ -416,28 +457,33 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+    padding: getResponsiveSpacing(14, 16, 18),
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   statValue: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(13, 14, 15),
     fontWeight: '600',
     color: '#1E293B',
-    marginTop: 4,
-    marginBottom: 2,
+    marginTop: getResponsiveSpacing(4, 5, 6),
+    marginBottom: getResponsiveSpacing(2, 3, 4),
+    textAlign: 'center',
+    width: '100%',
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: getResponsiveFontSize(11, 12, 13),
     color: '#64748B',
+    textAlign: 'center',
+    width: '100%',
   },
   statDivider: {
     width: 1,
     backgroundColor: '#E2E8F0',
-    marginHorizontal: 16,
+    marginHorizontal: getResponsiveSpacing(12, 16, 20),
   },
   section: {
     marginBottom: 24,
