@@ -492,9 +492,23 @@ const requestInterceptor = async (config: RequestConfig, forceTokenRefresh: bool
     try {
       // Use queued token refresh to prevent multiple simultaneous refreshes
       const token = await queueTokenRefresh(forceTokenRefresh);
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-    } catch (tokenError) {
-      // If token retrieval fails, continue without token (will get 401)
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      } else {
+        // PRODUCTION FIX: If no token available, throw error instead of making unauthenticated request
+        // This prevents "Network request failed" errors when user is not logged in
+        throw normalizeError({ 
+          message: 'Authentication required. Please login.', 
+          status: 401,
+          code: 'NO_TOKEN'
+        }, new Response());
+      }
+    } catch (tokenError: any) {
+      // If token retrieval fails, check if it's a "no token" error
+      if (tokenError?.code === 'NO_TOKEN' || tokenError?.message?.includes('No token')) {
+        throw tokenError; // Re-throw authentication errors
+      }
+      // For other token errors, log warning but continue (will get 401 from backend)
       console.warn('Failed to get auth token:', tokenError);
     }
   }

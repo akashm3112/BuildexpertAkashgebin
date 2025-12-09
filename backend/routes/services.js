@@ -94,15 +94,13 @@ router.use(auth);
 // @route   GET /api/services/my-registrations
 // @desc    Get current provider's registered services
 // @access  Private
-router.get('/my-registrations', asyncHandler(async (req, res) => {
+router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(async (req, res) => {
   logger.info('MY-REGISTRATIONS endpoint called', {
     userId: req.user.id,
     role: req.user.role
   });
-
-  if (req.user.role !== 'provider') {
-    throw new AuthorizationError('Access denied. Only providers can access this endpoint.');
-  }
+  
+  // Authentication and role check handled by middleware (auth + requireRole(['provider']))
 
   // First check if user has a provider profile
   const providerProfile = await getRow('SELECT * FROM provider_profiles WHERE user_id = $1', [req.user.id]);
@@ -162,9 +160,19 @@ router.get('/my-registrations', asyncHandler(async (req, res) => {
     count: registeredServices.length
   });
 
+  // PRODUCTION FIX: Ensure working_proof_urls is properly serialized as array
+  // PostgreSQL TEXT[] arrays are automatically parsed by pg library, but ensure they're arrays
+  const serializedServices = registeredServices.map(service => ({
+    ...service,
+    // Ensure working_proof_urls is always an array (pg library should handle this, but be explicit)
+    working_proof_urls: Array.isArray(service.working_proof_urls) 
+      ? service.working_proof_urls 
+      : (service.working_proof_urls ? [service.working_proof_urls] : [])
+  }));
+
   res.json({
     status: 'success',
-    data: { registeredServices }
+    data: { registeredServices: serializedServices }
   });
 }));
 
@@ -321,7 +329,7 @@ router.get('/:id/providers/:providerId', asyncHandler(async (req, res) => {
 // @route   PUT /api/services/:id/providers
 // @desc    Update provider registration for a service (requires provider role)
 // @access  Private
-router.put('/:id/providers', requireRole(['provider']), asyncHandler(async (req, res) => {
+router.put('/:id/providers', auth, requireRole(['provider']), asyncHandler(async (req, res) => {
   const { id } = req.params;
     const {
       yearsOfExperience,
@@ -393,9 +401,20 @@ router.put('/:id/providers', requireRole(['provider']), asyncHandler(async (req,
         const uploadResult = await uploadMultipleImages(workingProofUrls, 'buildxpert/working-proofs');
         
         if (uploadResult.success) {
+          // PRODUCTION FIX: Check if mock URLs were returned (should not happen if Cloudinary is configured)
+          if (uploadResult.mockCount && uploadResult.mockCount > 0) {
+            logger.error('Cloudinary upload returned mock URLs - Cloudinary may not be properly configured', {
+              mockCount: uploadResult.mockCount,
+              totalUrls: uploadResult.urls.length,
+              errors: uploadResult.errors
+            });
+            throw new Error(`Failed to upload working proof images to Cloudinary. ${uploadResult.mockCount} mock URL(s) generated. Please check Cloudinary configuration.`);
+          }
+          
           cloudinaryUrls = uploadResult.urls;
           logger.info('Successfully uploaded images to Cloudinary', {
-            count: cloudinaryUrls.length
+            count: cloudinaryUrls.length,
+            mockCount: uploadResult.mockCount || 0
           });
         } else {
           logger.error('Failed to upload images to Cloudinary', {
@@ -417,6 +436,15 @@ router.put('/:id/providers', requireRole(['provider']), asyncHandler(async (req,
       const uploadResult = await uploadImage(engineeringCertificateUrl, 'buildxpert/certificates');
       
       if (uploadResult.success) {
+        // PRODUCTION FIX: Check if mock URL was returned (should not happen if Cloudinary is configured)
+        if (uploadResult.isMock) {
+          logger.error('Cloudinary upload returned mock URL for engineering certificate - Cloudinary may not be properly configured', {
+            isMock: uploadResult.isMock,
+            error: uploadResult.originalError
+          });
+          throw new Error('Failed to upload engineering certificate to Cloudinary. Mock URL generated. Please check Cloudinary configuration.');
+        }
+        
         cloudinaryCertificateUrl = uploadResult.url;
         logger.info('Successfully uploaded engineering certificate to Cloudinary');
       } else {
@@ -474,7 +502,7 @@ router.put('/:id/providers', requireRole(['provider']), asyncHandler(async (req,
 // @route   POST /api/services/:id/providers
 // @desc    Register as provider for a service (requires provider role)
 // @access  Private
-router.post('/:id/providers', requireRole(['provider']), [
+router.post('/:id/providers', auth, requireRole(['provider']), [
   body('yearsOfExperience').isInt({ min: 0 }).withMessage('Years of experience must be a positive number'),
   body('serviceDescription').notEmpty().withMessage('Service description is required'),
   body('serviceChargeValue').isFloat({ min: 0 }).withMessage('Service charge must be a positive number'),
@@ -562,6 +590,15 @@ router.post('/:id/providers', requireRole(['provider']), [
       const uploadResult = await uploadImage(engineeringCertificateUrl, 'buildxpert/certificates');
       
       if (uploadResult.success) {
+        // PRODUCTION FIX: Check if mock URL was returned (should not happen if Cloudinary is configured)
+        if (uploadResult.isMock) {
+          logger.error('Cloudinary upload returned mock URL for engineering certificate - Cloudinary may not be properly configured', {
+            isMock: uploadResult.isMock,
+            error: uploadResult.originalError
+          });
+          throw new Error('Failed to upload engineering certificate to Cloudinary. Mock URL generated. Please check Cloudinary configuration.');
+        }
+        
         cloudinaryCertificateUrl = uploadResult.url;
         logger.info('Successfully uploaded engineering certificate to Cloudinary');
       } else {
@@ -600,14 +637,25 @@ router.post('/:id/providers', requireRole(['provider']), [
       const uploadResult = await uploadMultipleImages(validWorkingProofUrls, 'buildxpert/working-proofs');
       
       if (uploadResult.success) {
-        cloudinaryUrls = uploadResult.urls;
-          logger.info('Successfully uploaded images to Cloudinary', {
-            count: cloudinaryUrls.length
-          });
-      } else {
-          logger.error('Failed to upload images to Cloudinary', {
+        // PRODUCTION FIX: Check if mock URLs were returned (should not happen if Cloudinary is configured)
+        if (uploadResult.mockCount && uploadResult.mockCount > 0) {
+          logger.error('Cloudinary upload returned mock URLs - Cloudinary may not be properly configured', {
+            mockCount: uploadResult.mockCount,
+            totalUrls: uploadResult.urls.length,
             errors: uploadResult.errors
           });
+          throw new Error(`Failed to upload working proof images to Cloudinary. ${uploadResult.mockCount} mock URL(s) generated. Please check Cloudinary configuration.`);
+        }
+        
+        cloudinaryUrls = uploadResult.urls;
+        logger.info('Successfully uploaded images to Cloudinary', {
+          count: cloudinaryUrls.length,
+          mockCount: uploadResult.mockCount || 0
+        });
+      } else {
+        logger.error('Failed to upload images to Cloudinary', {
+          errors: uploadResult.errors
+        });
         throw new Error('Failed to upload working proof images');
       }
   }
@@ -748,7 +796,7 @@ router.post('/:id/providers', requireRole(['provider']), [
 // @route   DELETE /api/services/my-registrations/:serviceId
 // @desc    Cancel a service registration (only for labor services)
 // @access  Private
-router.delete('/my-registrations/:serviceId', requireRole(['provider']), asyncHandler(async (req, res) => {
+router.delete('/my-registrations/:serviceId', auth, requireRole(['provider']), asyncHandler(async (req, res) => {
   logger.info('Cancel service registration request', {
     userId: req.user.id,
     serviceId: req.params.serviceId

@@ -110,6 +110,11 @@ class Config {
   }
 
   validateConfig() {
+    // PRODUCTION SECURITY: Ensure admin bypass is disabled in production
+    if (this.isProduction() && process.env.ENABLE_ADMIN_BYPASS === 'true') {
+      throw new Error('SECURITY ERROR: ENABLE_ADMIN_BYPASS cannot be enabled in production mode. This is a critical security risk!');
+    }
+    
     const errors = [];
     const warnings = [];
 
@@ -137,6 +142,11 @@ class Config {
 
     if (this.config.nodeEnv === 'development') {
       warnings.push('⚠️  Running in development mode. Set NODE_ENV=production for production deployment.');
+      
+      // SECURITY: Warn if admin bypass is attempted in production
+      if (process.env.ENABLE_ADMIN_BYPASS === 'true') {
+        warnings.push('🚨 SECURITY WARNING: ENABLE_ADMIN_BYPASS is set. This should NEVER be enabled in production!');
+      }
     }
 
     if (this.config.paytm.mid === 'YOUR_MERCHANT_ID') {

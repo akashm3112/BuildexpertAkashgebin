@@ -10,7 +10,7 @@ const express = require('express');
 const router = express.Router();
 const { metricsCollector, alertManager, performHealthCheck } = require('../utils/monitoring');
 const { asyncHandler } = require('../middleware/errorHandler');
-const { auth } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 const config = require('../utils/config');
 const { AuthorizationError } = require('../utils/errorTypes');
 
@@ -21,9 +21,13 @@ const { AuthorizationError } = require('../utils/errorTypes');
  */
 router.get('/metrics', asyncHandler(async (req, res) => {
   // In production, require admin auth
-  if (config.isProduction() && (!req.user || req.user.role !== 'admin')) {
-    throw new AuthorizationError('Access denied. Admin role required.');
+  if (config.isProduction()) {
+    // Use proper middleware for production
+    if (!req.user || req.user.role !== 'admin') {
+      throw new AuthorizationError('Access denied. Admin role required.');
+    }
   }
+  // In development, allow public access for testing
 
   const metrics = metricsCollector.getMetrics();
   
@@ -55,12 +59,7 @@ router.get('/health', asyncHandler(async (req, res) => {
  * @desc    Get recent alerts
  * @access  Admin only
  */
-router.get('/alerts', auth, asyncHandler(async (req, res) => {
-  // Require admin role
-  if (req.user.role !== 'admin') {
-    throw new AuthorizationError('Access denied. Admin role required.');
-  }
-
+router.get('/alerts', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const alerts = alertManager.getRecentAlerts(limit);
   
@@ -112,12 +111,7 @@ router.get('/status', asyncHandler(async (req, res) => {
  * @desc    Reset metrics (admin only)
  * @access  Admin only
  */
-router.post('/reset', auth, asyncHandler(async (req, res) => {
-  // Require admin role
-  if (req.user.role !== 'admin') {
-    throw new AuthorizationError('Access denied. Admin role required.');
-  }
-
+router.post('/reset', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
   metricsCollector.reset();
   
   res.json({

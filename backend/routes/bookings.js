@@ -308,7 +308,7 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
 // @route   GET /api/bookings
 // @desc    Get user's bookings
 // @access  Private
-router.get('/', asyncHandler(async (req, res) => {
+router.get('/', auth, asyncHandler(async (req, res) => {
   const { status, page = 1, limit = 10 } = req.query;
 
   // Use optimized database query
@@ -331,7 +331,7 @@ router.get('/', asyncHandler(async (req, res) => {
 // @route   GET /api/bookings/:id
 // @desc    Get booking details
 // @access  Private
-router.get('/:id', asyncHandler(async (req, res) => {
+router.get('/:id', auth, asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const booking = await getRow(`
@@ -373,7 +373,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 // @route   PUT /api/bookings/:id/cancel
 // @desc    Cancel booking
 // @access  Private
-router.put('/:id/cancel', [
+router.put('/:id/cancel', auth, [
   body('cancellationReason').optional().notEmpty().withMessage('Cancellation reason cannot be empty')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
@@ -500,7 +500,7 @@ router.put('/:id/cancel', [
 // @route   POST /api/bookings/:id/rate
 // @desc    Rate a completed booking
 // @access  Private
-router.post('/:id/rate', [
+router.post('/:id/rate', auth, [
   body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
   body('review').optional().isLength({ max: 500 }).withMessage('Review must be less than 500 characters')
 ], asyncHandler(async (req, res) => {
@@ -584,7 +584,7 @@ router.post('/:id/rate', [
 // @route   POST /api/bookings/:id/report
 // @desc    Report a booking
 // @access  Private
-router.post('/:id/report', [
+router.post('/:id/report', auth, [
   require('../middleware/rateLimiting').reportLimiter,
   body('reportReason').notEmpty().withMessage('Report reason is required'),
   body('reportDescription').notEmpty().withMessage('Report description is required')

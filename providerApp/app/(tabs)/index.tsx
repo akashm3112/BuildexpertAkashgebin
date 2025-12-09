@@ -499,6 +499,13 @@ export default function HomeScreen() {
   };
 
   const fetchRegisteredServices = async () => {
+    // PRODUCTION FIX: Only fetch if user is authenticated
+    if (!user || !user.id) {
+      console.log('📱 fetchRegisteredServices: User not authenticated, skipping API call');
+      setIsLoadingServices(false);
+      return;
+    }
+
     try {
       setIsLoadingServices(true);
       
@@ -538,7 +545,21 @@ export default function HomeScreen() {
         }
       } catch (apiError: any) {
         // Handle API errors silently - don't show error for home screen
-        console.error('Error fetching registered services:', apiError);
+        // PRODUCTION FIX: Better error handling for authentication and network errors
+        const isAuthError = apiError?.status === 401 || 
+                           apiError?.code === 'NO_TOKEN' ||
+                           apiError?.message?.includes('Authentication required') ||
+                           apiError?.message?.includes('Session expired');
+        const isNetworkError = apiError?.isNetworkError === true ||
+                              apiError?.message?.includes('Network request failed');
+        
+        // Only log non-auth, non-network errors (these are unexpected)
+        if (!isAuthError && !isNetworkError) {
+          console.error('Error fetching registered services:', apiError);
+        } else if (isAuthError && user?.id) {
+          // User exists but authentication failed - might be token issue
+          console.log('📱 fetchRegisteredServices: Authentication failed, user may need to login again');
+        }
       }
     } catch (error: any) {
       // Suppress "Session expired" errors - they're expected after 30 days
@@ -547,6 +568,15 @@ export default function HomeScreen() {
                                error?._suppressUnhandled === true ||
                                error?._handled === true;
       
+      // Suppress authentication errors when user is not logged in
+      const isAuthError = error?.status === 401 || 
+                         error?.code === 'NO_TOKEN' ||
+                         error?.message?.includes('Authentication required');
+      
+      // Suppress network errors when user is not authenticated (expected)
+      const isNetworkError = error?.isNetworkError === true ||
+                            error?.message?.includes('Network request failed');
+      
       // Suppress server/database errors - backend issue, not user's fault
       const isServerError = error?.status === 500 || 
                           error?.isServerError === true ||
@@ -554,7 +584,8 @@ export default function HomeScreen() {
                           error?.message?.includes('Database') ||
                           error?.data?.errorCode === 'DATABASE_ERROR';
       
-      if (!isSessionExpired && !isServerError) {
+      // Only log unexpected errors
+      if (!isSessionExpired && !isAuthError && !isNetworkError && !isServerError) {
         console.error('Error fetching registered services:', error);
       }
     } finally {
@@ -704,6 +735,12 @@ export default function HomeScreen() {
 
   // Handle refresh
   const handleRefresh = async () => {
+    // PRODUCTION FIX: Only refresh if user is authenticated
+    if (!user || !user.id) {
+      setRefreshing(false);
+      return;
+    }
+
     setRefreshing(true);
     try {
       // Refresh both registered services and earnings

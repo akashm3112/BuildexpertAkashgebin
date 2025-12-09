@@ -21,7 +21,98 @@ const {
 
 const router = express.Router();
 
-// All routes require authentication and provider role
+// PRODUCTION SECURITY: Admin routes must be defined BEFORE provider role middleware
+// Admin routes override the provider role requirement
+
+// Admin-only routes (must be before provider role middleware)
+// @route   GET /api/providers/reports
+// @desc    Get provider's reports (for admin)
+// @access  Private (Admin only)
+router.get('/reports', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, status } = req.query;
+  const offset = (page - 1) * limit;
+
+  let whereClause = '';
+  let queryParams = [];
+  let paramCount = 1;
+
+  if (status) {
+    whereClause = `WHERE pr.status = $${paramCount}`;
+    queryParams.push(status);
+    paramCount++;
+  }
+
+  const reports = await getRows(`
+    SELECT 
+      pr.*
+    FROM provider_reports_users pr
+    ${whereClause}
+    ORDER BY pr.created_at DESC
+    LIMIT $${paramCount} OFFSET $${paramCount + 1}
+  `, [...queryParams, limit, offset]);
+
+  // Get total count
+  const countResult = await getRow(`
+    SELECT COUNT(*) as total
+    FROM provider_reports_users pr
+    ${whereClause ? whereClause.replace(/\$\d+/g, (match, offset, string) => {
+      const num = parseInt(match.substring(1));
+      return `$${num}`;
+    }) : ''}
+  `, queryParams);
+
+  const total = parseInt(countResult?.total || 0, 10);
+
+  res.json({
+    status: 'success',
+    data: {
+      reports,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        totalCount: total,
+        limit: parseInt(limit)
+      }
+    }
+  });
+}));
+
+// @route   PUT /api/providers/reports/:id/status
+// @desc    Update report status (for admin)
+// @access  Private (Admin only)
+router.put('/reports/:id/status', [
+  body('status').isIn(['open', 'resolved', 'closed']).withMessage('Invalid status')
+], auth, requireRole(['admin']), asyncHandler(async (req, res) => {
+  validateOrThrow(req);
+
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const report = await getRow(`
+    SELECT * FROM provider_reports_users WHERE id = $1
+  `, [id]);
+
+  if (!report) {
+    throw new NotFoundError('Report', id);
+  }
+
+  await query(`
+    UPDATE provider_reports_users
+    SET status = $1, updated_at = NOW()
+    WHERE id = $2
+  `, [status, id]);
+
+  res.json({
+    status: 'success',
+    message: 'Report status updated successfully',
+    data: {
+      ...report,
+      status
+    }
+  });
+}));
+
+// All other routes require authentication and provider role
 router.use(auth);
 router.use(requireRole(['provider']));
 
@@ -667,59 +758,6 @@ router.post('/report-customer', [
   });
 }));
 
-// @route   GET /api/providers/reports
-// @desc    Get provider's reports (for admin)
-// @access  Private (Admin only)
-router.get('/reports', requireRole(['admin']), asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, status } = req.query;
-  const offset = (page - 1) * limit;
-
-  let whereClause = '';
-  let queryParams = [];
-  let paramCount = 1;
-
-  if (status) {
-    whereClause = `WHERE pr.status = $${paramCount}`;
-    queryParams.push(status);
-    paramCount++;
-  }
-
-  const reports = await getRows(`
-    SELECT 
-      pr.*,
-      u.full_name as provider_name,
-      u.phone as provider_phone
-    FROM provider_reports_users pr
-    JOIN users u ON pr.provider_id = u.id
-    ${whereClause}
-    ORDER BY pr.created_at DESC
-    LIMIT $${paramCount} OFFSET $${paramCount + 1}
-  `, [...queryParams, limit, offset]);
-
-  // Get total count
-  const countResult = await getRow(`
-    SELECT COUNT(*) as total
-    FROM provider_reports_users pr
-    ${whereClause}
-  `, queryParams);
-
-  const total = parseInt(countResult.total);
-  const totalPages = Math.ceil(total / limit);
-
-  res.json({
-    status: 'success',
-    data: {
-      reports,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages,
-        total,
-        limit: parseInt(limit)
-      }
-    }
-  });
-}));
-
 // @route   GET /api/providers/my-reports
 // @desc    Get provider's own reports
 // @access  Private (Providers only)
@@ -768,35 +806,6 @@ router.get('/my-reports', asyncHandler(async (req, res) => {
         limit: parseInt(limit)
       }
     }
-  });
-}));
-
-// @route   PUT /api/providers/reports/:id/status
-// @desc    Update report status (for admin)
-// @access  Private (Admin only)
-router.put('/reports/:id/status', [
-  body('status').isIn(['open', 'resolved', 'closed']).withMessage('Invalid status')
-], requireRole(['admin']), asyncHandler(async (req, res) => {
-  validateOrThrow(req);
-
-  const { id } = req.params;
-  const { status } = req.body;
-
-  const result = await query(`
-    UPDATE provider_reports_users 
-    SET status = $1
-    WHERE id = $2
-    RETURNING *
-  `, [status, id]);
-
-  if (result.rows.length === 0) {
-    throw new NotFoundError('Report', id);
-  }
-
-  res.json({
-    status: 'success',
-    message: 'Report status updated successfully',
-    data: { report: result.rows[0] }
   });
 }));
 

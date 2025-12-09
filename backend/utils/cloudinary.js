@@ -59,18 +59,25 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
       };
     }
     
-    // Convert base64 to buffer if needed
+    // PRODUCTION FIX: Only accept base64 data URLs or Cloudinary URLs
+    // Reject file:// URIs as they cannot be uploaded to Cloudinary from the server
     let uploadData;
     
     if (imageFile.startsWith('data:image')) {
       uploadData = imageFile;
       console.log('Processing base64 image...');
     } else if (imageFile.startsWith('file://')) {
+      // PRODUCTION FIX: Reject file:// URIs - they should have been converted to base64 by the frontend
+      console.error('❌ File URI received - should have been converted to base64 by frontend:', imageFile.substring(0, 100));
+      throw new Error('File URIs cannot be uploaded directly. Images must be converted to base64 before sending to backend.');
+    } else if (imageFile.startsWith('http://') || imageFile.startsWith('https://')) {
+      // Already a Cloudinary URL - return as is (for edit mode)
       uploadData = imageFile;
-      console.log('Processing file URI...');
+      console.log('Processing Cloudinary URL (already uploaded)...');
     } else {
+      // Unknown format - try to use as-is but log warning
+      console.warn('⚠️ Unknown image format, attempting upload:', imageFile.substring(0, 100));
       uploadData = imageFile;
-      console.log('Processing file path or buffer...');
     }
 
     // Determine optimization profile based on folder
@@ -96,19 +103,17 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
             resource_type: 'auto',
             transformation: transformations,
             timeout: 60000, // 60 second timeout
-            // Additional optimization flags
-            flags: 'progressive',
+            // Enable automatic format optimization (use fetch_format, not format)
+            fetch_format: 'auto',
+            // Enable automatic quality optimization
+            quality: 'auto:good',
             // Generate optimized versions for common sizes (eager transformations)
             eager: [
-              { width: 400, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' },
-              { width: 800, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' },
-              { width: 1280, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }
+              { width: 400, crop: 'limit', quality: 'auto:good' },
+              { width: 800, crop: 'limit', quality: 'auto:good' },
+              { width: 1280, crop: 'limit', quality: 'auto:good' }
             ],
-            eager_async: false,
-            // Enable automatic format optimization
-            format: 'auto',
-            // Enable automatic quality optimization
-            quality: 'auto:good'
+            eager_async: false
           });
           
           console.log('Upload successful:', result.secure_url);
@@ -147,17 +152,26 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
     return await withUploadRetry(uploadWithProtection, `upload to Cloudinary (${folder})`);
     
   } catch (error) {
-    console.error('Error details:', {
+    console.error('❌ Cloudinary upload error:', {
       message: error.message,
       http_code: error.http_code,
-      name: error.name
+      name: error.name,
+      stack: error.stack
     });
     
-    // Final fallback to mock URL
+    // PRODUCTION FIX: If Cloudinary is configured, don't fall back to mock URLs - throw error instead
+    const configured = isCloudinaryConfigured();
+    if (configured) {
+      // Cloudinary is configured but upload failed - throw error instead of returning mock URL
+      throw new Error(`Failed to upload image to Cloudinary: ${error.message || 'Unknown error'}`);
+    }
+    
+    // Only use mock URL if Cloudinary is not configured (development/fallback)
+    console.warn('⚠️ Cloudinary not configured, using mock URL (development mode only)');
     const mockUrl = generateMockUrl(folder);
     
     return {
-      success: true, // Return success with mock URL (graceful degradation)
+      success: true, // Return success with mock URL (graceful degradation for development)
       url: mockUrl,
       public_id: `mock-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
       width: 800,
@@ -199,14 +213,25 @@ const uploadMultipleImages = async (imageFiles, folder = 'buildxpert') => {
       mockCount: successfulUploads.filter(result => result.isMock).length
     };
   } catch (error) {
-    console.error('Multiple images upload error:', error);
+    console.error('❌ Multiple images upload error:', {
+      message: error.message,
+      stack: error.stack
+    });
     
-    // Fallback: generate mock URLs for all images
+    // PRODUCTION FIX: If Cloudinary is configured, don't fall back to mock URLs - throw error instead
+    const configured = isCloudinaryConfigured();
+    if (configured) {
+      // Cloudinary is configured but upload failed - throw error instead of returning mock URLs
+      throw new Error(`Failed to upload images to Cloudinary: ${error.message || 'Unknown error'}`);
+    }
+    
+    // Only use mock URLs if Cloudinary is not configured (development/fallback)
+    console.warn('⚠️ Cloudinary not configured, using mock URLs (development mode only)');
     const mockUrls = imageFiles.map(() => generateMockUrl(folder));
     const mockPublicIds = imageFiles.map(() => `mock-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`);
     
     return {
-      success: true, // Return success with mock URLs
+      success: true, // Return success with mock URLs (graceful degradation for development)
       urls: mockUrls,
       public_ids: mockPublicIds,
       failed: 0,

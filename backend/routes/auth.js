@@ -48,19 +48,10 @@ const {
   handleValidationErrors
 } = require('../middleware/validators');
 
-// Admin bypass only allowed in development mode for testing
-// In production, admins must follow normal security checks
-// To enable in development: Set ENABLE_ADMIN_BYPASS=true in config.env
-// SECURITY: Never enable this in production - it bypasses critical security checks
-const ADMIN_BYPASS_ENABLED = config.isDevelopment() && process.env.ENABLE_ADMIN_BYPASS === 'true';
-const ADMIN_BYPASS_PHONE = process.env.DEFAULT_ADMIN_PHONE || '9999999999';
-const ADMIN_BYPASS_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
-
-// SECURITY WARNING: Default credentials are weak - change in production!
-// In production, ensure:
-// 1. Strong admin passwords (minimum 12 characters, mixed case, numbers, symbols)
-// 2. ENABLE_ADMIN_BYPASS is NOT set (or set to false)
-// 3. Admin accounts are created manually, not auto-created
+// PRODUCTION SECURITY: No admin bypass allowed
+// All users including admins must authenticate through proper channels
+// Admin accounts must be created manually with strong passwords
+// All authentication goes through standard JWT token validation
 const {
   normalizePhoneNumber,
   normalizeEmail,
@@ -911,30 +902,14 @@ router.post('/login', [loginLimiter, ...validateLogin], asyncHandler(async (req,
   phone = normalizePhoneNumber(req.body.phone);
 
   try {
-
-  // Check if this is an admin bypass attempt (only allowed in development)
-  // Must verify user exists and is actually an admin before allowing bypass
-  let isAdminBypass = false;
-  if (ADMIN_BYPASS_ENABLED && phone === ADMIN_BYPASS_PHONE && role === 'admin') {
-    // Verify user actually exists and is an admin before allowing bypass
-    const existingUser = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
-    if (existingUser && existingUser.role === 'admin') {
-      isAdminBypass = true;
-      logger.warn('Admin bypass used in development mode', {
-        phone,
-        userId: existingUser.id,
-        ip: ipAddress
-      });
-    }
-  }
-
+  // PRODUCTION SECURITY: No bypass allowed - all users must authenticate properly
   if (!phone) {
     await logLoginAttempt(req.body.phone, ipAddress, 'failed', 'invalid_phone', userAgent);
     throw new ValidationError('Invalid phone number provided.');
   }
 
   // Check if IP should be blocked due to too many failed attempts
-  // Admins must follow same security rules (no bypass in production)
+  // All users including admins must follow security rules
   const ipBlocked = await shouldBlockIP(ipAddress, 15, 30);
   if (ipBlocked) {
     await logLoginAttempt(phone, ipAddress, 'blocked', 'ip_blocked', userAgent);
@@ -970,7 +945,8 @@ router.post('/login', [loginLimiter, ...validateLogin], asyncHandler(async (req,
     throw new AuthorizationError('This account has been blocked by the BuildXpert admin. Please contact support for assistance.');
   }
 
-    // Check password using bcrypt (all passwords should be hashed)
+    // PRODUCTION SECURITY: All passwords must be validated using bcrypt
+    // No bypass allowed - all users including admins must use proper passwords
     let isPasswordValid = false;
     
     try {
@@ -980,35 +956,6 @@ router.post('/login', [loginLimiter, ...validateLogin], asyncHandler(async (req,
       logger.error('Bcrypt comparison error', { error: bcryptError.message });
       // If bcrypt comparison fails, the password is invalid
       isPasswordValid = false;
-    }
-    
-    // Admin bypass only works in development mode and only if explicitly enabled
-    // In production, admins must use proper passwords
-    if (isAdminBypass && password === ADMIN_BYPASS_PASSWORD) {
-      isPasswordValid = true;
-
-      // Log admin bypass usage for security auditing
-      logger.warn('Admin bypass password used', {
-        userId: user.id,
-        phone: user.phone,
-        ip: ipAddress,
-        userAgent
-      });
-
-      // Ensure stored password matches the bypass password hash (development only)
-      // In production, this should never happen
-      if (config.isDevelopment()) {
-        try {
-          const matches = await bcrypt.compare(ADMIN_BYPASS_PASSWORD, user.password);
-          if (!matches) {
-            const hashedPassword = await bcrypt.hash(ADMIN_BYPASS_PASSWORD, 12);
-            await query('UPDATE users SET password = $1, is_verified = true WHERE id = $2', [hashedPassword, user.id]);
-            user.password = hashedPassword;
-          }
-        } catch (error) {
-          logger.warn('Admin bypass password synchronization failed', { error: error.message });
-        }
-      }
     }
 
     if (!isPasswordValid) {

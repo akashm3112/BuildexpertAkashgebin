@@ -204,15 +204,12 @@ const getCloudinaryTransformations = (profile = 'general') => {
   
   // Quality optimization
   transformations.push({
-    quality: `auto:${config.quality >= 85 ? 'best' : config.quality >= 75 ? 'good' : 'eco'}`,
-    fetch_format: 'auto' // Automatically use WebP when supported
+    quality: `auto:${config.quality >= 85 ? 'best' : config.quality >= 75 ? 'good' : 'eco'}`
   });
   
   // Additional optimizations
   transformations.push({
-    flags: 'progressive', // Progressive JPEG
-    dpr: 'auto', // Device pixel ratio
-    responsive: true // Enable responsive images
+    flags: 'progressive' // Progressive JPEG
   });
   
   return transformations;

@@ -5,7 +5,13 @@ const { auth } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandler');
 
 // Test route to grant labour access directly
+// PRODUCTION SECURITY: This route should be disabled or restricted in production
+// Only allow in development mode
 router.post('/grant-labour-access', auth, asyncHandler(async (req, res) => {
+  // PRODUCTION SECURITY: Disable this route in production
+  if (config.isProduction()) {
+    throw new AuthorizationError('This route is disabled in production for security reasons.');
+  }
   const userId = req.user.id;
   const startDate = new Date();
     const endDate = new Date();

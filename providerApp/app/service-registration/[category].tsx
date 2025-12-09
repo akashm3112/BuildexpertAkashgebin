@@ -133,18 +133,139 @@ export default function ServiceRegistration() {
       if (response.ok) {
         const data = await response.json();
         
+        // PRODUCTION FIX: Debug logging to understand data structure
+        if (__DEV__) {
+          console.log('📦 Full API response:', JSON.stringify(data, null, 2));
+        }
+        
         const serviceData = data.data.registeredServices.find(
           (s: any) => s.provider_service_id === serviceId
         );
 
-       
+        // PRODUCTION FIX: Debug logging for found service data
+        if (__DEV__) {
+          console.log('📦 Found service data:', serviceData ? 'YES' : 'NO');
+          if (serviceData) {
+            console.log('📦 Service data working_proof_urls:', serviceData.working_proof_urls);
+            console.log('📦 Service data working_proof_urls type:', typeof serviceData.working_proof_urls);
+            console.log('📦 Service data working_proof_urls isArray:', Array.isArray(serviceData.working_proof_urls));
+            if (serviceData.working_proof_urls) {
+              console.log('📦 Service data working_proof_urls length:', Array.isArray(serviceData.working_proof_urls) ? serviceData.working_proof_urls.length : 'N/A');
+            }
+          }
+        }
 
         if (serviceData) {
-          // Ensure working_proof_urls is always an array
-          const workingProofUrls = Array.isArray(serviceData.working_proof_urls) 
-            ? serviceData.working_proof_urls 
-            : [];
+          // PRODUCTION FIX: Parse working_proof_urls - handle all possible formats
+          // Also filter out mock URLs that don't exist
+          let workingProofUrls: string[] = [];
           
+          if (serviceData.working_proof_urls) {
+            try {
+              // Handle PostgreSQL array format - pg library should return arrays, but handle all cases
+              if (Array.isArray(serviceData.working_proof_urls)) {
+                // Already an array - filter valid URLs and exclude mock URLs
+                workingProofUrls = serviceData.working_proof_urls
+                  .filter((url: any) => {
+                    if (!url || typeof url !== 'string') return false;
+                    const trimmed = url.trim();
+                    // PRODUCTION FIX: Filter out mock URLs that don't exist
+                    if (trimmed.includes('mock-cloud') || trimmed.includes('/mock-image-')) {
+                      if (__DEV__) {
+                        console.warn('⚠️ Filtering out mock URL:', trimmed);
+                      }
+                      return false; // Skip mock URLs
+                    }
+                    return trimmed !== '' && 
+                           (trimmed.startsWith('http://') || 
+                            trimmed.startsWith('https://') || 
+                            trimmed.startsWith('data:image/') || 
+                            trimmed.startsWith('file://'));
+                  })
+                  .map((url: any) => url.trim()); // Ensure no whitespace
+              } else if (typeof serviceData.working_proof_urls === 'string') {
+                // PostgreSQL array might be returned as string - try to parse
+                const strValue = serviceData.working_proof_urls.trim();
+                
+                // PRODUCTION FIX: Filter out mock URLs
+                if (strValue.includes('mock-cloud') || strValue.includes('/mock-image-')) {
+                  if (__DEV__) {
+                    console.warn('⚠️ Skipping mock URL string:', strValue);
+                  }
+                  workingProofUrls = [];
+                } else {
+                  // Try JSON parse first
+                  try {
+                    const parsed = JSON.parse(strValue);
+                    if (Array.isArray(parsed)) {
+                      workingProofUrls = parsed
+                        .filter((url: any) => {
+                          if (!url || typeof url !== 'string') return false;
+                          const trimmed = url.trim();
+                          // PRODUCTION FIX: Filter out mock URLs
+                          if (trimmed.includes('mock-cloud') || trimmed.includes('/mock-image-')) {
+                            if (__DEV__) {
+                              console.warn('⚠️ Filtering out mock URL from array:', trimmed);
+                            }
+                            return false;
+                          }
+                          return trimmed !== '' && 
+                                 (trimmed.startsWith('http://') || 
+                                  trimmed.startsWith('https://') || 
+                                  trimmed.startsWith('data:image/') || 
+                                  trimmed.startsWith('file://'));
+                        })
+                        .map((url: any) => url.trim());
+                    } else if (typeof parsed === 'string' && parsed.trim() !== '') {
+                      // Single URL string in JSON
+                      const trimmed = parsed.trim();
+                      if (!trimmed.includes('mock-cloud') && !trimmed.includes('/mock-image-') &&
+                          (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/') || trimmed.startsWith('file://'))) {
+                        workingProofUrls = [trimmed];
+                      }
+                    }
+                  } catch (parseError) {
+                    // JSON parse failed - check if it's a single URL string
+                    if (strValue !== '' && 
+                        !strValue.includes('mock-cloud') && !strValue.includes('/mock-image-') &&
+                        (strValue.startsWith('http://') || 
+                         strValue.startsWith('https://') ||
+                         strValue.startsWith('data:image/') ||
+                         strValue.startsWith('file://'))) {
+                      workingProofUrls = [strValue];
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.warn('Error parsing working_proof_urls:', error, 'Raw data:', serviceData.working_proof_urls);
+              workingProofUrls = [];
+            }
+          }
+          
+          // DEBUG: Log the parsed URLs in development
+          if (__DEV__) {
+            console.log('📸 Raw working_proof_urls:', serviceData.working_proof_urls);
+            console.log('📸 Raw type:', typeof serviceData.working_proof_urls);
+            console.log('📸 Is array:', Array.isArray(serviceData.working_proof_urls));
+            console.log('📸 Parsed working proof URLs (after filtering mock URLs):', workingProofUrls);
+            console.log('📸 Parsed URLs count:', workingProofUrls.length);
+            workingProofUrls.forEach((url, idx) => {
+              console.log(`📸 URL ${idx}:`, url);
+            });
+          }
+          
+          // PRODUCTION FIX: Ensure engineering certificate URL is valid
+          let engineeringCertificateUrl: string | undefined = undefined;
+          if (serviceData.engineering_certificate_url && 
+              typeof serviceData.engineering_certificate_url === 'string' &&
+              serviceData.engineering_certificate_url.trim() !== '' &&
+              (serviceData.engineering_certificate_url.startsWith('http://') || 
+               serviceData.engineering_certificate_url.startsWith('https://') || 
+               serviceData.engineering_certificate_url.startsWith('data:image/') || 
+               serviceData.engineering_certificate_url.startsWith('file://'))) {
+            engineeringCertificateUrl = serviceData.engineering_certificate_url;
+          }
           
           // Map backend data to form data
           setFormData({
@@ -157,7 +278,7 @@ export default function ServiceRegistration() {
             charges: serviceData.service_charge_value?.toString() || '',
             description: serviceData.service_description || '',
             photos: workingProofUrls,
-            engineeringCertificate: serviceData.engineering_certificate_url || undefined,
+            engineeringCertificate: engineeringCertificateUrl,
           });
           
         } else {
@@ -366,49 +487,166 @@ export default function ServiceRegistration() {
   // Convert file URI to base64
   const convertToBase64 = async (uri: string): Promise<string> => {
     try {
+      // PRODUCTION FIX: Validate input
+      if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+        if (__DEV__) {
+          console.warn('⚠️ Invalid URI provided to convertToBase64:', uri);
+        }
+        throw new Error('Invalid URI provided');
+      }
       
       // If it's already a base64 URL, return as is
       if (uri.startsWith('data:image/')) {
+        if (__DEV__) {
+          console.log('✅ Already base64, returning as-is');
+        }
         return uri;
       }
       
       // If it's a file URI, convert to base64
       if (uri.startsWith('file://')) {
+        if (__DEV__) {
+          console.log('🔄 Converting file URI to base64:', uri.substring(0, 80) + '...');
+        }
         
         try {
+          // PRODUCTION FIX: Check if file exists before reading
+          const fileInfo = await FileSystem.getInfoAsync(uri);
+          if (!fileInfo.exists) {
+            if (__DEV__) {
+              console.error('❌ File does not exist:', uri);
+            }
+            throw new Error(`File does not exist: ${uri}`);
+          }
+          
           const base64 = await FileSystem.readAsStringAsync(uri, {
             encoding: 'base64' as any,
           });
           
+          if (!base64 || base64.length === 0) {
+            if (__DEV__) {
+              console.error('❌ Failed to read file content (empty result):', uri);
+            }
+            throw new Error('Failed to read file content');
+          }
           
-          // Determine the file extension from the URI
+          // PRODUCTION FIX: Determine MIME type more accurately
           const extension = uri.split('.').pop()?.toLowerCase() || 'jpg';
-          const mimeType = extension === 'png' ? 'image/png' : 'image/jpeg';
+          let mimeType = 'image/jpeg'; // Default
+          if (extension === 'png') {
+            mimeType = 'image/png';
+          } else if (extension === 'gif') {
+            mimeType = 'image/gif';
+          } else if (extension === 'webp') {
+            mimeType = 'image/webp';
+          }
           
-          return `data:${mimeType};base64,${base64}`;
-        } catch (fileError) {
-          return '';
+          const base64DataUrl = `data:${mimeType};base64,${base64}`;
+          
+          if (__DEV__) {
+            console.log('✅ Successfully converted to base64, length:', base64DataUrl.length);
+          }
+          
+          return base64DataUrl;
+        } catch (fileError: any) {
+          if (__DEV__) {
+            console.error('❌ Error converting file URI to base64:', fileError?.message || fileError, uri.substring(0, 80));
+          }
+          throw new Error(`Failed to convert file to base64: ${fileError?.message || fileError}`);
         }
       }
       
-      // If it's already a remote URL, return as is
-      return uri;
-    } catch (error) {
-      console.error('Error converting to base64:', error);
-      return ''; // Return empty string if conversion fails
+      // If it's already a remote URL (Cloudinary), return as is
+      if (uri.startsWith('http://') || uri.startsWith('https://')) {
+        if (__DEV__) {
+          console.log('✅ Already a remote URL, returning as-is');
+        }
+        return uri;
+      }
+      
+      // Unknown format
+      if (__DEV__) {
+        console.warn('⚠️ Unknown URI format:', uri.substring(0, 80));
+      }
+      throw new Error(`Unknown URI format: ${uri.substring(0, 50)}`);
+    } catch (error: any) {
+      if (__DEV__) {
+        console.error('❌ Error converting to base64:', error?.message || error, 'URI:', uri?.substring(0, 80));
+      }
+      throw error; // Re-throw to be caught by caller
     }
   };
 
   // Convert multiple URIs to base64
   const convertMultipleToBase64 = async (uris: string[]): Promise<string[]> => {
     try {
-      const base64Promises = uris.map(uri => convertToBase64(uri));
-      const results = await Promise.all(base64Promises);
-      // Filter out empty strings (failed conversions)
-      return results.filter(result => result.length > 0);
-    } catch (error) {
-      console.error('Error converting multiple images to base64:', error);
-      return [];
+      if (!uris || uris.length === 0) {
+        if (__DEV__) {
+          console.warn('⚠️ No URIs provided to convertMultipleToBase64');
+        }
+        return [];
+      }
+      
+      if (__DEV__) {
+        console.log(`🔄 Converting ${uris.length} images to base64...`);
+      }
+      
+      // PRODUCTION FIX: Use Promise.allSettled to handle individual failures gracefully
+      const base64Promises = uris.map(async (uri, index) => {
+        try {
+          const result = await convertToBase64(uri);
+          if (__DEV__) {
+            console.log(`✅ Image ${index + 1}/${uris.length} converted successfully`);
+          }
+          return { success: true, result };
+        } catch (error: any) {
+          if (__DEV__) {
+            console.error(`❌ Image ${index + 1}/${uris.length} conversion failed:`, error?.message || error);
+          }
+          return { success: false, error: error?.message || 'Unknown error', uri };
+        }
+      });
+      
+      const results = await Promise.allSettled(base64Promises);
+      
+      // Extract successful conversions
+      const successful: string[] = [];
+      const failed: { uri: string; error: string }[] = [];
+      
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          if (result.value.success && result.value.result) {
+            successful.push(result.value.result);
+          } else {
+            failed.push({ uri: uris[index], error: result.value.error || 'Unknown error' });
+          }
+        } else {
+          failed.push({ uri: uris[index], error: result.reason?.message || 'Promise rejected' });
+        }
+      });
+      
+      if (__DEV__) {
+        console.log(`📊 Conversion results: ${successful.length} successful, ${failed.length} failed`);
+        if (failed.length > 0) {
+          console.warn('⚠️ Failed conversions:', failed);
+        }
+      }
+      
+      // PRODUCTION FIX: If all conversions failed, throw an error
+      if (successful.length === 0 && uris.length > 0) {
+        const errorMessage = `Failed to convert all ${uris.length} image(s) to base64. ${failed.map(f => f.error).join('; ')}`;
+        if (__DEV__) {
+          console.error('❌ All image conversions failed:', errorMessage);
+        }
+        throw new Error(errorMessage);
+      }
+      
+      return successful;
+    } catch (error: any) {
+      if (__DEV__) {
+        console.error('❌ Error converting multiple images to base64:', error?.message || error);
+      }
+      throw error; // Re-throw to be caught by handleSubmit
     }
   };
 
@@ -442,16 +680,79 @@ export default function ServiceRegistration() {
         return;
       }
       
-      // Convert working proof images to base64
+      // PRODUCTION FIX: Convert working proof images to base64 with error handling
       let workingProofUrls: string[] = [];
       if (formData.photos.length > 0) {
-        workingProofUrls = await convertMultipleToBase64(formData.photos);
+        try {
+          workingProofUrls = await convertMultipleToBase64(formData.photos);
+          
+          // PRODUCTION FIX: Validate that we have at least one converted image
+          if (workingProofUrls.length === 0) {
+            setIsLoading(false);
+            showAlert(
+              t('alerts.error'), 
+              'Failed to convert images. Please try selecting images again.', 
+              'error'
+            );
+            return;
+          }
+          
+          if (__DEV__) {
+            console.log(`✅ Successfully converted ${workingProofUrls.length} image(s) to base64`);
+          }
+        } catch (conversionError: any) {
+          setIsLoading(false);
+          console.error('❌ Image conversion error:', conversionError);
+          showAlert(
+            t('alerts.error'), 
+            `Failed to process images: ${conversionError?.message || 'Unknown error'}. Please try again.`, 
+            'error'
+          );
+          return;
+        }
       }
       
-      // Convert engineering certificate to base64 if it's a file URI
+      // PRODUCTION FIX: Convert engineering certificate to base64 with error handling
       let engineeringCertificateUrl = formData.engineeringCertificate;
-      if (engineeringCertificateUrl && engineeringCertificateUrl.startsWith('file://')) {
-        engineeringCertificateUrl = await convertToBase64(engineeringCertificateUrl);
+      if (engineeringCertificateUrl) {
+        // Check if it needs conversion
+        if (engineeringCertificateUrl.startsWith('file://')) {
+          try {
+            engineeringCertificateUrl = await convertToBase64(engineeringCertificateUrl);
+            if (!engineeringCertificateUrl || engineeringCertificateUrl.length === 0) {
+              setIsLoading(false);
+              showAlert(
+                t('alerts.error'), 
+                'Failed to convert engineering certificate. Please try selecting it again.', 
+                'error'
+              );
+              return;
+            }
+            if (__DEV__) {
+              console.log('✅ Successfully converted engineering certificate to base64');
+            }
+          } catch (certError: any) {
+            setIsLoading(false);
+            console.error('❌ Certificate conversion error:', certError);
+            showAlert(
+              t('alerts.error'), 
+              `Failed to process engineering certificate: ${certError?.message || 'Unknown error'}. Please try again.`, 
+              'error'
+            );
+            return;
+          }
+        } else if (!engineeringCertificateUrl.startsWith('data:image/') && 
+                   !engineeringCertificateUrl.startsWith('http://') && 
+                   !engineeringCertificateUrl.startsWith('https://')) {
+          // Invalid format
+          setIsLoading(false);
+          showAlert(
+            t('alerts.error'), 
+            'Invalid engineering certificate format. Please select it again.', 
+            'error'
+          );
+          return;
+        }
       }
       
       // Prepare payload for backend
@@ -469,6 +770,15 @@ export default function ServiceRegistration() {
       };
       
       
+      // PRODUCTION FIX: Log payload in development for debugging
+      if (__DEV__) {
+        console.log('📤 Sending registration payload:', {
+          ...payload,
+          workingProofUrls: payload.workingProofUrls?.map((url: string) => url.substring(0, 50) + '...') || [],
+          engineeringCertificateUrl: payload.engineeringCertificateUrl?.substring(0, 50) + '...' || 'none'
+        });
+      }
+      
       const method = isEditMode ? 'PUT' : 'POST';
       const response = await fetch(`${API_BASE_URL}/api/services/${category}/providers`, {
         method,
@@ -478,9 +788,40 @@ export default function ServiceRegistration() {
         },
         body: JSON.stringify(payload)
       });
-      const data = await response.json();
+      
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        // If response is not JSON, get text
+        const text = await response.text();
+        setIsLoading(false);
+        console.error('❌ Non-JSON response from server:', text);
+        showAlert(
+          t('alerts.registrationError'), 
+          `Server error: ${text || 'Unknown error'}`, 
+          'error', 
+          [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+        );
+        return;
+      }
+      
       setIsLoading(false);
+      
       if (!response.ok) {
+        // PRODUCTION FIX: Better error handling with detailed messages
+        const errorMessage = data.message || data.error || t('alerts.failedToRegisterService');
+        const errorDetails = data.errors ? `\n\nDetails: ${JSON.stringify(data.errors)}` : '';
+        
+        if (__DEV__) {
+          console.error('❌ Registration failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorMessage,
+            data: data
+          });
+        }
+        
         if (data.message && data.message.includes('Already registered')) {
           showAlert(
             'Service Already Registered', 
@@ -491,12 +832,21 @@ export default function ServiceRegistration() {
               router.back();
             }, style: 'primary' }]
           );
+        } else if (data.message && data.message.includes('Cloudinary')) {
+          // Cloudinary-specific error
+          showAlert(
+            t('alerts.registrationError'), 
+            `${errorMessage}${errorDetails}\n\nPlease check your internet connection and try again.`, 
+            'error', 
+            [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+          );
         } else {
-          showAlert(t('alerts.registrationError'), data.message || t('alerts.failedToRegisterService'), 'error', [
-            { text: 'OK', onPress: () => {
-              setShowAlertModal(false);
-            }, style: 'primary' }
-          ]);
+          showAlert(
+            t('alerts.registrationError'), 
+            `${errorMessage}${errorDetails}`, 
+            'error', 
+            [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+          );
         }
         return;
       }
@@ -551,14 +901,43 @@ export default function ServiceRegistration() {
           ]);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       setIsLoading(false);
-      console.error('Submit error:', error);
-      showAlert(t('alerts.error'), t('alerts.failedToSubmitRegistration'), 'error', [
-        { text: 'OK', onPress: () => {
-          setShowAlertModal(false);
-        }, style: 'primary' }
-      ]);
+      // PRODUCTION FIX: Better error logging and user feedback
+      const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
+      
+      if (__DEV__) {
+        console.error('❌ Submit error:', {
+          message: errorMessage,
+          error: error,
+          stack: error?.stack
+        });
+      }
+      
+      // Check if it's a network error
+      if (errorMessage.includes('Network') || errorMessage.includes('fetch') || errorMessage.includes('Failed to fetch')) {
+        showAlert(
+          t('alerts.error'), 
+          'Network error. Please check your internet connection and try again.', 
+          'error', 
+          [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+        );
+      } else if (errorMessage.includes('base64') || errorMessage.includes('convert')) {
+        // Image conversion error
+        showAlert(
+          t('alerts.error'), 
+          `Failed to process images: ${errorMessage}. Please try selecting images again.`, 
+          'error', 
+          [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+        );
+      } else {
+        showAlert(
+          t('alerts.error'), 
+          `${t('alerts.failedToSubmitRegistration')}\n\n${errorMessage}`, 
+          'error', 
+          [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+        );
+      }
     }
   };
 
@@ -740,14 +1119,26 @@ export default function ServiceRegistration() {
                   {t('serviceRegistration.certificateHelper')}
                 </Text>
 
-                {formData.engineeringCertificate ? (
+                {formData.engineeringCertificate && formData.engineeringCertificate.trim() !== '' ? (
                   <View style={styles.certificateContainer}>
                     <Image
                       source={{ uri: formData.engineeringCertificate }}
                       style={styles.certificateImage}
                       resizeMode="cover"
-                      onError={(error) => console.error('Error loading engineering certificate:', error)}
-                      onLoad={() => console.log('Successfully loaded engineering certificate:', formData.engineeringCertificate)}
+                      onError={(error) => {
+                        // PRODUCTION FIX: Handle image loading errors gracefully
+                        // Don't log as error - image loading failures are expected (network issues, invalid URLs, etc.)
+                        // Only log in development for debugging
+                        if (__DEV__) {
+                          console.warn('Engineering certificate failed to load:', formData.engineeringCertificate, error?.nativeEvent?.error || error);
+                        }
+                      }}
+                      onLoad={() => {
+                        // Only log in development
+                        if (__DEV__) {
+                          console.log('Successfully loaded engineering certificate:', formData.engineeringCertificate);
+                        }
+                      }}
                     />
                     {!isViewMode && (
                       <TouchableOpacity
@@ -779,28 +1170,86 @@ export default function ServiceRegistration() {
                 <Text style={styles.helperText} numberOfLines={2} ellipsizeMode="tail">{t('serviceRegistration.photosHelper')}</Text>
 
                 <View style={styles.photosContainer}>
-                  {formData.photos.map((photo, index) => {
-                    return (
-                      <View key={index} style={styles.photoWrapper}>
-                        <Image 
-                          source={{ uri: photo }} 
-                          style={styles.photo} 
-                          resizeMode="cover"
-                          onError={(error) => console.error(`Error loading image ${index}:`, error)}
-                          onLoad={() => console.log(`Successfully loaded image ${index}:`, photo)}
-                        />
-                        {!isViewMode && (
-                          <TouchableOpacity
-                            style={styles.removePhotoButton}
-                            onPress={() => handleRemovePhoto(index)}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          >
-                            <X size={16} color="#FFFFFF" />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    );
-                  })}
+                  {formData.photos && formData.photos.length > 0 ? (
+                    formData.photos
+                      .filter(photo => {
+                        // PRODUCTION FIX: Filter out invalid and mock URLs
+                        if (!photo || typeof photo !== 'string' || photo.trim() === '') {
+                          return false;
+                        }
+                        const trimmed = photo.trim();
+                        // PRODUCTION FIX: Filter out mock URLs that don't exist
+                        if (trimmed.includes('mock-cloud') || trimmed.includes('/mock-image-')) {
+                          if (__DEV__) {
+                            console.warn('⚠️ Skipping mock URL in render:', trimmed.substring(0, 80));
+                          }
+                          return false;
+                        }
+                        return true;
+                      })
+                      .map((photo, index) => {
+                        // PRODUCTION FIX: Ensure photo URL is valid before rendering
+                        if (!photo || typeof photo !== 'string' || photo.trim() === '') {
+                          return null;
+                        }
+                        
+                        // PRODUCTION FIX: Debug log in development
+                        if (__DEV__) {
+                          console.log(`📸 Rendering image ${index}:`, photo.substring(0, 80) + '...');
+                        }
+                        
+                        return (
+                          <View key={`photo-${index}-${photo.substring(0, 20)}`} style={styles.photoWrapper}>
+                            <Image 
+                              source={{ uri: photo }} 
+                              style={styles.photo} 
+                              resizeMode="cover"
+                              onError={(error) => {
+                                // PRODUCTION FIX: Handle image loading errors gracefully
+                                // Don't log as error - image loading failures are expected (network issues, invalid URLs, etc.)
+                                // Only log in development for debugging
+                                if (__DEV__) {
+                                  console.warn(`❌ Image ${index} failed to load:`, photo.substring(0, 80), error?.nativeEvent?.error || error);
+                                }
+                                // Optionally remove the broken image from the list
+                                // Uncomment the line below if you want to auto-remove broken images
+                                // handleRemovePhoto(index);
+                              }}
+                              onLoadStart={() => {
+                                if (__DEV__) {
+                                  console.log(`🔄 Image ${index} loading started:`, photo.substring(0, 80) + '...');
+                                }
+                              }}
+                              onLoad={() => {
+                                // Only log in development
+                                if (__DEV__) {
+                                  console.log(`✅ Successfully loaded image ${index}:`, photo.substring(0, 80) + '...');
+                                }
+                              }}
+                              onLoadEnd={() => {
+                                if (__DEV__) {
+                                  console.log(`🏁 Image ${index} load ended:`, photo.substring(0, 80) + '...');
+                                }
+                              }}
+                            />
+                            {!isViewMode && (
+                              <TouchableOpacity
+                                style={styles.removePhotoButton}
+                                onPress={() => handleRemovePhoto(index)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              >
+                                <X size={16} color="#FFFFFF" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        );
+                      })
+                  ) : (
+                    // PRODUCTION FIX: Show message when no photos available in view mode
+                    isViewMode && (
+                      <Text style={styles.helperText}>{t('serviceRegistration.noPhotosAvailable') || 'No photos available'}</Text>
+                    )
+                  )}
 
                   {formData.photos.length < 4 && !isViewMode && (
                     <TouchableOpacity style={styles.addPhotoButton} onPress={handleAddPhoto}>
@@ -966,11 +1415,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden', // Ensures image respects border radius
     borderWidth: 1,
     borderColor: '#E5E7EB', // Border for consistency
+    backgroundColor: '#F3F4F6', // PRODUCTION FIX: Add background color to prevent white flash
   },
   photo: {
     width: '100%',
     height: '100%',
     borderRadius: getResponsiveSpacing(8, 10, 12), // Match wrapper border radius
+    backgroundColor: 'transparent', // PRODUCTION FIX: Ensure image background is transparent
   },
   removePhotoButton: {
     position: 'absolute',
@@ -1015,6 +1466,7 @@ const styles = StyleSheet.create({
     width: getResponsiveSpacing(100, 120, 140),
     height: getResponsiveSpacing(130, 160, 190),
     borderRadius: getResponsiveSpacing(8, 10, 12),
+    backgroundColor: 'transparent', // PRODUCTION FIX: Ensure image background is transparent
   },
   removeCertificateButton: {
     position: 'absolute',

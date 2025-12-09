@@ -17,7 +17,7 @@ router.use(standardLimiter);
 // @route   GET /api/earnings
 // @desc    Get provider's earnings data
 // @access  Private (Providers only)
-router.get('/', requireRole('provider'), asyncHandler(async (req, res) => {
+router.get('/', requireRole(['provider']), asyncHandler(async (req, res) => {
   const providerUserId = req.user.id;
 
   // Use IST timezone for date calculations (database is configured for Asia/Kolkata)

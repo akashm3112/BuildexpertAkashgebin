@@ -9,6 +9,7 @@ import { CallScreen } from '@/components/calls/CallScreen';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
+import Toast from 'react-native-toast-message';
 import { globalErrorHandler } from '@/utils/globalErrorHandler';
 import { requestQueue } from '@/utils/requestQueue';
 import { frontendMonitor } from '@/utils/monitoring';
@@ -213,6 +214,7 @@ export default function RootLayout() {
             </Stack>
             <StatusBar style="auto" />
             <CallScreen />
+            <Toast />
           </LanguageProvider>
         </NotificationProvider>
       </AuthProvider>
