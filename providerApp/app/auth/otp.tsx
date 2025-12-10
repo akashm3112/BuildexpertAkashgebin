@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, ShieldCheck, CheckCircle, Shield, MessageCircle, AlertTriangle, Clock } from 'lucide-react-native';
+import { ArrowLeft, ShieldCheck, CheckCircle, Shield, MessageCircle, AlertTriangle, Clock, Lock } from 'lucide-react-native';
 import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import { useAuth } from '@/context/AuthContext';
@@ -334,143 +334,152 @@ export default function OTPVerification() {
   };
 
   return (
-    <SafeView backgroundColor="#F8FAFC">
+    <SafeView backgroundColor="#FAFBFC">
       <KeyboardAvoidingView 
         style={styles.container} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
+        {/* Simple Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            activeOpacity={0.6}
+          >
+            <ArrowLeft size={22} color="#475569" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Verification</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
         <ScrollView 
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.topBar}>
-            <View style={{ width: 32 }} />
-            <Text style={styles.screenTitle}>Mobile Number Verification</Text>
-            <View style={{ width: 32 }} />
+          {/* Simple Icon */}
+          <View style={styles.iconSection}>
+            <View style={styles.iconContainer}>
+              <Shield size={getResponsiveFontSize(32, 36, 40)} color="#3B82F6" strokeWidth={2} />
+            </View>
           </View>
 
-          <View style={styles.cardWrapper}>
-            <View style={styles.card}>
-              <View style={styles.iconContainer}>
-                <Shield size={48} color="#3B82F6" />
-              </View>
-              <Text style={styles.cardTitle}>Verify Your Identity</Text>
-              <Text style={styles.cardSubtitle}>
-                Please enter your OTP sent to +{phone}
-              </Text>
-              
-              {/* SMS Status Indicator */}
-              <View style={styles.smsStatusContainer}>
-                <MessageCircle size={16} color={getSmsStatusColor()} />
-                <Text style={[styles.smsStatusText, { color: getSmsStatusColor() }]}>
-                  {getSmsStatusText()}
-                </Text>
-              </View>
+          {/* Main Content */}
+          <View style={styles.contentSection}>
+            <Text style={styles.mainTitle}>Enter Verification Code</Text>
+            <Text style={styles.description}>
+              We've sent a 6-digit code to{'\n'}
+              <Text style={styles.phoneHighlight}>+{phone}</Text>
+            </Text>
 
-              {/* Attempt Counter */}
-              {remainingAttempts < 5 && !isLocked && (
-                <View style={styles.attemptContainer}>
-                  <AlertTriangle size={16} color="#F59E0B" />
-                  <Text style={styles.attemptText}>
-                    {remainingAttempts} attempts remaining
-                  </Text>
-                </View>
+            {/* Status Badge */}
+            {smsStatus === 'sent' && (
+              <View style={styles.statusBadge}>
+                <MessageCircle size={14} color="#10B981" />
+                <Text style={styles.statusText}>SMS sent successfully</Text>
+              </View>
+            )}
+
+            {/* Warning Messages */}
+            {remainingAttempts < 5 && !isLocked && (
+              <View style={styles.warningBadge}>
+                <AlertTriangle size={14} color="#F59E0B" />
+                <Text style={styles.warningText}>{remainingAttempts} attempts remaining</Text>
+              </View>
+            )}
+
+            {isLocked && (
+              <View style={styles.errorBadge}>
+                <Clock size={14} color="#EF4444" />
+                <Text style={styles.errorText}>Account locked. Try again in {formatTime(lockoutTimer)}</Text>
+              </View>
+            )}
+
+            {/* OTP Input Fields - Simple Design */}
+            <View style={styles.otpContainer}>
+              {otp.map((digit, index) => {
+                const scrollContentPadding = 24 * 2;
+                const gapSize = getResponsiveSpacing(8, 10, 12);
+                const totalGaps = gapSize * 5;
+                const availableWidth = screenWidth - scrollContentPadding - totalGaps;
+                const inputWidth = availableWidth / 6;
+                const responsiveInputWidth = Math.max(48, Math.min(64, inputWidth));
+                
+                return (
+                  <TextInput
+                    key={index}
+                    ref={(ref) => {
+                      inputRefs.current[index] = ref;
+                    }}
+                    style={[
+                      styles.otpInput,
+                      {
+                        width: responsiveInputWidth,
+                        height: getResponsiveSpacing(56, 64, 72),
+                        fontSize: getResponsiveFontSize(22, 26, 30),
+                        marginRight: index < 5 ? gapSize : 0,
+                      },
+                      digit && styles.otpInputFilled,
+                      isLocked && styles.otpInputDisabled
+                    ]}
+                    value={digit}
+                    onChangeText={(value) => handleOtpChange(value, index)}
+                    onKeyPress={(e) => handleKeyPress(e, index)}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    textAlign="center"
+                    autoFocus={index === 0 && otp.every(d => !d)}
+                    editable={!isLocked}
+                    selectTextOnFocus={true}
+                    contextMenuHidden={true}
+                  />
+                );
+              })}
+            </View>
+
+            {/* Verify Button */}
+            <TouchableOpacity
+              style={[
+                styles.verifyButton,
+                (isLoading || isLocked) && styles.verifyButtonDisabled
+              ]}
+              onPress={() => handleVerifyOTP()}
+              disabled={isLoading || isLocked}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <CheckCircle size={20} color="#FFFFFF" />
+                  <Text style={styles.verifyButtonText}>Verify OTP</Text>
+                </>
               )}
+            </TouchableOpacity>
 
-              {/* Lockout Warning */}
-              {isLocked && (
-                <View style={styles.lockoutContainer}>
-                  <Clock size={16} color="#EF4444" />
-                  <Text style={styles.lockoutText}>
-                    Account locked. Try again in {formatTime(lockoutTimer)}
-                  </Text>
-                </View>
-              )}
-
-              <View style={styles.otpContainer}>
-                {otp.map((digit, index) => {
-                  // Calculate responsive width for OTP inputs
-                  // Account for: scrollContent padding (20*2) + card padding (32*2) = 104px total
-                  const scrollContentPadding = 20 * 2; // Left + Right
-                  const cardPadding = 32 * 2; // Left + Right
-                  const totalHorizontalPadding = scrollContentPadding + cardPadding;
-                  const gapSize = getResponsiveSpacing(6, 8, 10); // Responsive gap between inputs
-                  const totalGaps = gapSize * 5; // 5 gaps for 6 inputs
-                  const availableWidth = screenWidth - totalHorizontalPadding - totalGaps;
-                  const inputWidth = availableWidth / 6;
-                  // Ensure minimum 38px for very small screens and maximum 52px for large screens
-                  const responsiveInputWidth = Math.max(38, Math.min(52, inputWidth));
-                  
-                  return (
-                    <TextInput
-                      key={index}
-                      ref={(ref) => {
-                        inputRefs.current[index] = ref;
-                      }}
-                      style={[
-                        styles.otpInput,
-                        {
-                          width: responsiveInputWidth,
-                          height: getResponsiveSpacing(50, 54, 58),
-                          fontSize: getResponsiveFontSize(18, 20, 22),
-                          marginRight: index < 5 ? gapSize : 0, // Add margin except for last input
-                        },
-                        digit && styles.otpInputFilled,
-                        isLocked && styles.otpInputDisabled
-                      ]}
-                      value={digit}
-                      onChangeText={(value) => handleOtpChange(value, index)}
-                      onKeyPress={(e) => handleKeyPress(e, index)}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      textAlign="center"
-                      autoFocus={index === 0 && otp.every(d => !d)}
-                      editable={!isLocked}
-                      selectTextOnFocus={true}
-                      contextMenuHidden={true}
-                    />
-                  );
-                })}
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.verifyButton,
-                  (isLoading || isLocked) && styles.verifyButtonDisabled
-                ]}
-                onPress={() => handleVerifyOTP()}
-                disabled={isLoading || isLocked}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <CheckCircle size={20} color="#FFFFFF" />
-                    <Text style={styles.verifyButtonText}>Verify OTP</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <View style={styles.resendContainer}>
-                <Text style={styles.resendText}>Didn't receive the code? </Text>
-                {timer > 0 ? (
+            {/* Resend Section */}
+            <View style={styles.resendContainer}>
+              <Text style={styles.resendText}>Didn't receive the code? </Text>
+              {timer > 0 ? (
+                <View style={styles.timerContainer}>
+                  <Clock size={12} color="#94A3B8" />
                   <Text style={styles.timerText}>Resend in {timer}s</Text>
-                ) : (
-                  <TouchableOpacity
-                    onPress={handleResendOTP}
-                    disabled={isResending || isLocked}
-                  >
-                    <Text style={[
-                      styles.resendButton,
-                      (isResending || isLocked) && styles.resendButtonDisabled
-                    ]}>
-                      {isResending ? 'Resending...' : 'Resend'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={handleResendOTP}
+                  disabled={isResending || isLocked}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[
+                    styles.resendLink,
+                    (isResending || isLocked) && styles.resendLinkDisabled
+                  ]}>
+                    {isResending ? 'Resending...' : 'Resend'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </ScrollView>
@@ -491,178 +500,195 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 40,
-  },
-  topBar: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32,
+    justifyContent: 'space-between',
+    paddingHorizontal: getResponsiveSpacing(20, 24, 28),
+    paddingTop: getResponsiveSpacing(16, 20, 24),
+    paddingBottom: getResponsiveSpacing(12, 16, 20),
+    backgroundColor: '#FAFBFC',
   },
-  screenTitle: {
-    fontSize: 20,
+  backButton: {
+    width: getResponsiveSpacing(36, 40, 44),
+    height: getResponsiveSpacing(36, 40, 44),
+    borderRadius: getResponsiveSpacing(18, 20, 22),
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  headerTitle: {
+    fontSize: getResponsiveFontSize(18, 20, 22),
     fontWeight: '600',
     color: '#1E293B',
   },
-  cardWrapper: {
-    flex: 1,
-    justifyContent: 'center',
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: getResponsiveSpacing(40, 48, 56),
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+  iconSection: {
+    alignItems: 'center',
+    paddingTop: getResponsiveSpacing(24, 32, 40),
+    paddingBottom: getResponsiveSpacing(16, 20, 24),
   },
   iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: getResponsiveSpacing(72, 80, 88),
+    height: getResponsiveSpacing(72, 80, 88),
+    borderRadius: getResponsiveSpacing(36, 40, 44),
     backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#DBEAFE',
   },
-  cardTitle: {
-    fontSize: 24,
+  contentSection: {
+    flex: 1,
+    paddingHorizontal: getResponsiveSpacing(24, 28, 32),
+  },
+  mainTitle: {
+    fontSize: getResponsiveFontSize(26, 30, 34),
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#0F172A',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: getResponsiveSpacing(8, 10, 12),
+    letterSpacing: -0.5,
   },
-  cardSubtitle: {
-    fontSize: 16,
+  description: {
+    fontSize: getResponsiveFontSize(14, 16, 18),
     color: '#64748B',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+    lineHeight: getResponsiveFontSize(20, 24, 28),
   },
-  smsStatusContainer: {
+  phoneHighlight: {
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
+    alignSelf: 'center',
+    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingVertical: getResponsiveSpacing(8, 10, 12),
+    backgroundColor: '#ECFDF5',
+    borderRadius: getResponsiveSpacing(16, 18, 20),
+    marginBottom: getResponsiveSpacing(12, 16, 20),
+    gap: getResponsiveSpacing(6, 8, 10),
   },
-  smsStatusText: {
-    fontSize: 14,
-    marginLeft: 6,
+  statusText: {
+    fontSize: getResponsiveFontSize(12, 13, 14),
+    color: '#10B981',
     fontWeight: '500',
   },
-  attemptContainer: {
+  warningBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    alignSelf: 'center',
+    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingVertical: getResponsiveSpacing(8, 10, 12),
     backgroundColor: '#FEF3C7',
-    borderRadius: 8,
+    borderRadius: getResponsiveSpacing(16, 18, 20),
+    marginBottom: getResponsiveSpacing(12, 16, 20),
+    gap: getResponsiveSpacing(6, 8, 10),
   },
-  attemptText: {
-    fontSize: 14,
+  warningText: {
+    fontSize: getResponsiveFontSize(12, 13, 14),
     color: '#92400E',
-    marginLeft: 6,
     fontWeight: '500',
   },
-  lockoutContainer: {
+  errorBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    alignSelf: 'center',
+    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingVertical: getResponsiveSpacing(8, 10, 12),
     backgroundColor: '#FEE2E2',
-    borderRadius: 8,
+    borderRadius: getResponsiveSpacing(16, 18, 20),
+    marginBottom: getResponsiveSpacing(12, 16, 20),
+    gap: getResponsiveSpacing(6, 8, 10),
   },
-  lockoutText: {
-    fontSize: 14,
+  errorText: {
+    fontSize: getResponsiveFontSize(12, 13, 14),
     color: '#991B1B',
-    marginLeft: 6,
     fontWeight: '500',
   },
   otpContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 0,
-    width: '100%',
+    marginBottom: getResponsiveSpacing(32, 40, 48),
+    paddingHorizontal: getResponsiveSpacing(4, 8, 12),
   },
   otpInput: {
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#0F172A',
     backgroundColor: '#FFFFFF',
     textAlign: 'center',
   },
   otpInputFilled: {
     borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F8FAFF',
+    borderWidth: 2,
   },
   otpInputDisabled: {
     backgroundColor: '#F1F5F9',
     borderColor: '#CBD5E1',
     color: '#94A3B8',
+    opacity: 0.6,
   },
   verifyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#3B82F6',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    marginBottom: 24,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingVertical: getResponsiveSpacing(16, 18, 20),
+    paddingHorizontal: getResponsiveSpacing(32, 40, 48),
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    marginBottom: getResponsiveSpacing(24, 28, 32),
+    gap: getResponsiveSpacing(8, 10, 12),
   },
   verifyButtonDisabled: {
     backgroundColor: '#94A3B8',
-    shadowOpacity: 0,
-    elevation: 0,
   },
   verifyButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(16, 17, 18),
     fontWeight: '600',
-    marginLeft: 8,
   },
   resendContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: getResponsiveSpacing(4, 6, 8),
   },
   resendText: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(13, 14, 15),
     color: '#64748B',
   },
-  resendButton: {
-    fontSize: 14,
+  resendLink: {
+    fontSize: getResponsiveFontSize(13, 14, 15),
     color: '#3B82F6',
     fontWeight: '600',
   },
-  resendButtonDisabled: {
+  resendLinkDisabled: {
     color: '#94A3B8',
   },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: getResponsiveSpacing(4, 6, 8),
+  },
   timerText: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(13, 14, 15),
     color: '#94A3B8',
     fontWeight: '500',
   },

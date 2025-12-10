@@ -10,15 +10,34 @@ import {
   ScrollView,
   ActivityIndicator,
   BackHandler,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, ShieldCheck, CheckCircle, Shield, CheckSquare, Square, MessageCircle, AlertTriangle, Clock } from 'lucide-react-native';
+import { ArrowLeft, ShieldCheck, CheckCircle, Shield, CheckSquare, Square, MessageCircle, AlertTriangle, Clock, Lock } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '@/context/AuthContext';
 import { Modal } from '@/components/common/Modal';
 import { TermsModal } from '@/components/common/TermsModal';
 import { API_BASE_URL } from '@/constants/api';
+
+// Responsive design utilities
+const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 375;
+const isMediumScreen = screenWidth >= 375 && screenWidth < 414;
+const isLargeScreen = screenWidth >= 414;
+
+const getResponsiveSpacing = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
+
+const getResponsiveFontSize = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
 
 export default function MobileVerificationScreen() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -34,7 +53,7 @@ export default function MobileVerificationScreen() {
     message: '',
     type: 'info' as 'success' | 'error' | 'warning' | 'info'
   });
-  const [smsStatus, setSmsStatus] = useState<'pending' | 'sent' | 'failed'>('pending');
+  const [smsStatus, setSmsStatus] = useState<'pending' | 'sent' | 'failed'>('sent');
   const [remainingAttempts, setRemainingAttempts] = useState(5);
   const [isLocked, setIsLocked] = useState(false);
   const [lockoutTimer, setLockoutTimer] = useState(0);
@@ -345,81 +364,101 @@ export default function MobileVerificationScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
+        {/* Simple Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            activeOpacity={0.6}
+          >
+            <ArrowLeft size={22} color="#475569" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Verification</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <ArrowLeft size={24} color="#1E293B" />
-            </TouchableOpacity>
+          {/* Simple Icon */}
+          <View style={styles.iconSection}>
+            <View style={styles.iconContainer}>
+              <ShieldCheck size={getResponsiveFontSize(32, 36, 40)} color="#3B82F6" strokeWidth={2} />
+            </View>
           </View>
 
-          <View style={styles.content}>
-            <View style={styles.iconContainer}>
-              <ShieldCheck size={64} color="#3B82F6" />
-            </View>
-
-            <Text style={styles.title}>Verify Your Mobile</Text>
-            <Text style={styles.subtitle}>
-              We've sent a 6-digit verification code to{'\n'}
-              <Text style={styles.phoneNumber}>+91 {phone}</Text>
+          {/* Main Content */}
+          <View style={styles.contentSection}>
+            <Text style={styles.mainTitle}>Enter Verification Code</Text>
+            <Text style={styles.description}>
+              We've sent a 6-digit code to{'\n'}
+              <Text style={styles.phoneHighlight}>+91 {phone}</Text>
             </Text>
 
-            {/* SMS Status Indicator */}
-            <View style={styles.smsStatusContainer}>
-              <MessageCircle size={16} color={getSmsStatusColor()} />
-              <Text style={[styles.smsStatusText, { color: getSmsStatusColor() }]}>
-                {getSmsStatusText()}
-              </Text>
-            </View>
+            {/* Status Badge */}
+            {smsStatus === 'sent' && (
+              <View style={styles.statusBadge}>
+                <MessageCircle size={14} color="#10B981" />
+                <Text style={styles.statusText}>SMS sent successfully</Text>
+              </View>
+            )}
 
-            {/* Attempt Counter */}
+            {/* Warning Messages */}
             {remainingAttempts < 5 && !isLocked && (
-              <View style={styles.attemptContainer}>
-                <AlertTriangle size={16} color="#F59E0B" />
-                <Text style={styles.attemptText}>
-                  {remainingAttempts} attempts remaining
-                </Text>
+              <View style={styles.warningBadge}>
+                <AlertTriangle size={14} color="#F59E0B" />
+                <Text style={styles.warningText}>{remainingAttempts} attempts remaining</Text>
               </View>
             )}
 
-            {/* Lockout Warning */}
             {isLocked && (
-              <View style={styles.lockoutContainer}>
-                <Clock size={16} color="#EF4444" />
-                <Text style={styles.lockoutText}>
-                  Account locked. Try again in {formatTime(lockoutTimer)}
-                </Text>
+              <View style={styles.errorBadge}>
+                <Clock size={14} color="#EF4444" />
+                <Text style={styles.errorText}>Account locked. Try again in {formatTime(lockoutTimer)}</Text>
               </View>
             )}
 
+            {/* OTP Input Fields - Simple Design */}
             <View style={styles.otpContainer}>
-              {otp.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => {
-                    inputRefs.current[index] = ref;
-                  }}
-                  style={[
-                    styles.otpInput, 
-                    digit && styles.otpInputFilled,
-                    isLocked && styles.otpInputDisabled
-                  ]}
-                  value={digit}
-                  onChangeText={(value) => handleOtpChange(value, index)}
-                  onKeyPress={(e) => handleKeyPress(e, index)}
-                  keyboardType="numeric"
-                  maxLength={6}
-                  textAlign="center"
-                  autoFocus={index === 0}
-                  editable={!isLocked}
-                  selectTextOnFocus={true}
-                  contextMenuHidden={true}
-                />
-              ))}
+              {otp.map((digit, index) => {
+                const scrollContentPadding = 24 * 2;
+                const gapSize = getResponsiveSpacing(8, 10, 12);
+                const totalGaps = gapSize * 5;
+                const availableWidth = screenWidth - scrollContentPadding - totalGaps;
+                const inputWidth = availableWidth / 6;
+                const responsiveInputWidth = Math.max(48, Math.min(64, inputWidth));
+                
+                return (
+                  <TextInput
+                    key={index}
+                    ref={(ref) => {
+                      inputRefs.current[index] = ref;
+                    }}
+                    style={[
+                      styles.otpInput,
+                      {
+                        width: responsiveInputWidth,
+                        height: getResponsiveSpacing(56, 64, 72),
+                        fontSize: getResponsiveFontSize(22, 26, 30),
+                        marginRight: index < 5 ? gapSize : 0,
+                      },
+                      digit && styles.otpInputFilled,
+                      isLocked && styles.otpInputDisabled
+                    ]}
+                    value={digit}
+                    onChangeText={(value) => handleOtpChange(value, index)}
+                    onKeyPress={(e) => handleKeyPress(e, index)}
+                    keyboardType="numeric"
+                    maxLength={6}
+                    textAlign="center"
+                    autoFocus={index === 0}
+                    editable={!isLocked}
+                    selectTextOnFocus={true}
+                    contextMenuHidden={true}
+                  />
+                );
+              })}
             </View>
 
+            {/* Verify Button */}
             <TouchableOpacity
               style={[
                 styles.verifyButton, 
@@ -427,9 +466,10 @@ export default function MobileVerificationScreen() {
               ]}
               onPress={() => handleVerifyOtp()}
               disabled={isLoading || isLocked}
+              activeOpacity={0.8}
             >
               {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <>
                   <CheckCircle size={20} color="#FFFFFF" />
@@ -438,33 +478,29 @@ export default function MobileVerificationScreen() {
               )}
             </TouchableOpacity>
 
+            {/* Resend Section */}
             <View style={styles.resendContainer}>
               <Text style={styles.resendText}>Didn't receive the code? </Text>
               {timer > 0 ? (
-                <Text style={styles.timerText}>Resend in {timer}s</Text>
+                <View style={styles.timerContainer}>
+                  <Clock size={12} color="#94A3B8" />
+                  <Text style={styles.timerText}>Resend in {timer}s</Text>
+                </View>
               ) : (
                 <TouchableOpacity
                   onPress={handleResendOtp}
                   disabled={isResending || isLocked}
+                  activeOpacity={0.7}
                 >
                   <Text style={[
-                    styles.resendButton, 
-                    (isResending || isLocked) && styles.resendButtonDisabled
+                    styles.resendLink, 
+                    (isResending || isLocked) && styles.resendLinkDisabled
                   ]}>
                     {isResending ? 'Resending...' : 'Resend'}
                   </Text>
                 </TouchableOpacity>
               )}
             </View>
-
-            {/* Development Mode Notice */}
-            {__DEV__ && (
-              <View style={styles.devNotice}>
-                <Text style={styles.devNoticeText}>
-                  💡 Development Mode: Check console for OTP
-                </Text>
-              </View>
-            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -493,193 +529,201 @@ export default function MobileVerificationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAFBFC',
   },
   keyboardView: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 40,
-  },
   header: {
-    marginBottom: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: getResponsiveSpacing(20, 24, 28),
+    paddingTop: getResponsiveSpacing(16, 20, 24),
+    paddingBottom: getResponsiveSpacing(12, 16, 20),
+    backgroundColor: '#FAFBFC',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: getResponsiveSpacing(36, 40, 44),
+    height: getResponsiveSpacing(36, 40, 44),
+    borderRadius: getResponsiveSpacing(18, 20, 22),
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  phoneNumber: {
+  headerTitle: {
+    fontSize: getResponsiveFontSize(18, 20, 22),
     fontWeight: '600',
     color: '#1E293B',
   },
-  smsStatusContainer: {
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: getResponsiveSpacing(40, 48, 56),
+  },
+  iconSection: {
+    alignItems: 'center',
+    paddingTop: getResponsiveSpacing(24, 32, 40),
+    paddingBottom: getResponsiveSpacing(16, 20, 24),
+  },
+  iconContainer: {
+    width: getResponsiveSpacing(72, 80, 88),
+    height: getResponsiveSpacing(72, 80, 88),
+    borderRadius: getResponsiveSpacing(36, 40, 44),
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#DBEAFE',
+  },
+  contentSection: {
+    flex: 1,
+    paddingHorizontal: getResponsiveSpacing(24, 28, 32),
+  },
+  mainTitle: {
+    fontSize: getResponsiveFontSize(26, 30, 34),
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: getResponsiveSpacing(8, 10, 12),
+    letterSpacing: -0.5,
+  },
+  description: {
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+    lineHeight: getResponsiveFontSize(20, 24, 28),
+  },
+  phoneHighlight: {
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingVertical: getResponsiveSpacing(8, 10, 12),
+    backgroundColor: '#ECFDF5',
+    borderRadius: getResponsiveSpacing(16, 18, 20),
+    marginBottom: getResponsiveSpacing(12, 16, 20),
+    gap: getResponsiveSpacing(6, 8, 10),
   },
-  smsStatusText: {
-    fontSize: 14,
-    marginLeft: 6,
+  statusText: {
+    fontSize: getResponsiveFontSize(12, 13, 14),
+    color: '#10B981',
     fontWeight: '500',
   },
-  attemptContainer: {
+  warningBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingVertical: getResponsiveSpacing(8, 10, 12),
     backgroundColor: '#FEF3C7',
-    borderRadius: 8,
+    borderRadius: getResponsiveSpacing(16, 18, 20),
+    marginBottom: getResponsiveSpacing(12, 16, 20),
+    gap: getResponsiveSpacing(6, 8, 10),
   },
-  attemptText: {
-    fontSize: 14,
+  warningText: {
+    fontSize: getResponsiveFontSize(12, 13, 14),
     color: '#92400E',
-    marginLeft: 6,
     fontWeight: '500',
   },
-  lockoutContainer: {
+  errorBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingVertical: getResponsiveSpacing(8, 10, 12),
     backgroundColor: '#FEE2E2',
-    borderRadius: 8,
+    borderRadius: getResponsiveSpacing(16, 18, 20),
+    marginBottom: getResponsiveSpacing(12, 16, 20),
+    gap: getResponsiveSpacing(6, 8, 10),
   },
-  lockoutText: {
-    fontSize: 14,
+  errorText: {
+    fontSize: getResponsiveFontSize(12, 13, 14),
     color: '#991B1B',
-    marginLeft: 6,
     fontWeight: '500',
   },
   otpContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: getResponsiveSpacing(32, 40, 48),
+    paddingHorizontal: getResponsiveSpacing(4, 8, 12),
   },
   otpInput: {
-    width: 48,
-    height: 56,
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    fontSize: 20,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#0F172A',
     backgroundColor: '#FFFFFF',
+    textAlign: 'center',
   },
   otpInputFilled: {
     borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F8FAFF',
+    borderWidth: 2,
   },
   otpInputDisabled: {
     backgroundColor: '#F1F5F9',
     borderColor: '#CBD5E1',
     color: '#94A3B8',
+    opacity: 0.6,
   },
   verifyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#3B82F6',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    marginBottom: 24,
-    minWidth: 200,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingVertical: getResponsiveSpacing(16, 18, 20),
+    paddingHorizontal: getResponsiveSpacing(32, 40, 48),
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    marginBottom: getResponsiveSpacing(24, 28, 32),
+    gap: getResponsiveSpacing(8, 10, 12),
   },
   verifyButtonDisabled: {
     backgroundColor: '#94A3B8',
-    shadowOpacity: 0,
-    elevation: 0,
   },
   verifyButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(16, 17, 18),
     fontWeight: '600',
-    marginLeft: 8,
   },
   resendContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: getResponsiveSpacing(4, 6, 8),
   },
   resendText: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(13, 14, 15),
     color: '#64748B',
   },
-  resendButton: {
-    fontSize: 14,
+  resendLink: {
+    fontSize: getResponsiveFontSize(13, 14, 15),
     color: '#3B82F6',
     fontWeight: '600',
   },
-  resendButtonDisabled: {
+  resendLinkDisabled: {
     color: '#94A3B8',
+  },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: getResponsiveSpacing(4, 6, 8),
   },
   timerText: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(13, 14, 15),
     color: '#94A3B8',
     fontWeight: '500',
-  },
-  devNotice: {
-    marginTop: 32,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
-  },
-  devNoticeText: {
-    fontSize: 12,
-    color: '#92400E',
-    textAlign: 'center',
   },
 }); 

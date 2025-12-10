@@ -292,8 +292,44 @@ export default function SignUpScreen() {
       
       setIsLoading(false);
       if (!response.ok) {
-        // Show detailed error message
-        const errorMessage = data.message || data.errors?.[0]?.msg || `An error occurred (Status: ${response.status}). Please try again.`;
+        // Extract validation errors from nested structure
+        let errorMessage = data.message || `An error occurred (Status: ${response.status}). Please try again.`;
+        
+        // Check for validation errors in nested structure: data.errors.errors
+        if (data.errors?.errors && Array.isArray(data.errors.errors) && data.errors.errors.length > 0) {
+          const validationErrors = data.errors.errors.map((err: any) => {
+            const field = err.field || err.path || '';
+            const msg = err.message || err.msg || '';
+            // Format field name nicely (e.g., "fullName" -> "Full Name")
+            const formattedField = field 
+              ? field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1').trim()
+              : '';
+            return formattedField ? `${formattedField}: ${msg}` : msg;
+          });
+          
+          if (validationErrors.length === 1) {
+            errorMessage = validationErrors[0];
+          } else if (validationErrors.length > 1) {
+            errorMessage = validationErrors.join('\n');
+          }
+        } else if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+          // Fallback: check if errors is directly an array
+          const validationErrors = data.errors.map((err: any) => {
+            const field = err.field || err.path || '';
+            const msg = err.message || err.msg || '';
+            const formattedField = field 
+              ? field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1').trim()
+              : '';
+            return formattedField ? `${formattedField}: ${msg}` : msg;
+          });
+          
+          if (validationErrors.length === 1) {
+            errorMessage = validationErrors[0];
+          } else if (validationErrors.length > 1) {
+            errorMessage = validationErrors.join('\n');
+          }
+        }
+        
         console.error('Signup error:', {
           status: response.status,
           message: errorMessage,
