@@ -70,15 +70,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         setUnreadCount(response.data.data.unreadCount);
       }
     } catch (error: any) {
-      // Check if it's a "Session expired" error (expected after 30 days)
+      // Mark error as handled to prevent unhandled promise rejection warnings
+      const isNetworkError = error?.message?.includes('Network request failed') ||
+                            error?.message?.includes('timeout') ||
+                            error?.isNetworkError === true;
+      
       const isSessionExpired = error?.message === 'Session expired' || 
                                error?.status === 401 && error?.message?.includes('Session expired') ||
                                error?._suppressUnhandled === true ||
                                error?._handled === true;
       
-      if (!isSessionExpired) {
-        // Only log non-session-expired errors
+      // Mark all errors as handled to prevent unhandled rejection warnings
+      if (!error?._handled) {
+        (error as any)._handled = true;
+        (error as any)._suppressUnhandled = true;
+      }
+      
+      if (!isSessionExpired && !isNetworkError) {
+        // Only log non-session-expired, non-network errors
         console.warn('Error fetching unread count:', error?.message || error);
+      } else if (isNetworkError) {
+        // Network errors are expected when backend is down or network is unavailable
+        // Silently handle them (will retry on next fetch)
       }
       // Session expired errors are handled by apiClient (logout triggered)
     }
@@ -101,15 +114,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         setUnreadCount(unread);
       }
     } catch (error: any) {
-      // Check if it's a "Session expired" error (expected after 30 days)
+      // Mark error as handled to prevent unhandled promise rejection warnings
+      const isNetworkError = error?.message?.includes('Network request failed') ||
+                            error?.message?.includes('timeout') ||
+                            error?.isNetworkError === true;
+      
       const isSessionExpired = error?.message === 'Session expired' || 
                                error?.status === 401 && error?.message?.includes('Session expired') ||
                                error?._suppressUnhandled === true ||
                                error?._handled === true;
       
-      if (!isSessionExpired) {
-        // Only log non-session-expired errors
+      // Mark all errors as handled to prevent unhandled rejection warnings
+      if (!error?._handled) {
+        (error as any)._handled = true;
+        (error as any)._suppressUnhandled = true;
+      }
+      
+      if (!isSessionExpired && !isNetworkError) {
+        // Only log non-session-expired, non-network errors
         console.warn('Error fetching notifications:', error?.message || error);
+      } else if (isNetworkError) {
+        // Network errors are expected when backend is down or network is unavailable
+        // Silently handle them (will retry on next fetch)
       }
       // Session expired errors are handled by apiClient (logout triggered)
     }

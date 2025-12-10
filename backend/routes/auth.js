@@ -844,8 +844,20 @@ router.post('/refresh', [tokenRefreshLimiter, ...validateRefreshToken], asyncHan
       throw new ServiceUnavailableError('Database', 'Service temporarily unavailable. Please try again in a moment.');
     }
     
-    // Token error - return 401 (Unauthorized)
-    // This is the expected error for invalid/expired tokens
+    // Token error - return 401 (Unauthorized) instead of 500
+    // This is the expected error for invalid/expired/not found tokens
+    if (error?.message?.includes('Refresh token not found') || 
+        error?.message?.includes('expired') || 
+        error?.message?.includes('revoked') ||
+        error?.message?.includes('User not found')) {
+      logger.warn('Token refresh failed - invalid token', {
+        error: error.message,
+        ipAddress
+      });
+      throw new AuthenticationError('Refresh token is invalid, expired, or revoked. Please login again.');
+    }
+    
+    // For other errors, re-throw as-is (will be handled by error middleware)
     throw error;
   }
   

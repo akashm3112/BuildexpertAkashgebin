@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -17,6 +18,7 @@ import {
   Platform,
 } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
+import { useBookings } from '@/context/BookingContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { API_BASE_URL } from '@/constants/api';
 import { SERVICE_CATEGORIES } from '@/constants/serviceCategories';
@@ -144,6 +146,84 @@ export default function BookingsScreen() {
     setShowAlertModal(true);
   };
 
+  const { fetchUnreadCount, unreadCount: bookingUnreadCount } = useBookings();
+  const markAllViewedInProgressRef = useRef(false);
+  const lastMarkAllViewedTimeRef = useRef(0);
+  const MARK_ALL_VIEWED_THROTTLE_MS = 2000; // Prevent duplicate calls within 2 seconds
+
+  // Mark all bookings as viewed when provider opens the bookings tab
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!user?.id || authLoading) {
+        if (__DEV__) {
+          console.log('📱 Bookings tab focused but skipping (no user or auth loading)');
+        }
+        return;
+      }
+      
+      // Skip if already in progress or called recently (throttle)
+      const now = Date.now();
+      if (markAllViewedInProgressRef.current) {
+        if (__DEV__) {
+          console.log('📱 Bookings tab focused but skipping (already in progress)');
+        }
+        return;
+      }
+      
+      if ((now - lastMarkAllViewedTimeRef.current) < MARK_ALL_VIEWED_THROTTLE_MS) {
+        if (__DEV__) {
+          console.log('📱 Bookings tab focused but skipping (throttled)');
+        }
+        return;
+      }
+
+      // Skip if there are no unread bookings (optimization)
+      if (bookingUnreadCount === 0) {
+        if (__DEV__) {
+          console.log('📱 Bookings tab focused but skipping (no unread bookings)');
+        }
+        return;
+      }
+
+      if (__DEV__) {
+        console.log('📱 Bookings tab focused, marking all as viewed. Unread count:', bookingUnreadCount);
+      }
+
+      // Mark all bookings as viewed when tab is focused
+      const markAllAsViewed = async () => {
+        // Set flag to prevent duplicate calls
+        markAllViewedInProgressRef.current = true;
+        lastMarkAllViewedTimeRef.current = now;
+
+        try {
+          const { apiPut } = await import('@/utils/apiClient');
+          const response = await apiPut('/api/providers/bookings/mark-all-viewed');
+          
+          if (__DEV__) {
+            console.log('📱 Mark all viewed response:', response?.ok ? 'success' : 'failed');
+          }
+          
+          // Refresh unread count to update badge
+          fetchUnreadCount().catch(() => {
+            // Errors are already handled in fetchUnreadCount
+          });
+        } catch (error: any) {
+          if (__DEV__) {
+            console.warn('📱 Error marking all bookings as viewed:', error?.message || error);
+          }
+          // Silently fail - marking as viewed is not critical
+          // Errors are already handled by apiClient
+        } finally {
+          // Reset flag after a short delay to allow for rapid navigation
+          setTimeout(() => {
+            markAllViewedInProgressRef.current = false;
+          }, 500);
+        }
+      };
+
+      markAllAsViewed();
+    }, [user?.id, authLoading, bookingUnreadCount]) // Removed fetchUnreadCount from deps - it's stable
+  );
 
   useEffect(() => {
     // Wait for auth to finish loading before fetching data
@@ -185,7 +265,7 @@ export default function BookingsScreen() {
       // Auth finished loading but no user, set loading to false
       setIsLoading(false);
     }
-  }, [user?.id, authLoading]);
+  }, [user?.id, authLoading, loadBookings]); // Added loadBookings to deps since it's now memoized
 
   // Handle orientation changes for responsive design
   useEffect(() => {
@@ -198,7 +278,8 @@ export default function BookingsScreen() {
   }, []);
 
   // Accepts a showSpinner param (default: false)
-  const loadBookings = async (showSpinner = false) => {
+  // Memoized to prevent unnecessary re-creations
+  const loadBookings = React.useCallback(async (showSpinner = false) => {
     try {
       if (showSpinner) setIsLoading(true);
       setError(null);
@@ -214,14 +295,15 @@ export default function BookingsScreen() {
       if (response.ok && response.data && response.data.status === 'success') {
         const bookingsData = response.data.data.bookings || [];
 
-        // Debug location data
-        bookingsData.forEach((booking: any, index: number) => {
-          console.log(`Booking ${index + 1} location data:`, {
-            customer_state: booking.customer_state,
-            customer_address: booking.customer_address,
-            customer_name: booking.customer_name,
+        // Debug location data (only in development, and only log once per fetch)
+        if (__DEV__ && bookingsData.length > 0) {
+          // Only log first booking as sample to avoid spam
+          console.log(`📋 Loaded ${bookingsData.length} bookings. Sample booking location data:`, {
+            customer_state: bookingsData[0].customer_state,
+            customer_address: bookingsData[0].customer_address,
+            customer_name: bookingsData[0].customer_name,
           });
-        });
+        }
 
         setBookings(bookingsData);
       } else {
@@ -237,8 +319,9 @@ export default function BookingsScreen() {
       setErrorKey('networkError');
     } finally {
       if (showSpinner) setIsLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []); // Empty deps - function doesn't depend on any props/state that change
 
   const onRefresh = async () => {
     setRefreshing(true);

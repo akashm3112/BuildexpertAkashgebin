@@ -18,6 +18,7 @@ import WebRTCCallButton from '@/components/calls/WebRTCCallButton';
 import { format, parseISO } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useBookings } from '@/context/BookingContext';
 
 interface BookingProps {
   booking: {
@@ -43,6 +44,7 @@ interface BookingProps {
 export function BookingItem({ booking, onStatusChange, onBookingReported }: BookingProps) {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { fetchUnreadCount } = useBookings();
   const { width, height } = useWindowDimensions();
 
   // Responsive design constants
@@ -195,7 +197,21 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
     }
   };
 
-  const handleRateService = () => {
+  const handleRateService = async () => {
+    // Mark booking as viewed when user opens rating modal (viewing booking details)
+    if (booking.status && ['accepted', 'cancelled', 'completed'].includes(booking.status)) {
+      try {
+        const { apiPut } = await import('@/utils/apiClient');
+        await apiPut(`/api/bookings/${booking.id}/mark-viewed`);
+        // Refresh unread count
+        fetchUnreadCount().catch(() => {
+          // Errors are already handled in fetchUnreadCount
+        });
+      } catch (error) {
+        // Silently fail - marking as viewed is not critical
+      }
+    }
+    
     // Pre-populate with existing rating if available
     if (booking.rating) {
       setRating(booking.rating.rating);

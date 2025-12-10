@@ -32,6 +32,9 @@ const addRefreshTokensTable = require('./018-add-refresh-tokens-table');
 const updatePaintingService = require('./019-update-painting-service');
 const addCityToAddresses = require('./020-add-city-to-addresses');
 const addLocationIndexes = require('./021-add-location-indexes');
+const addBookingViewedColumn = require('./022-add-booking-viewed-column');
+const addBookingProviderViewedColumn = require('./023-add-booking-provider-viewed-column');
+const addNotificationCreatedAtIndex = require('./024-add-notification-created-at-index');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -181,6 +184,27 @@ const migrations = [
     description: 'Adds indexes on addresses.city and addresses.state for optimized location-based sorting',
     function: addLocationIndexes,
     required: true // Required for fast location-based provider sorting
+  },
+  {
+    id: '022',
+    name: 'Add Booking Viewed Column',
+    description: 'Adds is_viewed_by_user column to bookings table for unread booking updates badge',
+    function: addBookingViewedColumn,
+    required: true // Required for booking badge feature
+  },
+  {
+    id: '023',
+    name: 'Add Booking Provider Viewed Column',
+    description: 'Adds is_viewed_by_provider column to bookings table for unread booking updates badge for providers',
+    function: addBookingProviderViewedColumn,
+    required: true // Required for provider booking badge feature
+  },
+  {
+    id: '024',
+    name: 'Add Notification Created At Index',
+    description: 'Adds indexes on notifications.created_at for efficient notification cleanup queries',
+    function: addNotificationCreatedAtIndex,
+    required: true // Required for notification cleanup service performance
   }
 ];
 

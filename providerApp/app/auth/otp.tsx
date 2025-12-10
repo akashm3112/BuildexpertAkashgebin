@@ -220,16 +220,37 @@ export default function OTPVerification() {
       console.log('🖼️ Profile picture URL from backend:', data.data.user.profilePicUrl || data.data.user.profile_pic_url || 'No profile picture');
       console.log('👤 User data:', data.data.user);
     
+      // Validate response data
+      if (!data.data) {
+        throw new Error('Invalid response: missing data field');
+      }
+      
+      if (!data.data.accessToken || !data.data.refreshToken) {
+        console.error('❌ OTP verification response missing tokens:', {
+          hasAccessToken: !!data.data.accessToken,
+          hasRefreshToken: !!data.data.refreshToken,
+          responseData: data.data
+        });
+        throw new Error('Invalid response: missing access token or refresh token');
+      }
+      
       // Store tokens using TokenManager
       const { tokenManager } = await import('@/utils/tokenManager');
-      if (data.data.accessToken && data.data.refreshToken) {
-        await tokenManager.storeTokenPair(
-          data.data.accessToken,
-          data.data.refreshToken,
-          data.data.accessTokenExpiresAt,
-          data.data.refreshTokenExpiresAt
-        );
-      }
+      console.log('📱 Storing tokens after OTP verification:', {
+        hasAccessToken: !!data.data.accessToken,
+        hasRefreshToken: !!data.data.refreshToken,
+        accessTokenExpiresAt: data.data.accessTokenExpiresAt,
+        refreshTokenExpiresAt: data.data.refreshTokenExpiresAt
+      });
+      
+      await tokenManager.storeTokenPair(
+        data.data.accessToken,
+        data.data.refreshToken,
+        data.data.accessTokenExpiresAt,
+        data.data.refreshTokenExpiresAt
+      );
+      
+      console.log('✅ Tokens stored successfully after OTP verification');
 
       // Success: log in and navigate (keep token for backward compatibility)
       await login({

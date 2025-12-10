@@ -25,6 +25,7 @@ const adminRoutes = require('./routes/admin');
 require('./services/bookingReminders');
 const { serviceExpiryManager } = require('./services/serviceExpiryManager');
 const { initializeCleanupJob } = require('./utils/cleanupJob');
+const { notificationCleanupService } = require('./services/notificationCleanupService');
 const { validateCallPermissions } = require('./utils/callPermissions');
 const { WebRTCPermissionError } = require('./utils/errorTypes');
 const notificationQueue = require('./utils/notificationQueue');
@@ -472,6 +473,8 @@ server.listen(PORT, '0.0.0.0', async () => {
   serviceExpiryManager.start();
   initializeCleanupJob(); // Auth data cleanup (tokens, sessions, security logs)
   notificationQueue.start();
+  notificationCleanupService.start(); // Notification cleanup (runs weekly on Sundays at 2 AM UTC)
+  notificationCleanupService.start(); // Notification cleanup (runs weekly)
   
   // Preload table cache for admin routes
   try {

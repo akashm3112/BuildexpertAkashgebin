@@ -2,11 +2,45 @@ import { Tabs, useRouter, useSegments, usePathname } from 'expo-router';
 import { Home, User, FileText, Calendar, Bell } from 'lucide-react-native';
 import { View, Text, StyleSheet, BackHandler } from 'react-native';
 import { useNotifications } from '@/context/NotificationContext';
+import { useBookings } from '@/context/BookingContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useEffect } from 'react';
 
-export default function TabLayout() {
+function NotificationTabIcon({ color, size }: { color: string; size: number }) {
   const { unreadCount } = useNotifications();
+
+  return (
+    <View style={{ position: 'relative' }}>
+      <Bell size={size} color={color} />
+      {unreadCount > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function BookingTabIcon({ color, size }: { color: string; size: number }) {
+  const { unreadCount } = useBookings();
+
+  return (
+    <View style={{ position: 'relative' }}>
+      <Calendar size={size} color={color} />
+      {unreadCount > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+export default function TabLayout() {
   const { t } = useLanguage();
   const router = useRouter();
   const segments = useSegments();
@@ -100,27 +134,14 @@ export default function TabLayout() {
         name="bookings"
         options={{
           title: t('toolbar.bookings'),
-          tabBarIcon: ({ size, color }) => (
-            <Calendar size={size} color={color} />
-          ),
+          tabBarIcon: ({ size, color }) => <BookingTabIcon color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="notifications"
         options={{
           title: t('toolbar.notifications'),
-          tabBarIcon: ({ size, color }) => (
-            <View style={{ position: 'relative' }}>
-              <Bell size={size} color={color} />
-              {unreadCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </Text>
-                </View>
-              )}
-            </View>
-          ),
+          tabBarIcon: ({ size, color }) => <NotificationTabIcon color={color} size={size} />,
         }}
       />
       <Tabs.Screen

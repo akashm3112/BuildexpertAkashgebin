@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, Dimensions, StatusBar, Platform, Modal, ScrollView, TextInput, useWindowDimensions } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { BookingItem } from '@/components/bookings/BookingItem';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
+import { useBookings } from '@/context/BookingContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { format } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -133,6 +135,56 @@ export default function BookingsScreen() {
     isMediumDevice = width >= 375 && width < 414;
     isLargeDevice = width >= 414;
   }, [width]);
+
+  const { fetchUnreadCount, unreadCount: bookingUnreadCount } = useBookings();
+  const markAllViewedInProgressRef = useRef(false);
+  const lastMarkAllViewedTimeRef = useRef(0);
+  const MARK_ALL_VIEWED_THROTTLE_MS = 2000; // Prevent duplicate calls within 2 seconds
+
+  // Mark all bookings as viewed when user opens the bookings tab
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!user?.id || authLoading) return;
+      
+      // Skip if already in progress or called recently (throttle)
+      const now = Date.now();
+      if (markAllViewedInProgressRef.current || 
+          (now - lastMarkAllViewedTimeRef.current) < MARK_ALL_VIEWED_THROTTLE_MS) {
+        return;
+      }
+
+      // Skip if there are no unread bookings (optimization)
+      if (bookingUnreadCount === 0) {
+        return;
+      }
+
+      // Mark all bookings as viewed when tab is focused
+      const markAllAsViewed = async () => {
+        // Set flag to prevent duplicate calls
+        markAllViewedInProgressRef.current = true;
+        lastMarkAllViewedTimeRef.current = now;
+
+        try {
+          const { apiPut } = await import('@/utils/apiClient');
+          await apiPut('/api/bookings/mark-all-viewed');
+          // Refresh unread count to update badge
+          fetchUnreadCount().catch(() => {
+            // Errors are already handled in fetchUnreadCount
+          });
+        } catch (error) {
+          // Silently fail - marking as viewed is not critical
+          // Errors are already handled by apiClient
+        } finally {
+          // Reset flag after a short delay to allow for rapid navigation
+          setTimeout(() => {
+            markAllViewedInProgressRef.current = false;
+          }, 500);
+        }
+      };
+
+      markAllAsViewed();
+    }, [user?.id, authLoading, bookingUnreadCount]) // Removed fetchUnreadCount from deps - it's stable
+  );
 
   useEffect(() => {
     // Wait for auth to finish loading before fetching data

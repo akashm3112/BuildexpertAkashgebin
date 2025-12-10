@@ -237,13 +237,23 @@ export default function HomeScreen() {
       // Wait a bit to ensure tokens are loaded
       const timer = setTimeout(() => {
         fetchRegisteredServices().catch((error: any) => {
+          // Mark NO_TOKEN errors as handled to prevent unhandled rejection warnings
+          if (error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required')) {
+            if (!error?._handled) {
+              (error as any)._handled = true;
+              (error as any)._suppressUnhandled = true;
+            }
+          }
+          
           // Suppress "Session expired" and server errors - they're expected or backend issues
           const isSessionExpired = error?.message === 'Session expired' || 
                                    error?.status === 401 && error?.message?.includes('Session expired') ||
                                    error?._suppressUnhandled === true ||
                                    error?._handled === true;
           const isServerError = error?.status === 500 || error?.isServerError === true;
-          if (!isSessionExpired && !isServerError) {
+          const isAuthError = error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required');
+          
+          if (!isSessionExpired && !isServerError && !isAuthError) {
             console.error('Error fetching registered services:', error);
             globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
           }
@@ -346,13 +356,23 @@ export default function HomeScreen() {
       if (user?.id) {
         // Only fetch registered services on focus, earnings are handled by sockets
         fetchRegisteredServices().catch((error: any) => {
+          // Mark NO_TOKEN errors as handled to prevent unhandled rejection warnings
+          if (error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required')) {
+            if (!error?._handled) {
+              (error as any)._handled = true;
+              (error as any)._suppressUnhandled = true;
+            }
+          }
+          
           // Suppress "Session expired" and server errors - they're expected or backend issues
           const isSessionExpired = error?.message === 'Session expired' || 
                                    error?.status === 401 && error?.message?.includes('Session expired') ||
                                    error?._suppressUnhandled === true ||
                                    error?._handled === true;
           const isServerError = error?.status === 500 || error?.isServerError === true;
-          if (!isSessionExpired && !isServerError) {
+          const isAuthError = error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required');
+          
+          if (!isSessionExpired && !isServerError && !isAuthError) {
             console.error('Error fetching registered services on focus:', error);
             globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
           }
@@ -572,6 +592,14 @@ export default function HomeScreen() {
       const isAuthError = error?.status === 401 || 
                          error?.code === 'NO_TOKEN' ||
                          error?.message?.includes('Authentication required');
+      
+      // Mark NO_TOKEN errors as handled to prevent unhandled rejection warnings
+      if (error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required')) {
+        if (!error?._handled) {
+          (error as any)._handled = true;
+          (error as any)._suppressUnhandled = true;
+        }
+      }
       
       // Suppress network errors when user is not authenticated (expected)
       const isNetworkError = error?.isNetworkError === true ||

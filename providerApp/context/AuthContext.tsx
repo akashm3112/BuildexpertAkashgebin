@@ -164,6 +164,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fullName: userData.fullName || userData.full_name 
       });
       
+      // Verify tokens exist before saving user data
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const tokenData = await tokenManager.getStoredToken();
+      if (!tokenData || !tokenData.refreshToken) {
+        console.error('❌ AuthContext: No tokens found when trying to login. Tokens should have been stored before calling login().');
+        throw new Error('Tokens not found. Please try logging in again.');
+      }
+      
+      console.log('✅ AuthContext: Tokens verified before saving user data');
+      
       // Save user data with retry mechanism (critical priority - never expires)
       await storage.setJSON('user', userData, {
         maxRetries: 3,

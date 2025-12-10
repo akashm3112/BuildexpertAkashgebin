@@ -273,9 +273,25 @@ const queueTokenRefresh = async (forceRefresh: boolean = false): Promise<string 
     : tokenManager.getValidToken();
   
   tokenRefreshPromise = refreshFn.catch((error: any) => {
+    // Mark network errors as handled to prevent unhandled rejection warnings
+    const isNetworkError = error?.message?.includes('Network request failed') ||
+                          error?.message?.includes('timeout') ||
+                          error?.isNetworkError === true;
+    
+    if (isNetworkError || !error?._handled) {
+      (error as any)._handled = true;
+      (error as any)._suppressUnhandled = true;
+    }
+    
     // If refresh fails, reject all queued requests
-    tokenRefreshQueue.forEach(({ reject }) => reject(error));
+    tokenRefreshQueue.forEach(({ reject }) => {
+      // Create a handled error copy to prevent unhandled rejections
+      const handledError = { ...error, _handled: true, _suppressUnhandled: true };
+      reject(handledError);
+    });
     tokenRefreshQueue.length = 0;
+    
+    // Re-throw but mark as handled
     throw error;
   });
   
@@ -498,9 +514,22 @@ const requestInterceptor = async (config: RequestConfig, forceTokenRefresh: bool
       // Use queued token refresh to prevent multiple simultaneous refreshes
       const token = await queueTokenRefresh(forceTokenRefresh);
       if (token) headers.set('Authorization', `Bearer ${token}`);
-    } catch (tokenError) {
+    } catch (tokenError: any) {
+      // Mark token errors as handled to prevent unhandled rejection warnings
+      const isNetworkError = tokenError?.message?.includes('Network request failed') ||
+                            tokenError?.message?.includes('timeout') ||
+                            tokenError?.isNetworkError === true;
+      
+      if (!tokenError?._handled) {
+        (tokenError as any)._handled = true;
+        (tokenError as any)._suppressUnhandled = true;
+      }
+      
       // If token retrieval fails, continue without token (will get 401)
-      console.warn('Failed to get auth token:', tokenError);
+      // Network errors are expected when backend is down - silently handle
+      if (!isNetworkError) {
+        console.warn('Failed to get auth token:', tokenError?.message || tokenError);
+      }
     }
   }
 
@@ -864,7 +893,15 @@ const executeRequest = async <T = any>(
       // Create retry function for 401 handling
       const retryWithRefresh = async (refreshedToken?: string): Promise<ApiResponse<T>> => {
         if (hasRetriedWithRefresh) {
-          throw normalizeError({ message: 'Authentication required', status: 401 });
+          const authError = normalizeError({ 
+            message: 'Authentication required. Please login.', 
+            status: 401,
+            code: 'NO_TOKEN'
+          });
+          // Mark as handled to prevent unhandled rejection warnings
+          (authError as any)._handled = true;
+          (authError as any)._suppressUnhandled = true;
+          throw authError;
         }
         hasRetriedWithRefresh = true;
         
@@ -884,7 +921,15 @@ const executeRequest = async <T = any>(
         }
         
         if (!tokenToUse) {
-          throw normalizeError({ message: 'Authentication required', status: 401 });
+          const authError = normalizeError({ 
+            message: 'Authentication required. Please login.', 
+            status: 401,
+            code: 'NO_TOKEN'
+          });
+          // Mark as handled to prevent unhandled rejection warnings
+          (authError as any)._handled = true;
+          (authError as any)._suppressUnhandled = true;
+          throw authError;
         }
         
         // CRITICAL: Ensure we're using the new token, not the old blacklisted one

@@ -94,23 +94,62 @@ const generateTokenPair = async (userId, userRole, ipAddress, userAgent) => {
   const deviceInfo = parseUserAgent(userAgent);
   
   // Store refresh token hash in database (store jti for tracking, but lookup by hash)
-  await query(`
-    INSERT INTO refresh_tokens 
-    (user_id, token_hash, token_jti, access_token_jti, device_name, device_type, 
-     ip_address, user_agent, expires_at, family_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-  `, [
-    userId,
-    refreshTokenHash,
-    refreshTokenJti,
-    accessTokenJti,
-    deviceInfo.deviceName,
-    deviceInfo.deviceType,
-    ipAddress,
-    userAgent,
-    refreshTokenExpiresAt,
-    familyId
-  ]);
+  try {
+    await query(`
+      INSERT INTO refresh_tokens 
+      (user_id, token_hash, token_jti, access_token_jti, device_name, device_type, 
+       ip_address, user_agent, expires_at, family_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `, [
+      userId,
+      refreshTokenHash,
+      refreshTokenJti,
+      accessTokenJti,
+      deviceInfo.deviceName,
+      deviceInfo.deviceType,
+      ipAddress,
+      userAgent,
+      refreshTokenExpiresAt,
+      familyId
+    ]);
+    
+    // Verify the token was actually inserted
+    const verifyToken = await getRow(`
+      SELECT id, token_hash, expires_at 
+      FROM refresh_tokens 
+      WHERE token_hash = $1
+    `, [refreshTokenHash]);
+    
+    if (!verifyToken) {
+      logger.error('Refresh token INSERT succeeded but token not found in database', {
+        userId,
+        tokenJti: refreshTokenJti,
+        tokenHash: refreshTokenHash.substring(0, 16) + '...'
+      });
+      throw new Error('Refresh token was not properly stored in database');
+    }
+    
+    logger.info('Refresh token created and verified successfully', {
+      userId,
+      tokenJti: refreshTokenJti,
+      tokenId: verifyToken.id,
+      expiresAt: refreshTokenExpiresAt
+    });
+  } catch (insertError) {
+    // Log detailed error information
+    logger.error('Failed to create refresh token in database', {
+      error: insertError.message,
+      code: insertError.code,
+      detail: insertError.detail,
+      constraint: insertError.constraint,
+      userId,
+      tokenJti: refreshTokenJti,
+      tokenHash: refreshTokenHash.substring(0, 16) + '...' // Log partial hash for debugging
+    });
+    
+    // Re-throw the error so the caller knows token creation failed
+    throw new Error(`Failed to create refresh token: ${insertError.message}`);
+  }
   
   return {
     userId,
@@ -167,6 +206,40 @@ const refreshAccessToken = async (refreshToken, ipAddress, userAgent) => {
     }
     
     if (!refreshTokenRecord) {
+      // Log detailed information about why refresh token lookup failed
+      logger.warn('Refresh token lookup failed', {
+        tokenHashPrefix: refreshTokenHash.substring(0, 16) + '...',
+        ipAddress,
+        userAgent: userAgent?.substring(0, 100) // Truncate for logging
+      });
+      
+      // Check if token exists but is revoked or expired
+      const existingToken = await getRow(`
+        SELECT is_revoked, expires_at, revoked_at, revoked_reason
+        FROM refresh_tokens 
+        WHERE token_hash = $1
+      `, [refreshTokenHash]);
+      
+      if (existingToken) {
+        if (existingToken.is_revoked) {
+          logger.warn('Refresh token is revoked', {
+            revokedAt: existingToken.revoked_at,
+            revokedReason: existingToken.revoked_reason,
+            ipAddress
+          });
+        } else if (existingToken.expires_at && new Date(existingToken.expires_at) <= new Date()) {
+          logger.warn('Refresh token is expired', {
+            expiresAt: existingToken.expires_at,
+            ipAddress
+          });
+        }
+      } else {
+        logger.warn('Refresh token does not exist in database', {
+          tokenHashPrefix: refreshTokenHash.substring(0, 16) + '...',
+          ipAddress
+        });
+      }
+      
       throw new Error('Refresh token not found, expired, or revoked');
     }
     

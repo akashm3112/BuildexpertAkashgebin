@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider } from '@/context/AuthContext';
 import { NotificationProvider } from '@/context/NotificationContext';
+import { BookingProvider } from '@/context/BookingContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { LabourAccessProvider } from '@/context/LabourAccessContext';
 import { LocationProvider } from '@/context/LocationContext';
@@ -145,9 +146,10 @@ export default function RootLayout() {
     >
       <AuthProvider>
         <NotificationProvider>
-          <LanguageProvider>
-            <LabourAccessProvider>
-              <LocationProvider>
+          <BookingProvider>
+            <LanguageProvider>
+              <LabourAccessProvider>
+                <LocationProvider>
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="+not-found" />
                 </Stack>
@@ -157,6 +159,7 @@ export default function RootLayout() {
               </LocationProvider>
             </LabourAccessProvider>
           </LanguageProvider>
+        </BookingProvider>
         </NotificationProvider>
       </AuthProvider>
     </ErrorBoundary>

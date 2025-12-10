@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider } from '@/context/AuthContext';
 import { NotificationProvider } from '@/context/NotificationContext';
+import { BookingProvider } from '@/context/BookingContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { CallScreen } from '@/components/calls/CallScreen';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -196,7 +197,8 @@ export default function RootLayout() {
     >
       <AuthProvider>
         <NotificationProvider>
-          <LanguageProvider>
+          <BookingProvider>
+            <LanguageProvider>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="auth" />
@@ -216,6 +218,7 @@ export default function RootLayout() {
             <CallScreen />
             <Toast />
           </LanguageProvider>
+        </BookingProvider>
         </NotificationProvider>
       </AuthProvider>
     </ErrorBoundary>

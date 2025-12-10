@@ -849,7 +849,15 @@ const executeRequest = async <T = any>(
       // Create retry function for 401 handling
       const retryWithRefresh = async (refreshedToken?: string): Promise<ApiResponse<T>> => {
         if (hasRetriedWithRefresh) {
-          throw normalizeError({ message: 'Authentication required', status: 401 });
+          const authError = normalizeError({ 
+            message: 'Authentication required. Please login.', 
+            status: 401,
+            code: 'NO_TOKEN'
+          });
+          // Mark as handled to prevent unhandled rejection warnings
+          (authError as any)._handled = true;
+          (authError as any)._suppressUnhandled = true;
+          throw authError;
         }
         hasRetriedWithRefresh = true;
         
@@ -869,7 +877,15 @@ const executeRequest = async <T = any>(
         }
         
         if (!tokenToUse) {
-          throw normalizeError({ message: 'Authentication required', status: 401 });
+          const authError = normalizeError({ 
+            message: 'Authentication required. Please login.', 
+            status: 401,
+            code: 'NO_TOKEN'
+          });
+          // Mark as handled to prevent unhandled rejection warnings
+          (authError as any)._handled = true;
+          (authError as any)._suppressUnhandled = true;
+          throw authError;
         }
         
         // CRITICAL: Ensure we're using the new token, not the old blacklisted one

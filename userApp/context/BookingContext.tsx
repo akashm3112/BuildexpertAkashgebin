@@ -1,0 +1,245 @@
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
+import { useAuth } from './AuthContext';
+import { io as socketIOClient, Socket } from 'socket.io-client';
+import { API_BASE_URL } from '@/constants/api';
+
+interface BookingContextType {
+  unreadCount: number;
+  fetchUnreadCount: () => Promise<void>;
+  refreshBookings: () => void;
+  resetBookingState: () => void;
+}
+
+const BookingContext = createContext<BookingContextType | undefined>(undefined);
+
+export function BookingProvider({ children }: { children: React.ReactNode }) {
+  const { user, logout, isLoading: authLoading } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const appState = useRef(AppState.currentState);
+  const socketRef = useRef<Socket | null>(null);
+
+  // Fetch unread count from API
+  const fetchUnreadCount = async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Use API client for automatic token management and error handling
+      const { apiGet } = await import('@/utils/apiClient');
+      const response = await apiGet('/api/bookings/unread-count');
+
+      if (response.ok && response.data && response.data.status === 'success') {
+        setUnreadCount(response.data.data.unreadCount);
+      }
+    } catch (error: any) {
+      // Mark error as handled to prevent unhandled promise rejection warnings
+      const isNetworkError = error?.message?.includes('Network request failed') ||
+                            error?.message?.includes('timeout') ||
+                            error?.isNetworkError === true;
+      
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired') ||
+                               error?._suppressUnhandled === true ||
+                               error?._handled === true;
+      
+      // Mark all errors as handled to prevent unhandled rejection warnings
+      if (!error?._handled) {
+        (error as any)._handled = true;
+        (error as any)._suppressUnhandled = true;
+      }
+      
+      if (!isSessionExpired && !isNetworkError) {
+        console.warn('Error fetching unread booking count:', error?.message || error);
+      }
+    }
+  };
+
+  // Refresh bookings (placeholder for future use)
+  const refreshBookings = () => {
+    fetchUnreadCount().catch((error) => {
+      // Errors are already handled in fetchUnreadCount
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired');
+      const isServerError = error?.status === 500 || 
+                           error?.isServerError === true ||
+                           error?.message?.includes('Database operation failed') ||
+                           error?.message?.includes('Service temporarily unavailable');
+      
+      if (!isSessionExpired && !isServerError) {
+        console.warn('refreshBookings error (handled):', error?.message || error);
+      }
+    });
+  };
+
+  // Reset booking state on logout
+  const resetBookingState = () => {
+    setUnreadCount(0);
+  };
+
+  // Handle app state changes (foreground/background)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active' &&
+        user?.id
+      ) {
+        // App has come to foreground, refresh unread count
+        fetchUnreadCount().catch((error) => {
+          // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+          const isSessionExpired = error?.message === 'Session expired' || 
+                                   error?.status === 401 && error?.message?.includes('Session expired');
+          const isServerError = error?.status === 500 || 
+                               error?.isServerError === true ||
+                               error?.message?.includes('Database operation failed') ||
+                               error?.message?.includes('Service temporarily unavailable');
+          
+          if (!isSessionExpired && !isServerError) {
+            console.warn('fetchUnreadCount error on app state change (handled):', error?.message || error);
+          }
+        });
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user?.id]);
+
+  // Setup socket connection for real-time updates
+  useEffect(() => {
+    if (!user?.id || authLoading) {
+      // Clean up socket if user logs out
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      return;
+    }
+
+    // Initialize socket connection
+    socketRef.current = socketIOClient(`${API_BASE_URL}`, {
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000
+    });
+
+    const socket = socketRef.current;
+
+    socket.on('connect', () => {
+      socket.emit('join', user.id);
+    });
+
+    // Listen for booking status updates (accepted, cancelled, completed)
+    socket.on('booking_updated', () => {
+      fetchUnreadCount().catch((error) => {
+        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Service temporarily unavailable');
+        
+        if (!isSessionExpired && !isServerError) {
+          console.warn('fetchUnreadCount error on booking_updated (handled):', error?.message || error);
+        }
+      });
+    });
+
+    // Listen for unread count update events (more efficient than listening to all booking_updated events)
+    socket.on('booking_unread_count_update', () => {
+      fetchUnreadCount().catch((error) => {
+        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Service temporarily unavailable');
+        
+        if (!isSessionExpired && !isServerError) {
+          console.warn('fetchUnreadCount error on booking_unread_count_update (handled):', error?.message || error);
+        }
+      });
+    });
+
+    // Listen for when a booking is viewed (to update count in real-time)
+    socket.on('booking_viewed', () => {
+      fetchUnreadCount().catch((error) => {
+        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        const isSessionExpired = error?.message === 'Session expired' || 
+                                 error?.status === 401 && error?.message?.includes('Session expired');
+        const isServerError = error?.status === 500 || 
+                             error?.isServerError === true ||
+                             error?.message?.includes('Database operation failed') ||
+                             error?.message?.includes('Service temporarily unavailable');
+        
+        if (!isSessionExpired && !isServerError) {
+          console.warn('fetchUnreadCount error on booking_viewed (handled):', error?.message || error);
+        }
+      });
+    });
+
+    socket.on('disconnect', () => {
+      // Socket disconnected - expected when backend is off
+    });
+
+    socket.on('connect_error', (error: any) => {
+      // Suppress socket connection errors - they're expected when backend is off
+      // Don't log or show errors to user
+    });
+
+    // Initial fetch
+    fetchUnreadCount().catch((error) => {
+      // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+      const isSessionExpired = error?.message === 'Session expired' || 
+                               error?.status === 401 && error?.message?.includes('Session expired');
+      const isServerError = error?.status === 500 || 
+                           error?.isServerError === true ||
+                           error?.message?.includes('Database operation failed') ||
+                           error?.message?.includes('Service temporarily unavailable');
+      
+      if (!isSessionExpired && !isServerError) {
+        console.warn('fetchUnreadCount error on initial fetch (handled):', error?.message || error);
+      }
+    });
+
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, [user?.id, authLoading]);
+
+  // Reset state when user logs out
+  useEffect(() => {
+    if (!user?.id && !authLoading) {
+      resetBookingState();
+    }
+  }, [user?.id, authLoading]);
+
+  return (
+    <BookingContext.Provider
+      value={{
+        unreadCount,
+        fetchUnreadCount,
+        refreshBookings,
+        resetBookingState
+      }}
+    >
+      {children}
+    </BookingContext.Provider>
+  );
+}
+
+export function useBookings() {
+  const context = useContext(BookingContext);
+  if (context === undefined) {
+    throw new Error('useBookings must be used within a BookingProvider');
+  }
+  return context;
+}
+

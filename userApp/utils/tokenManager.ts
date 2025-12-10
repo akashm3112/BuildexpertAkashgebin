@@ -337,27 +337,54 @@ export class TokenManager {
       }
 
       // Use fetchWithRetry for token refresh with network failure handling
-      const response = await fetchWithRetry(
-        `${API_BASE_URL}/api/auth/refresh`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+      let response: Response;
+      try {
+        response = await fetchWithRetry(
+          `${API_BASE_URL}/api/auth/refresh`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              refreshToken: tokenData.refreshToken
+            }),
           },
-          body: JSON.stringify({
-            refreshToken: tokenData.refreshToken
-          }),
-        },
-        {
-          maxRetries: 1, // Reduce retries to avoid long waits during backend issues
-          retryDelay: 1000,
-          exponentialBackoff: true,
-          timeout: 10000, // Reduce timeout from 15s to 10s
-          onRetry: (attempt) => {
-            console.log(`Token refresh retry attempt ${attempt}/1`);
-          },
+          {
+            maxRetries: 1, // Reduce retries to avoid long waits during backend issues
+            retryDelay: 1000,
+            exponentialBackoff: true,
+            timeout: 10000, // Reduce timeout from 15s to 10s
+            onRetry: (attempt) => {
+              console.log(`Token refresh retry attempt ${attempt}/1`);
+            },
+          }
+        );
+      } catch (error: any) {
+        // Network errors are expected when backend is down or network is unavailable
+        // Mark as handled to prevent unhandled promise rejection warnings
+        const networkError = error instanceof Error && (
+          error.message.includes('Network request failed') ||
+          error.message.includes('timeout') ||
+          error.message.includes('Network request failed after retries')
+        );
+        
+        if (networkError) {
+          // Mark error as handled to prevent unhandled rejection warnings
+          (error as any)._handled = true;
+          (error as any)._suppressUnhandled = true;
+          console.warn('Token refresh failed: Network error (will retry on next API call):', error.message);
+        } else {
+          // Mark other errors as handled too
+          (error as any)._handled = true;
+          (error as any)._suppressUnhandled = true;
+          console.warn('Token refresh failed (will retry on next API call):', error.message || error);
         }
-      );
+        
+        // Return null to indicate refresh failed (will retry on next API call)
+        this.invalidateCache();
+        return null;
+      }
 
       if (!response.ok) {
         // Refresh failed - check the status code
@@ -513,16 +540,45 @@ export class TokenManager {
 
   // Public method to store tokens after login/signup
   async storeTokenPair(accessToken: string, refreshToken: string, accessTokenExpiresAt: string | Date, refreshTokenExpiresAt: string | Date): Promise<void> {
-    const tokenData: TokenData = {
-      accessToken,
-      refreshToken,
-      accessTokenExpiresAt: typeof accessTokenExpiresAt === 'string' ? new Date(accessTokenExpiresAt).getTime() : accessTokenExpiresAt.getTime(),
-      refreshTokenExpiresAt: typeof refreshTokenExpiresAt === 'string' ? new Date(refreshTokenExpiresAt).getTime() : refreshTokenExpiresAt.getTime()
-    };
-    
-    await this.storeTokens(tokenData);
-    this.memoryCache = tokenData;
-    this.cacheTimestamp = Date.now();
+    try {
+      const tokenData: TokenData = {
+        accessToken,
+        refreshToken,
+        accessTokenExpiresAt: typeof accessTokenExpiresAt === 'string' ? new Date(accessTokenExpiresAt).getTime() : accessTokenExpiresAt.getTime(),
+        refreshTokenExpiresAt: typeof refreshTokenExpiresAt === 'string' ? new Date(refreshTokenExpiresAt).getTime() : refreshTokenExpiresAt.getTime()
+      };
+      
+      // Validate token data
+      if (!accessToken || !refreshToken) {
+        throw new Error('Invalid token data: accessToken and refreshToken are required');
+      }
+      
+      if (!tokenData.accessTokenExpiresAt || !tokenData.refreshTokenExpiresAt) {
+        throw new Error('Invalid token data: expiration times are required');
+      }
+      
+      console.log('📱 TokenManager: Storing token pair', {
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+        accessTokenExpiresAt: new Date(tokenData.accessTokenExpiresAt).toISOString(),
+        refreshTokenExpiresAt: new Date(tokenData.refreshTokenExpiresAt).toISOString()
+      });
+      
+      await this.storeTokens(tokenData);
+      this.memoryCache = tokenData;
+      this.cacheTimestamp = Date.now();
+      
+      // Verify tokens were stored
+      const storedTokenData = await this.getStoredToken();
+      if (!storedTokenData || !storedTokenData.refreshToken) {
+        throw new Error('Failed to verify token storage: tokens were not properly saved');
+      }
+      
+      console.log('✅ TokenManager: Token pair stored and verified successfully');
+    } catch (error) {
+      console.error('❌ TokenManager: Failed to store token pair:', error);
+      throw error;
+    }
   }
 
   async isTokenValid(): Promise<boolean> {

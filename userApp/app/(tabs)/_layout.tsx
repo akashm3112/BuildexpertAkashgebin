@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { View, Text, BackHandler } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotifications } from '@/context/NotificationContext';
+import { useBookings } from '@/context/BookingContext';
 import { useLanguage } from '@/context/LanguageContext';
 
 function NotificationTabIcon({ color, size }: { color: string; size: number }) {
@@ -12,6 +13,37 @@ function NotificationTabIcon({ color, size }: { color: string; size: number }) {
   return (
     <>
       <Bell size={size} color={color} />
+      {unreadCount > 0 && (
+        <View
+          style={{
+            position: 'absolute',
+            top: -2,
+            right: -6,
+            backgroundColor: '#EF4444',
+            borderRadius: 8,
+            minWidth: 16,
+            height: 16,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 3,
+            zIndex: 10,
+          }}
+        >
+          <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </Text>
+        </View>
+      )}
+    </>
+  );
+}
+
+function BookingTabIcon({ color, size }: { color: string; size: number }) {
+  const { unreadCount } = useBookings();
+
+  return (
+    <>
+      <Calendar size={size} color={color} />
       {unreadCount > 0 && (
         <View
           style={{
@@ -98,7 +130,7 @@ export default function TabLayout() {
         name="bookings"
         options={{
           title: t('toolbar.bookings'),
-          tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <BookingTabIcon color={color} size={size} />,
         }}
       />
       <Tabs.Screen

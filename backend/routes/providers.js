@@ -443,6 +443,42 @@ router.delete('/services/:id', asyncHandler(async (req, res) => {
   });
 }));
 
+// @route   GET /api/providers/bookings/unread-count
+// @desc    Get unread booking updates count for the logged-in provider
+// @access  Private
+router.get('/bookings/unread-count', auth, asyncHandler(async (req, res) => {
+  // Get provider's profile ID
+  const providerProfile = await getRow(
+    'SELECT id FROM provider_profiles WHERE user_id = $1',
+    [req.user.id]
+  );
+
+  if (!providerProfile) {
+    return res.json({
+      status: 'success',
+      data: { unreadCount: 0 }
+    });
+  }
+
+  // Count unread bookings (pending or cancelled) for this provider
+  const result = await getRows(
+    `SELECT COUNT(*) as count 
+     FROM bookings b
+     JOIN provider_services ps ON b.provider_service_id = ps.id
+     WHERE ps.provider_id = $1 
+       AND b.status IN ('pending', 'cancelled') 
+       AND b.is_viewed_by_provider = FALSE`,
+    [providerProfile.id]
+  );
+
+  const unreadCount = parseInt(result[0]?.count || 0);
+
+  res.json({
+    status: 'success',
+    data: { unreadCount }
+  });
+}));
+
 // @route   GET /api/providers/bookings
 // @desc    Get provider's bookings
 // @access  Private
@@ -466,7 +502,67 @@ router.get('/bookings', asyncHandler(async (req, res) => {
   });
 }));
 
+// @route   PUT /api/providers/bookings/mark-all-viewed
+// @desc    Mark all unread bookings as viewed (when provider opens bookings tab)
+// @access  Private
+router.put('/bookings/mark-all-viewed', auth, asyncHandler(async (req, res) => {
+  // Get provider's profile ID
+  const providerProfile = await getRow(
+    'SELECT id FROM provider_profiles WHERE user_id = $1',
+    [req.user.id]
+  );
 
+  if (!providerProfile) {
+    return res.json({
+      status: 'success',
+      message: 'Provider profile not found',
+      data: { updatedCount: 0 }
+    });
+  }
+
+  // Optimized: Check if there are any unread bookings first (avoid unnecessary UPDATE)
+  const unreadCheck = await getRow(
+    `SELECT COUNT(*) as count 
+     FROM bookings b
+     JOIN provider_services ps ON b.provider_service_id = ps.id
+     WHERE ps.provider_id = $1 
+       AND b.status IN ('pending', 'cancelled') 
+       AND b.is_viewed_by_provider = FALSE`,
+    [providerProfile.id]
+  );
+
+  const unreadCount = parseInt(unreadCheck?.count || 0);
+
+  // If no unread bookings, return early (optimization)
+  if (unreadCount === 0) {
+    return res.json({
+      status: 'success',
+      message: 'All bookings already viewed',
+      data: { updatedCount: 0 }
+    });
+  }
+
+  // Mark all unread bookings with tracked statuses as viewed
+  const result = await query(
+    `UPDATE bookings 
+     SET is_viewed_by_provider = TRUE 
+     FROM provider_services ps
+     WHERE bookings.provider_service_id = ps.id
+       AND ps.provider_id = $1
+       AND bookings.status IN ('pending', 'cancelled') 
+       AND bookings.is_viewed_by_provider = FALSE`,
+    [providerProfile.id]
+  );
+
+  // Emit socket event to update unread count in real-time
+  getIO().to(req.user.id).emit('booking_unread_count_update');
+
+  res.json({
+    status: 'success',
+    message: 'All bookings marked as viewed',
+    data: { updatedCount: result.rowCount || 0 }
+  });
+}));
 
 // @route   PUT /api/providers/bookings/:id/status
 // @desc    Update booking status (accept/reject/complete)
@@ -514,6 +610,12 @@ router.put('/bookings/:id/status', [
 
   // Always update updated_at when status changes
   updateFields.push(`updated_at = NOW()`);
+  
+  // Mark booking as unread when status changes to accepted, cancelled, or completed
+  // This triggers the unread badge for the user
+  if (['accepted', 'cancelled', 'completed'].includes(status)) {
+    updateFields.push(`is_viewed_by_user = FALSE`);
+  }
   
   updateValues.push(id);
   const result = await query(`
@@ -633,6 +735,22 @@ router.put('/bookings/:id/status', [
       getIO().to(req.user.id).emit('booking_updated', {
         booking: updatedBooking
       });
+      
+      // Emit booking_unread_count_update event to user for real-time badge update
+      // This triggers the frontend to refresh the unread count
+      if (['accepted', 'cancelled', 'completed'].includes(status)) {
+        getIO().to(bookingDetails.user_id).emit('booking_unread_count_update');
+      }
+      
+      // When provider accepts/rejects/completes a booking, mark it as viewed for provider
+      // This removes it from the unread count
+      await query(
+        `UPDATE bookings SET is_viewed_by_provider = TRUE WHERE id = $1`,
+        [id]
+      );
+      
+      // Emit booking_unread_count_update event to provider for real-time badge update
+      getIO().to(req.user.id).emit('booking_unread_count_update');
 
       // Emit earnings update to provider when booking is completed
       if (status === 'completed') {

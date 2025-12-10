@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -120,35 +120,16 @@ export default function ReportsScreen() {
   const slideAnim = useRef(new Animated.Value(50)).current;
   const filterAnim = useRef(new Animated.Value(0)).current;
 
+  // Refs to prevent duplicate API calls
+  const isLoadingReportsRef = useRef(false);
+  const lastLoadTimeRef = useRef(0);
+  const LOAD_THROTTLE_MS = 2000; // Minimum 2 seconds between loads
+
   useEffect(() => {
     if (user && user.role !== 'admin') {
       router.replace('/(tabs)');
     }
   }, [user?.role]);
-
-  useEffect(() => {
-    // Wait for auth to finish loading before fetching data
-    if (!authLoading && user?.id) {
-      loadReports();
-      loadStats();
-    } else if (!authLoading && !user?.id) {
-      setIsLoading(false);
-    }
-    
-    // Entrance animations
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [filter, user?.id, authLoading]);
 
   useEffect(() => {
     // Filter animation
@@ -160,7 +141,21 @@ export default function ReportsScreen() {
     }).start();
   }, [showFilters]);
 
-  const loadReports = async () => {
+  const loadReports = useCallback(async (force = false) => {
+    // Throttle: Prevent duplicate calls within throttle period
+    const now = Date.now();
+    if (!force && isLoadingReportsRef.current) {
+      if (__DEV__) console.log('⏸️  loadReports: Already loading, skipping...');
+      return;
+    }
+    if (!force && (now - lastLoadTimeRef.current) < LOAD_THROTTLE_MS) {
+      if (__DEV__) console.log('⏸️  loadReports: Throttled, skipping...');
+      return;
+    }
+
+    isLoadingReportsRef.current = true;
+    lastLoadTimeRef.current = now;
+
     try {
       const { tokenManager } = await import('@/utils/tokenManager');
       const token = await tokenManager.getValidToken();
@@ -169,12 +164,13 @@ export default function ReportsScreen() {
         Alert.alert('Authentication Error', 'Please log in again to view reports.');
         setIsLoading(false);
         setIsRefreshing(false);
+        isLoadingReportsRef.current = false;
         return;
       }
 
-      const url = filter === 'all' 
-        ? `${API_BASE_URL}/api/admin/reports`
-        : `${API_BASE_URL}/api/admin/reports?status=${filter}`;
+      // Always fetch ALL reports - filtering is done client-side for better performance
+      // This matches the pattern used in userApp bookings screen
+      const url = `${API_BASE_URL}/api/admin/reports`;
 
       const response = await fetch(url, {
         headers: {
@@ -186,7 +182,9 @@ export default function ReportsScreen() {
         const data = await response.json();
         if (data.status === 'success') {
           const reportsData = data.data?.reports || [];
-          console.log(`Loaded ${reportsData.length} reports`);
+          if (__DEV__) {
+            console.log(`📋 Loaded ${reportsData.length} reports (all statuses)`);
+          }
           setReports(reportsData);
         } else {
           console.error('API returned error status:', data.message || 'Unknown error');
@@ -203,10 +201,11 @@ export default function ReportsScreen() {
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
+      isLoadingReportsRef.current = false;
     }
-  };
+  }, []); // Empty deps - function doesn't depend on any props/state
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const { tokenManager } = await import('@/utils/tokenManager');
       const token = await tokenManager.getValidToken();
@@ -234,24 +233,63 @@ export default function ReportsScreen() {
     } catch (error) {
       console.error('Error loading stats:', error);
     }
-  };
+  }, []); // Empty deps - function doesn't depend on any props/state
 
-  const onRefresh = () => {
+  // Add useEffect to load data on mount and when user/auth changes
+  useEffect(() => {
+    // Wait for auth to finish loading before fetching data
+    if (!authLoading && user?.id) {
+      loadReports(true); // Force load on mount/auth change
+      loadStats();
+      
+      // Entrance animations
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else if (!authLoading && !user?.id) {
+      setIsLoading(false);
+    }
+  }, [user?.id, authLoading, loadReports, loadStats]); // Include memoized functions in deps
+
+  const onRefresh = useCallback(() => {
     setIsRefreshing(true);
-    loadReports();
+    loadReports(true); // Force refresh
     loadStats();
-  };
+  }, [loadReports, loadStats]);
 
-  const filteredReports = reports.filter(report => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      report.report_type.toLowerCase().includes(query) ||
-      report.description.toLowerCase().includes(query) ||
-      report.reporter_name.toLowerCase().includes(query) ||
-      report.reported_provider_name.toLowerCase().includes(query)
-    );
-  });
+  // Memoized filtered reports - filters by status and search query client-side
+  // This prevents unnecessary re-renders and API calls when filters change
+  // Matches the pattern used in userApp bookings screen
+  const filteredReports = useMemo(() => {
+    return reports.filter(report => {
+      // Filter by status (client-side)
+      if (filter !== 'all' && report.status !== filter) {
+        return false;
+      }
+
+      // Filter by search query (client-side)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          report.report_type.toLowerCase().includes(query) ||
+          report.description.toLowerCase().includes(query) ||
+          report.reporter_name.toLowerCase().includes(query) ||
+          report.reported_provider_name.toLowerCase().includes(query)
+        );
+      }
+
+      return true;
+    });
+  }, [reports, filter, searchQuery]); // Only recalculate when reports, filter, or searchQuery changes
 
   const updateReportStatus = async (reportId: string, status: 'open' | 'resolved' | 'closed') => {
     try {
@@ -269,8 +307,8 @@ export default function ReportsScreen() {
       });
 
       if (response.ok) {
-        // Reload reports
-        loadReports();
+        // Reload reports (force to bypass throttle)
+        loadReports(true);
       } else {
         console.error('Failed to update report status');
       }
@@ -303,7 +341,7 @@ export default function ReportsScreen() {
 
               if (response.ok) {
                 Alert.alert('Success', 'User removed successfully');
-                loadReports();
+                loadReports(true); // Force reload
               } else {
                 Alert.alert('Error', 'Failed to remove user');
               }
@@ -377,7 +415,7 @@ export default function ReportsScreen() {
 
               if (response.ok) {
                 Alert.alert('Success', 'Provider removed successfully');
-                loadReports();
+                loadReports(true); // Force reload
               } else {
                 Alert.alert('Error', 'Failed to remove provider');
               }
@@ -461,13 +499,10 @@ export default function ReportsScreen() {
     const userRemovalTargetName = userRemovalTarget?.name || (item.reported_type === 'User' ? 'Reported User' : 'Reporter');
     const providerRemovalTargetId = providerRemovalTarget?.id;
     const providerRemovalTargetName = providerRemovalTarget?.name || (item.reported_type === 'Provider' ? 'Reported Provider' : 'Reporter');
-    const isLastItem = index === filteredReports.length - 1;
-
     return (
       <Animated.View 
         style={[
           styles.reportCard,
-          isLastItem && { marginBottom: 0 },
           {
             opacity: fadeAnim,
             transform: [
@@ -489,11 +524,15 @@ export default function ReportsScreen() {
             <View style={styles.reportInfo}>
               <View style={styles.reportTypeContainer}>
                 <MessageSquare size={getResponsiveValue(16, 18, 20)} color="#3B82F6" />
-                <Text style={styles.reportType}>{item.report_type}</Text>
+                <Text style={styles.reportType} numberOfLines={2} ellipsizeMode="tail">
+                  {item.report_type}
+                </Text>
               </View>
               <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                 <StatusIcon size={getResponsiveValue(12, 14, 16)} color="white" />
-                <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+                <Text style={styles.statusText} numberOfLines={1}>
+                  {item.status.toUpperCase()}
+                </Text>
               </View>
             </View>
             <TouchableOpacity
@@ -503,7 +542,7 @@ export default function ReportsScreen() {
                 setShowReportModal(true);
               }}
             >
-              <Info size={getResponsiveValue(22, 24, 26)} color="#6B7280" />
+              <Info size={getResponsiveValue(20, 22, 24)} color="#6B7280" />
             </TouchableOpacity>
           </View>
 
@@ -520,8 +559,12 @@ export default function ReportsScreen() {
               </View>
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Reported by</Text>
-                <Text style={styles.detailText}>{item.reporter_name}</Text>
-                <Text style={styles.detailPhone}>{item.reporter_phone}</Text>
+                <Text style={styles.detailText} numberOfLines={1} ellipsizeMode="tail">
+                  {item.reporter_name}
+                </Text>
+                <Text style={styles.detailPhone} numberOfLines={1}>
+                  {item.reporter_phone}
+                </Text>
               </View>
             </View>
 
@@ -531,8 +574,12 @@ export default function ReportsScreen() {
               </View>
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Reported provider</Text>
-                <Text style={styles.detailText}>{item.reported_provider_name}</Text>
-                <Text style={styles.detailPhone}>{item.reported_provider_phone}</Text>
+                <Text style={styles.detailText} numberOfLines={1} ellipsizeMode="tail">
+                  {item.reported_provider_name}
+                </Text>
+                <Text style={styles.detailPhone} numberOfLines={1}>
+                  {item.reported_provider_phone}
+                </Text>
               </View>
             </View>
 
@@ -554,7 +601,7 @@ export default function ReportsScreen() {
                 onPress={() => updateReportStatus(item.id, 'resolved')}
               >
                 <CheckCircle size={getResponsiveValue(14, 16, 18)} color="white" />
-                <Text style={styles.actionButtonText}>Resolve</Text>
+                <Text style={styles.actionButtonText} numberOfLines={1}>Resolve</Text>
               </TouchableOpacity>
             )}
             
@@ -564,7 +611,7 @@ export default function ReportsScreen() {
                 onPress={() => updateReportStatus(item.id, 'closed')}
               >
                 <XCircle size={getResponsiveValue(14, 16, 18)} color="white" />
-                <Text style={styles.actionButtonText}>Close</Text>
+                <Text style={styles.actionButtonText} numberOfLines={1}>Close</Text>
               </TouchableOpacity>
             )}
 
@@ -982,9 +1029,9 @@ const styles = StyleSheet.create({
   // Header Styles
   header: {
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'ios' ? 8 : 12,
+    paddingTop: Platform.OS === 'ios' ? getResponsiveValue(8, 10, 12) : getResponsiveValue(8, 10, 12),
     paddingHorizontal: getResponsivePadding(),
-    paddingBottom: 8,
+    paddingBottom: getResponsiveValue(12, 14, 16),
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     ...Platform.select({
@@ -1016,7 +1063,7 @@ const styles = StyleSheet.create({
   },
   headerInfo: {
     flex: 1,
-    marginRight: 12,
+    marginRight: getResponsiveValue(10, 12, 14),
     minWidth: 0, // Allows text to shrink
   },
   title: {
@@ -1050,20 +1097,20 @@ const styles = StyleSheet.create({
   // Stats Section
   statsSection: {
     backgroundColor: '#FFFFFF',
-    paddingTop: getResponsivePadding() * 0.5,
-    paddingBottom: 0,
+    paddingTop: getResponsiveValue(12, 14, 16),
+    paddingBottom: getResponsiveValue(12, 14, 16),
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
   statsScrollContent: {
     paddingHorizontal: getResponsivePadding(),
-    paddingRight: getResponsivePadding() + 4,
+    paddingRight: getResponsivePadding() + getResponsiveValue(4, 8, 12),
   },
   statsCard: {
     width: isSmallScreen ? 140 : isTablet ? 180 : 160,
     height: isSmallScreen ? 90 : isTablet ? 110 : 100,
     borderRadius: 12,
-    marginRight: 12,
+    marginRight: getResponsiveValue(10, 12, 16),
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -1120,8 +1167,8 @@ const styles = StyleSheet.create({
   searchSection: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: getResponsivePadding(),
-    paddingTop: getResponsivePadding() * 0.5,
-    paddingBottom: 0,
+    paddingTop: getResponsiveValue(12, 14, 16),
+    paddingBottom: getResponsiveValue(12, 14, 16),
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
@@ -1147,24 +1194,24 @@ const styles = StyleSheet.create({
   // Filter Section
   filterSection: {
     backgroundColor: '#FFFFFF',
+    paddingTop: getResponsiveValue(8, 10, 12),
+    paddingBottom: getResponsiveValue(12, 14, 16),
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
   filterScrollContent: {
     paddingHorizontal: getResponsivePadding(),
-    paddingTop: getResponsivePadding() * 0.5,
-    paddingBottom: 0,
-    paddingRight: getResponsivePadding() + 4,
+    paddingRight: getResponsivePadding() + getResponsiveValue(4, 8, 12),
   },
   filterButton: {
-    paddingHorizontal: isSmallScreen ? 14 : 16,
-    paddingVertical: isSmallScreen ? 7 : 8,
-    marginRight: 10,
+    paddingHorizontal: getResponsiveValue(14, 16, 18),
+    paddingVertical: getResponsiveValue(8, 10, 12),
+    marginRight: getResponsiveValue(8, 10, 12),
     borderRadius: 20,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: 'transparent',
-    minWidth: 60,
+    minWidth: getResponsiveValue(60, 70, 80),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1188,13 +1235,13 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: getResponsivePadding(),
-    paddingTop: 0,
-    paddingBottom: 0,
+    paddingTop: getResponsiveValue(12, 16, 20),
+    paddingBottom: getResponsiveValue(100, 120, 140), // Safe area bottom spacing for tab bar
   },
 
   // Report Card Styles
   reportCard: {
-    marginBottom: 12,
+    marginBottom: getResponsiveValue(12, 16, 20),
     borderRadius: 16,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
@@ -1211,41 +1258,44 @@ const styles = StyleSheet.create({
     }),
   },
   reportGradient: {
-    padding: getResponsivePadding(),
+    padding: getResponsiveValue(14, 16, 20),
   },
   reportHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: getResponsiveValue(12, 14, 16),
     width: '100%',
   },
   reportInfo: {
     flex: 1,
-    marginRight: 8,
+    marginRight: getResponsiveValue(8, 10, 12),
     minWidth: 0, // Allows text to shrink
   },
   reportTypeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: getResponsiveValue(8, 10, 12),
     flexWrap: 'wrap',
+    flex: 1,
+    marginRight: getResponsiveValue(8, 10, 12),
   },
   reportType: {
     fontSize: getResponsiveFontSize(16, 17, 18),
     fontWeight: '700',
     color: '#111827',
-    marginLeft: 6,
+    marginLeft: getResponsiveValue(6, 8, 10),
     flexShrink: 1,
+    flex: 1,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: isSmallScreen ? 10 : 12,
-    paddingVertical: isSmallScreen ? 5 : 6,
+    paddingHorizontal: getResponsiveValue(10, 12, 14),
+    paddingVertical: getResponsiveValue(5, 6, 8),
     borderRadius: 16,
     alignSelf: 'flex-start',
-    marginTop: 4,
+    marginTop: getResponsiveValue(4, 6, 8),
   },
   statusText: {
     fontSize: getResponsiveFontSize(11, 12, 13),
@@ -1263,7 +1313,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   reportDescriptionContainer: {
-    marginBottom: 12,
+    marginBottom: getResponsiveValue(12, 14, 16),
   },
   reportDescription: {
     fontSize: getResponsiveFontSize(14, 15, 16),
@@ -1272,22 +1322,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   reportDetails: {
-    marginBottom: 12,
+    marginBottom: getResponsiveValue(12, 14, 16),
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 10,
+    marginBottom: getResponsiveValue(10, 12, 14),
     width: '100%',
   },
   detailIconContainer: {
-    width: isSmallScreen ? 32 : 36,
-    height: isSmallScreen ? 32 : 36,
-    borderRadius: isSmallScreen ? 16 : 18,
+    width: getResponsiveValue(32, 36, 40),
+    height: getResponsiveValue(32, 36, 40),
+    borderRadius: getResponsiveValue(16, 18, 20),
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: getResponsiveValue(10, 12, 14),
     flexShrink: 0,
   },
   detailContent: {
@@ -1314,21 +1364,26 @@ const styles = StyleSheet.create({
   reportActions: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexWrap: 'wrap',
-    marginTop: 12,
+    marginTop: getResponsiveValue(12, 14, 16),
+    marginHorizontal: -getResponsiveValue(3, 4, 5), // Negative margin to offset button margins
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: isSmallScreen ? 14 : 16,
-    paddingVertical: isSmallScreen ? 10 : 12,
+    paddingHorizontal: getResponsiveValue(12, 14, 16),
+    paddingVertical: getResponsiveValue(10, 12, 14),
     borderRadius: 10,
-    minHeight: 40,
-    marginRight: 8,
-    marginBottom: 8,
+    minHeight: getResponsiveValue(40, 44, 48),
+    marginRight: getResponsiveValue(6, 8, 10),
+    marginBottom: getResponsiveValue(6, 8, 10),
     borderWidth: 1,
+    flexShrink: 1,
+    flex: isSmallScreen ? 1 : 0, // Full width on small screens, auto on larger
+    minWidth: isSmallScreen ? '48%' : 'auto', // Two buttons per row on small screens
+    maxWidth: isSmallScreen ? '48%' : '100%',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -1357,9 +1412,10 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(12, 13, 14),
     fontWeight: '700',
     color: '#FFFFFF',
-    marginLeft: 6,
+    marginLeft: getResponsiveValue(6, 8, 10),
     flexShrink: 1,
     textAlign: 'center',
+    maxWidth: '100%',
   },
 
   // Loading and Empty States
@@ -1404,9 +1460,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   modalHeader: {
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingTop: Platform.OS === 'ios' ? getResponsiveValue(50, 54, 60) : getResponsiveValue(20, 24, 28),
     paddingHorizontal: getResponsivePadding(),
-    paddingBottom: 16,
+    paddingBottom: getResponsiveValue(14, 16, 18),
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
@@ -1430,7 +1486,7 @@ const styles = StyleSheet.create({
   },
   modalTitleContainer: {
     flex: 1,
-    marginRight: 12,
+    marginRight: getResponsiveValue(10, 12, 14),
     minWidth: 0,
   },
   modalTitle: {
@@ -1462,25 +1518,26 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: getResponsivePadding(),
+    paddingBottom: getResponsiveValue(20, 24, 28),
   },
   modalSection: {
-    marginBottom: 16,
+    marginBottom: getResponsiveValue(16, 18, 20),
   },
   modalSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: getResponsiveValue(10, 12, 14),
   },
   modalSectionTitle: {
     fontSize: getResponsiveFontSize(15, 16, 17),
     fontWeight: '700',
     color: '#111827',
-    marginLeft: 8,
+    marginLeft: getResponsiveValue(8, 10, 12),
   },
   modalInfoCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: isSmallScreen ? 12 : 14,
+    padding: getResponsiveValue(12, 14, 16),
     borderWidth: 1,
     borderColor: '#E5E7EB',
     ...Platform.select({
@@ -1498,7 +1555,7 @@ const styles = StyleSheet.create({
   modalActionsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: isSmallScreen ? 12 : 14,
+    padding: getResponsiveValue(12, 14, 16),
     borderWidth: 1,
     borderColor: '#E5E7EB',
     ...Platform.select({
@@ -1515,7 +1572,7 @@ const styles = StyleSheet.create({
   },
   modalInfoRow: {
     flexDirection: 'column',
-    paddingVertical: 6,
+    paddingVertical: getResponsiveValue(6, 8, 10),
   },
   modalInfoLabel: {
     fontSize: getResponsiveFontSize(11, 12, 13),
@@ -1545,16 +1602,16 @@ const styles = StyleSheet.create({
   modalDivider: {
     height: 1,
     backgroundColor: '#E5E7EB',
-    marginVertical: 6,
+    marginVertical: getResponsiveValue(6, 8, 10),
   },
   modalActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: isSmallScreen ? 12 : 14,
-    paddingHorizontal: isSmallScreen ? 16 : 20,
+    paddingVertical: getResponsiveValue(12, 14, 16),
+    paddingHorizontal: getResponsiveValue(16, 18, 20),
     borderRadius: 10,
-    marginVertical: 6,
+    marginVertical: getResponsiveValue(6, 8, 10),
     width: '100%',
     borderWidth: 1.5,
     ...Platform.select({
@@ -1573,7 +1630,7 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(14, 15, 16),
     fontWeight: '700',
     color: '#FFFFFF',
-    marginLeft: 8,
+    marginLeft: getResponsiveValue(8, 10, 12),
     textAlign: 'center',
   },
   modalResolveButton: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -148,7 +148,7 @@ export default function ReportsScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [filter, user?.id, authLoading]);
+  }, [user?.id, authLoading]); // Removed 'filter' from dependencies - filtering is now client-side only
 
   useEffect(() => {
     // Filter animation
@@ -172,9 +172,8 @@ export default function ReportsScreen() {
         return;
       }
 
-      const url = filter === 'all' 
-        ? `${API_BASE_URL}/api/admin/reports`
-        : `${API_BASE_URL}/api/admin/reports?status=${filter}`;
+      // Always fetch ALL reports - filtering is done client-side for better performance
+      const url = `${API_BASE_URL}/api/admin/reports`;
 
       const response = await fetch(url, {
         headers: {
@@ -186,7 +185,9 @@ export default function ReportsScreen() {
         const data = await response.json();
         if (data.status === 'success') {
           const reportsData = data.data?.reports || [];
-          console.log(`Loaded ${reportsData.length} reports`);
+          if (__DEV__) {
+            console.log(`📋 Loaded ${reportsData.length} reports (all statuses)`);
+          }
           setReports(reportsData);
         } else {
           console.error('API returned error status:', data.message || 'Unknown error');
@@ -242,16 +243,29 @@ export default function ReportsScreen() {
     loadStats();
   };
 
-  const filteredReports = reports.filter(report => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      report.report_type.toLowerCase().includes(query) ||
-      report.description.toLowerCase().includes(query) ||
-      report.reporter_name.toLowerCase().includes(query) ||
-      report.reported_provider_name.toLowerCase().includes(query)
-    );
-  });
+  // Memoized filtered reports - filters by status and search query client-side
+  // This prevents unnecessary re-renders and API calls when filters change
+  const filteredReports = useMemo(() => {
+    return reports.filter(report => {
+      // Filter by status (client-side)
+      if (filter !== 'all' && report.status !== filter) {
+        return false;
+      }
+
+      // Filter by search query (client-side)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          report.report_type.toLowerCase().includes(query) ||
+          report.description.toLowerCase().includes(query) ||
+          report.reporter_name.toLowerCase().includes(query) ||
+          report.reported_provider_name.toLowerCase().includes(query)
+        );
+      }
+
+      return true;
+    });
+  }, [reports, filter, searchQuery]); // Only recalculate when reports, filter, or searchQuery changes
 
   const updateReportStatus = async (reportId: string, status: 'open' | 'resolved' | 'closed') => {
     try {

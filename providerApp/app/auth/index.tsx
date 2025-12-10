@@ -303,16 +303,37 @@ function AuthScreen() {
       
       if (response.ok) {
         try {
+          // Validate response data
+          if (!data.data) {
+            throw new Error('Invalid response: missing data field');
+          }
+          
+          if (!data.data.accessToken || !data.data.refreshToken) {
+            console.error('❌ Login response missing tokens:', {
+              hasAccessToken: !!data.data.accessToken,
+              hasRefreshToken: !!data.data.refreshToken,
+              responseData: data.data
+            });
+            throw new Error('Invalid response: missing access token or refresh token');
+          }
+          
           // Store tokens using TokenManager if available
           const { tokenManager } = await import('@/utils/tokenManager');
-          if (data.data.accessToken && data.data.refreshToken) {
-            await tokenManager.storeTokenPair(
-              data.data.accessToken,
-              data.data.refreshToken,
-              data.data.accessTokenExpiresAt,
-              data.data.refreshTokenExpiresAt
-            );
-          }
+          console.log('📱 Storing tokens after login:', {
+            hasAccessToken: !!data.data.accessToken,
+            hasRefreshToken: !!data.data.refreshToken,
+            accessTokenExpiresAt: data.data.accessTokenExpiresAt,
+            refreshTokenExpiresAt: data.data.refreshTokenExpiresAt
+          });
+          
+          await tokenManager.storeTokenPair(
+            data.data.accessToken,
+            data.data.refreshToken,
+            data.data.accessTokenExpiresAt,
+            data.data.refreshTokenExpiresAt
+          );
+          
+          console.log('✅ Tokens stored successfully');
           
           // Save user data to context
           const userData = {
@@ -330,9 +351,10 @@ function AuthScreen() {
           setTimeout(() => {
             router.replace('/');
           }, 300);
-        } catch (storageError) {
-          console.error('Storage error during login:', storageError);
-          showModal('Storage Error', 'Failed to save login data. Please try again.', 'error');
+        } catch (storageError: any) {
+          console.error('❌ Storage error during login:', storageError);
+          const errorMessage = storageError?.message || 'Failed to save login data. Please try again.';
+          showModal('Storage Error', errorMessage, 'error');
         }
       } else {
         showModal('Login Failed', data.message || 'Invalid phone number or password', 'error');
