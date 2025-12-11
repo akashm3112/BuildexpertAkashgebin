@@ -141,6 +141,7 @@ const validateResendOTP = [
     .custom(validatePhoneNumber)
     .withMessage('Please enter a valid 10-digit mobile number'),
   body('role')
+    .optional()
     .isIn(['user', 'provider'])
     .withMessage('Role must be either user or provider'),
   handleValidationErrors

@@ -244,10 +244,23 @@ const uploadMultipleImages = async (imageFiles, folder = 'buildxpert') => {
 
 // Delete image from Cloudinary
 const deleteImage = async (publicId) => {
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  
   try {
+    // PRODUCTION FIX: Input validation
+    if (!publicId || typeof publicId !== 'string' || publicId.trim().length === 0) {
+      return {
+        success: false,
+        error: 'Invalid public ID: must be a non-empty string',
+        isMock: false
+      };
+    }
+    
     // If it's a mock image, just return success
-    if (publicId.startsWith('mock-')) {
-      console.log('Mock image deletion (no-op):', publicId);
+    if (publicId.startsWith('mock-') || publicId.includes('mock-image-')) {
+      if (isDevelopment) {
+        console.log('Mock image deletion (no-op):', publicId);
+      }
       return {
         success: true,
         message: 'Mock image deleted',
@@ -255,19 +268,53 @@ const deleteImage = async (publicId) => {
       };
     }
     
+    // Check if Cloudinary is configured before attempting deletion
+    if (!isCloudinaryConfigured()) {
+      if (isDevelopment) {
+        console.log('Cloudinary not configured, skipping deletion:', publicId);
+      }
+      return {
+        success: true,
+        message: 'Cloudinary not configured (skipped)',
+        isMock: true
+      };
+    }
+    
     const result = await cloudinary.uploader.destroy(publicId);
-    console.log('Delete result:', result);
+    if (isDevelopment) {
+      console.log('Delete result:', result);
+    }
+    
+    // PRODUCTION FIX: Handle unexpected response format
+    if (!result || typeof result !== 'object') {
+      return {
+        success: false,
+        error: 'Unexpected response format from Cloudinary',
+        isMock: false
+      };
+    }
+    
+    // PRODUCTION FIX: Treat "not found" as success (image already deleted, which is what we want)
+    // Only treat actual errors as failures
+    // Cloudinary returns: { result: 'ok' } for success, { result: 'not found' } for already deleted
+    const resultStatus = result.result || 'unknown';
+    const isSuccess = resultStatus === 'ok' || resultStatus === 'not found';
     
     return {
-      success: result.result === 'ok',
-      message: result.result,
-      isMock: false
+      success: isSuccess,
+      message: resultStatus,
+      isMock: false,
+      alreadyDeleted: resultStatus === 'not found' // Flag for logging purposes
     };
   } catch (error) {
-    console.error('Cloudinary delete error:', error);
+    // Only log actual errors, not "not found" cases
+    const errorMessage = error?.message || 'Unknown error';
+    if (!errorMessage.includes('not found')) {
+      console.error('Cloudinary delete error:', errorMessage);
+    }
     return {
       success: false,
-      error: error.message,
+      error: errorMessage,
       isMock: false
     };
   }
@@ -275,34 +322,95 @@ const deleteImage = async (publicId) => {
 
 // Delete multiple images from Cloudinary
 const deleteMultipleImages = async (publicIds) => {
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  
   try {
-    console.log('Attempting to delete', publicIds.length, 'images from Cloudinary...');
+    // PRODUCTION FIX: Input validation
+    if (!Array.isArray(publicIds)) {
+      return {
+        success: false,
+        error: 'Invalid input: publicIds must be an array',
+        deleted: 0,
+        failed: 0,
+        mock: 0,
+        errors: ['Invalid input: publicIds must be an array']
+      };
+    }
     
+    // Handle empty array
+    if (publicIds.length === 0) {
+      return {
+        success: true,
+        deleted: 0,
+        alreadyDeleted: 0,
+        failed: 0,
+        mock: 0,
+        errors: []
+      };
+    }
+    
+    if (isDevelopment) {
+      console.log('Attempting to delete', publicIds.length, 'images from Cloudinary...');
+    }
+    
+    // PRODUCTION FIX: Use Promise.allSettled instead of Promise.all to handle individual failures gracefully
     const deletePromises = publicIds.map(publicId => deleteImage(publicId));
-    const results = await Promise.all(deletePromises);
+    const settledResults = await Promise.allSettled(deletePromises);
     
-    const successfulDeletes = results.filter(result => result.success);
-    const failedDeletes = results.filter(result => !result.success);
-    const mockDeletes = results.filter(result => result.isMock);
-    
-    console.log('Delete results:', {
-      successful: successfulDeletes.length,
-      failed: failedDeletes.length,
-      mock: mockDeletes.length
+    // Extract results, handling both fulfilled and rejected promises
+    const results = settledResults.map((settled, index) => {
+      if (settled.status === 'fulfilled') {
+        return settled.value;
+      } else {
+        // Handle promise rejection (shouldn't happen with our error handling, but be safe)
+        return {
+          success: false,
+          error: settled.reason?.message || 'Unknown error during deletion',
+          isMock: false
+        };
+      }
     });
     
+    const successfulDeletes = results.filter(result => result && result.success);
+    const failedDeletes = results.filter(result => result && !result.success);
+    const mockDeletes = results.filter(result => result && result.isMock);
+    const alreadyDeleted = results.filter(result => result && result.alreadyDeleted);
+    
+    if (isDevelopment) {
+      console.log('Delete results:', {
+        successful: successfulDeletes.length,
+        alreadyDeleted: alreadyDeleted.length,
+        failed: failedDeletes.length,
+        mock: mockDeletes.length
+      });
+    }
+    
+    // PRODUCTION FIX: Consider deletion successful if:
+    // 1. All deletions succeeded (including "not found" = already deleted)
+    // 2. Or only mock images were processed
+    // Only fail if there were actual errors (not "not found" cases)
+    const actualFailures = failedDeletes.filter(result => 
+      result && result.error && !result.error.includes('not found')
+    );
+    
     return {
-      success: failedDeletes.length === 0,
+      success: actualFailures.length === 0, // Only fail on actual errors
       deleted: successfulDeletes.length,
-      failed: failedDeletes.length,
+      alreadyDeleted: alreadyDeleted.length,
+      failed: actualFailures.length,
       mock: mockDeletes.length,
-      errors: failedDeletes.map(result => result.error)
+      errors: actualFailures.map(result => result.error).filter(Boolean)
     };
   } catch (error) {
-    console.error('Multiple images delete error:', error);
+    const errorMessage = error?.message || 'Unknown error';
+    console.error('Multiple images delete error:', errorMessage);
     return {
       success: false,
-      error: error.message
+      error: errorMessage,
+      deleted: 0,
+      failed: Array.isArray(publicIds) ? publicIds.length : 0,
+      mock: 0,
+      errors: [errorMessage]
     };
   }
 };

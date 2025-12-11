@@ -833,42 +833,75 @@ router.delete('/my-registrations/:serviceId', auth, requireRole(['provider']), a
         count: serviceRegistration.working_proof_urls.length
       });
       
-      // Extract public IDs from Cloudinary URLs
-      const publicIds = serviceRegistration.working_proof_urls.map(url => {
-        // Extract public ID from Cloudinary URL
-        // URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/image_name.jpg
-        const urlParts = url.split('/');
-        const uploadIndex = urlParts.indexOf('upload');
-        if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
-          // Skip version number and get folder + filename
-          const folderAndFile = urlParts.slice(uploadIndex + 2).join('/');
-          // Remove file extension
-          return folderAndFile.replace(/\.[^/.]+$/, '');
-        }
-        return null;
-      }).filter(Boolean);
+      // Extract public IDs from Cloudinary URLs, filtering out mock URLs
+      const publicIds = serviceRegistration.working_proof_urls
+        .filter(url => {
+          // Filter out mock URLs (mock-cloud domain) and invalid URLs
+          if (!url || typeof url !== 'string') return false;
+          if (url.includes('mock-cloud') || url.includes('/mock-image-')) {
+            logger.info('Skipping mock URL (no deletion needed)', { url: url.substring(0, 100) });
+            return false;
+          }
+          return true;
+        })
+        .map(url => {
+          // Extract public ID from Cloudinary URL
+          // URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/image_name.jpg
+          try {
+            const urlParts = url.split('/');
+            const uploadIndex = urlParts.indexOf('upload');
+            if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
+              // Skip version number and get folder + filename
+              const folderAndFile = urlParts.slice(uploadIndex + 2).join('/');
+              // Remove file extension
+              return folderAndFile.replace(/\.[^/.]+$/, '');
+            }
+          } catch (error) {
+            logger.warn('Failed to extract public ID from URL', { url: url.substring(0, 100), error: error.message });
+          }
+          return null;
+        })
+        .filter(Boolean);
 
       if (publicIds.length > 0) {
         const deleteResult = await deleteMultipleImages(publicIds);
-        if (deleteResult.success) {
-          logger.info('Successfully deleted images from Cloudinary', {
-            count: deleteResult.deleted
-          });
-        } else {
-          logger.error('Failed to delete some images from Cloudinary', {
-            errors: deleteResult.errors
+        // Treat deletion as successful even if some images were already deleted (not found)
+        // Only log errors for actual failures, not for "already deleted" cases
+        if (deleteResult.deleted > 0 || deleteResult.alreadyDeleted > 0 || deleteResult.mock > 0) {
+          logger.info('Successfully processed image deletions', {
+            deleted: deleteResult.deleted,
+            alreadyDeleted: deleteResult.alreadyDeleted || 0,
+            mock: deleteResult.mock,
+            failed: deleteResult.failed
           });
         }
+        // Only log as warning if there were actual failures (not "not found" cases)
+        if (deleteResult.failed > 0 && deleteResult.errors && deleteResult.errors.length > 0) {
+          const actualErrors = deleteResult.errors.filter(err => err && !err.includes('not found'));
+          if (actualErrors.length > 0) {
+            logger.warn('Some images failed to delete from Cloudinary', {
+              failed: deleteResult.failed,
+              errors: actualErrors
+            });
+          }
+        }
+      } else {
+        logger.info('No valid Cloudinary URLs to delete (all were mock URLs or invalid)');
       }
   }
 
-  // Check for existing bookings referencing this provider service
+  // Check for existing ACTIVE bookings referencing this provider service
+  // Only prevent deletion if there are pending or accepted bookings
+  // Cancelled, rejected, and completed bookings should not prevent deletion
   const bookingCount = await getRow(
-      'SELECT COUNT(*) FROM bookings WHERE provider_service_id = $1',
+      `SELECT COUNT(*) as count 
+       FROM bookings 
+       WHERE provider_service_id = $1 
+         AND status IN ('pending', 'accepted')`,
       [serviceId]
     );
   if (parseInt(bookingCount.count) > 0) {
-    throw new ValidationError('Cannot delete service registration: there are existing bookings referencing this service.');
+    throw new ValidationError('Cannot delete service registration: there are active bookings (pending or accepted) for this service. Please wait for these bookings to be completed or cancelled before deleting the service.');
   }
 
   // Delete the service registration

@@ -35,6 +35,8 @@ const addLocationIndexes = require('./021-add-location-indexes');
 const addBookingViewedColumn = require('./022-add-booking-viewed-column');
 const addBookingProviderViewedColumn = require('./023-add-booking-provider-viewed-column');
 const addNotificationCreatedAtIndex = require('./024-add-notification-created-at-index');
+const addServiceChargeToBookings = require('./025-add-service-charge-to-bookings');
+const fixBookingsCascadeDelete = require('./026-fix-bookings-cascade-delete');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -205,6 +207,20 @@ const migrations = [
     description: 'Adds indexes on notifications.created_at for efficient notification cleanup queries',
     function: addNotificationCreatedAtIndex,
     required: true // Required for notification cleanup service performance
+  },
+  {
+    id: '025',
+    name: 'Add Service Charge To Bookings',
+    description: 'Adds service_charge_value column to bookings table to persist earnings even after service deletion',
+    function: addServiceChargeToBookings,
+    required: true // Required for earnings persistence
+  },
+  {
+    id: '026',
+    name: 'Fix Bookings CASCADE DELETE',
+    description: 'Changes bookings.provider_service_id foreign key from CASCADE to SET NULL to preserve bookings when service is deleted',
+    function: fixBookingsCascadeDelete,
+    required: true // Required to prevent bookings from being deleted when service is deleted
   }
 ];
 

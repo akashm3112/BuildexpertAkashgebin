@@ -291,6 +291,14 @@ export default function MobileVerificationScreen() {
 
     if (timer > 0) return;
 
+    // Clean phone number (remove country code prefixes, spaces, etc.) to match backend format
+    const cleanPhone = String(phone || '').replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '').replace(/\D/g, '');
+    
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      showModal('Invalid Phone Number', 'Please enter a valid 10-digit phone number', 'error');
+      return;
+    }
+
     setIsResending(true);
     setSmsStatus('pending');
     try {
@@ -300,7 +308,7 @@ export default function MobileVerificationScreen() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          phone: phone as string,
+          phone: cleanPhone,
         }),
       });
 

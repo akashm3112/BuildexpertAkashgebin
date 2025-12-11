@@ -192,12 +192,15 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
 
   // Create booking (store normalized time for consistency)
   // Mark as unread for provider (new booking notification)
+  // Store service_charge_value and provider_id to persist earnings even if service is deleted
   const timeToStore = normalizedAppointmentTime;
+  const serviceChargeValue = providerService.service_charge_value || 0;
+  const providerId = providerService.provider_id;
   const result = await query(`
-      INSERT INTO bookings (user_id, provider_service_id, selected_service, appointment_date, appointment_time, is_viewed_by_provider)
-      VALUES ($1, $2, $3, $4, $5, FALSE)
+      INSERT INTO bookings (user_id, provider_service_id, provider_id, selected_service, appointment_date, appointment_time, service_charge_value, is_viewed_by_provider)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE)
       RETURNING *
-    `, [req.user.id, providerServiceId, selectedService, appointmentDate, timeToStore]);
+    `, [req.user.id, providerServiceId, providerId, selectedService, appointmentDate, timeToStore, serviceChargeValue]);
 
   const newBooking = result.rows[0];
 

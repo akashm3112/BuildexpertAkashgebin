@@ -474,7 +474,6 @@ server.listen(PORT, '0.0.0.0', async () => {
   initializeCleanupJob(); // Auth data cleanup (tokens, sessions, security logs)
   notificationQueue.start();
   notificationCleanupService.start(); // Notification cleanup (runs weekly on Sundays at 2 AM UTC)
-  notificationCleanupService.start(); // Notification cleanup (runs weekly)
   
   // Preload table cache for admin routes
   try {
