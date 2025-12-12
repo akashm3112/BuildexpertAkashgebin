@@ -14,6 +14,22 @@ import { API_BASE_URL } from '@/constants/api';
 import { useLabourAccess } from '@/context/LabourAccessContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'N/A';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: '2-digit', 
+      year: 'numeric' 
+    });
+  } catch (error) {
+    console.warn('Error formatting date:', dateString, error);
+    return 'Invalid Date';
+  }
+};
+
 export default function LabourAccessSimpleScreen() {
   const router = useRouter();
   const { labourAccessStatus, checkLabourAccess } = useLabourAccess();
@@ -21,13 +37,20 @@ export default function LabourAccessSimpleScreen() {
   const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchData = async () => {
       try {
         setLoading(true);
         // First check local storage (fast) - this will update context
-        await checkLabourAccess().catch((error) => {
+        await checkLabourAccess().catch((error: any) => {
           // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
-          console.warn('checkLabourAccess error (handled):', error?.message || error);
+          // Mark as handled to prevent React Native from logging
+          if (error && typeof error === 'object') {
+            (error as any)._handled = true;
+            (error as any)._suppressUnhandled = true;
+          }
+          // Don't log - errors are already handled silently in checkLabourAccess
         });
         
         // Also fetch from API to ensure we have latest data
@@ -38,25 +61,29 @@ export default function LabourAccessSimpleScreen() {
         console.error('Error fetching labour access:', error);
       } finally {
         // Always stop loading and show UI, regardless of success/failure
-        setHasChecked(true);
-        setLoading(false);
+        if (isMounted) {
+          setHasChecked(true);
+          setLoading(false);
+        }
       }
     };
     
     fetchData();
+    
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
   // Refresh labour access when screen comes into focus (not periodically)
-  useFocusEffect(
-    React.useCallback(() => {
-      // Only check when screen is focused, not periodically
-      checkLabourAccess().catch((error) => {
-        // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
-        console.warn('checkLabourAccess error on focus (handled):', error?.message || error);
-      });
-    }, [])
-  );
+  // REMOVED: This was causing too many API calls and rate limiting
+  // The context already checks on mount and app state change, which is sufficient
+  // useFocusEffect(
+  //   React.useCallback(() => {
+  //     // Removed to prevent excessive API calls
+  //   }, [checkLabourAccess])
+  // );
 
   if (loading) {
     return (
@@ -82,7 +109,20 @@ export default function LabourAccessSimpleScreen() {
           <ArrowLeft size={24} color="#374151" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Labour Access</Text>
-        <TouchableOpacity onPress={checkLabourAccess} style={styles.refreshButton}>
+        <TouchableOpacity 
+          onPress={() => {
+            checkLabourAccess().catch((error: any) => {
+              // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
+              // Mark as handled to prevent React Native from logging
+              if (error && typeof error === 'object') {
+                (error as any)._handled = true;
+                (error as any)._suppressUnhandled = true;
+              }
+              // Don't log - errors are already handled silently in checkLabourAccess
+            });
+          }} 
+          style={styles.refreshButton}
+        >
           <RefreshCw size={20} color="#3B82F6" />
         </TouchableOpacity>
       </View>
@@ -103,7 +143,7 @@ export default function LabourAccessSimpleScreen() {
               </Text>
               <Text style={styles.statusSubtitle}>
                 {labourAccessStatus?.hasAccess 
-                  ? `${labourAccessStatus.daysRemaining} days remaining`
+                  ? `${labourAccessStatus.daysRemaining ?? 0} days remaining`
                   : 'Pay ₹99 for 7-day access'
                 }
               </Text>
@@ -115,27 +155,19 @@ export default function LabourAccessSimpleScreen() {
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Start Date</Text>
                 <Text style={styles.detailValue}>
-                  {new Date(labourAccessStatus.startDate).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: '2-digit', 
-                    year: 'numeric' 
-                  })}
+                  {formatDate(labourAccessStatus.startDate)}
                 </Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Expiry Date</Text>
                 <Text style={styles.detailValue}>
-                  {new Date(labourAccessStatus.endDate).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: '2-digit', 
-                    year: 'numeric' 
-                  })}
+                  {formatDate(labourAccessStatus.endDate)}
                 </Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Days Remaining</Text>
                 <Text style={styles.detailValue}>
-                  {labourAccessStatus.daysRemaining} days
+                  {labourAccessStatus.daysRemaining ?? 0} days
                 </Text>
               </View>
             </View>
@@ -144,7 +176,13 @@ export default function LabourAccessSimpleScreen() {
           {!labourAccessStatus?.hasAccess && (
             <TouchableOpacity 
               style={styles.payButton} 
-              onPress={() => router.push('/labour-payment' as any)}
+              onPress={() => {
+                try {
+                  router.push('/labour-payment' as any);
+                } catch (error) {
+                  console.error('Error navigating to labour payment:', error);
+                }
+              }}
             >
               <CreditCard size={20} color="#FFFFFF" />
               <Text style={styles.payButtonText}>Pay ₹99 for 7 Days</Text>

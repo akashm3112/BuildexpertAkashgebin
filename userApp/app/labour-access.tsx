@@ -10,7 +10,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { ArrowLeft, CreditCard, Clock, CheckCircle, AlertTriangle, Calendar, Smartphone } from 'lucide-react-native';
 import { SafeView } from '@/components/SafeView';
 import { useAuth } from '@/context/AuthContext';
@@ -48,8 +48,53 @@ export default function LabourAccessScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchLabourAccessData();
+    let isMounted = true;
+    
+    const fetchData = async () => {
+      try {
+        await fetchLabourAccessData();
+      } catch (error: any) {
+        // Errors are already handled in fetchLabourAccessData
+        // Just ensure we don't leave loading state stuck
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    fetchData();
+    
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  // Refresh data when screen comes into focus (e.g., after payment)
+  useFocusEffect(
+    React.useCallback(() => {
+      let isMounted = true;
+      
+      const refreshData = async () => {
+        try {
+          await fetchLabourAccessData();
+        } catch (error: any) {
+          // Errors are already handled in fetchLabourAccessData
+          if (isMounted) {
+            // Don't set loading to false here - just refresh silently
+          }
+        }
+      };
+      
+      // Only refresh if not currently loading (to avoid double fetches)
+      if (!loading) {
+        refreshData();
+      }
+      
+      return () => {
+        isMounted = false;
+      };
+    }, [loading])
+  );
 
   const fetchLabourAccessData = async () => {
     try {
@@ -57,20 +102,67 @@ export default function LabourAccessScreen() {
       const { apiGet } = await import('@/utils/apiClient');
       
       // Fetch access status
-      const accessResponse = await apiGet('/api/payments/labour-access-status');
-      if (accessResponse.ok && accessResponse.data && accessResponse.data.status === 'success') {
-        setAccessData(accessResponse.data.data);
+      try {
+        const accessResponse = await apiGet('/api/payments/labour-access-status');
+        if (accessResponse.ok && accessResponse.data && accessResponse.data.status === 'success' && accessResponse.data.data) {
+          setAccessData(accessResponse.data.data);
+        }
+      } catch (accessError: any) {
+        // Check if it's a "Session expired" error (expected after 30 days)
+        const isSessionExpired = accessError?.message === 'Session expired' || 
+                                 accessError?.status === 401 && accessError?.message?.includes('Session expired') || 
+                                 accessError?._suppressUnhandled === true ||
+                                 accessError?._handled === true;
+        
+        if (!isSessionExpired) {
+          // Only log non-session-expired errors
+          console.warn('Error fetching labour access status:', accessError?.message || accessError);
+        }
+        // Session expired errors are handled by apiClient (logout triggered)
+        // Don't throw - continue to try fetching transaction history
       }
 
-      // Fetch transaction history
-      const historyResponse = await apiGet('/api/payments/labour-transaction-history');
-      if (historyResponse.ok && historyResponse.data && historyResponse.data.status === 'success') {
-        setTransactions(historyResponse.data.data.transactions || []);
+      // Fetch transaction history with increased limit to show all transactions
+      try {
+        const historyResponse = await apiGet('/api/payments/labour-transaction-history?limit=100');
+        if (historyResponse.ok && historyResponse.data && historyResponse.data.status === 'success') {
+          const transactionsData = historyResponse.data.data?.transactions;
+          if (Array.isArray(transactionsData)) {
+            // Show all transactions, not filtered by date
+            setTransactions(transactionsData);
+          } else {
+            setTransactions([]);
+          }
+        } else {
+          // If response is not ok, set empty array
+          setTransactions([]);
+        }
+      } catch (historyError: any) {
+        // Check if it's a "Session expired" error (expected after 30 days)
+        const isSessionExpired = historyError?.message === 'Session expired' || 
+                                 historyError?.status === 401 && historyError?.message?.includes('Session expired') || 
+                                 historyError?._suppressUnhandled === true ||
+                                 historyError?._handled === true;
+        
+        // Mark error as handled to prevent uncaught exception
+        if (historyError && typeof historyError === 'object') {
+          (historyError as any)._handled = true;
+          (historyError as any)._suppressUnhandled = true;
+        }
+        
+        if (!isSessionExpired) {
+          // Only log non-session-expired errors
+          console.warn('Error fetching transaction history:', historyError?.message || historyError);
+        }
+        // Set empty array on error to prevent UI issues
+        setTransactions([]);
+        // Session expired errors are handled by apiClient (logout triggered)
+        // Don't throw - we can still show access status
       }
     } catch (error: any) {
       // Check if it's a "Session expired" error (expected after 30 days)
       const isSessionExpired = error?.message === 'Session expired' || 
-                               error?.status === 401 && error?.message?.includes('Session expired') ||
+                               error?.status === 401 && error?.message?.includes('Session expired') || 
                                error?._suppressUnhandled === true ||
                                error?._handled === true;
       
@@ -85,17 +177,29 @@ export default function LabourAccessScreen() {
   };
 
   const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchLabourAccessData();
-    setRefreshing(false);
+    try {
+      setRefreshing(true);
+      await fetchLabourAccessData();
+    } catch (error: any) {
+      // Errors are already handled in fetchLabourAccessData
+      // Just ensure we reset refreshing state
+      console.warn('Error refreshing labour access data:', error?.message || error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handlePayNow = () => {
-    router.push('/labour-payment' as any);
+    try {
+      router.push('/labour-payment' as any);
+    } catch (error) {
+      console.error('Error navigating to labour payment:', error);
+    }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
+  const getStatusColor = (status: string | null | undefined) => {
+    if (!status) return '#64748B';
+    switch (status.toLowerCase()) {
       case 'completed':
         return '#10B981';
       case 'failed':
@@ -107,8 +211,9 @@ export default function LabourAccessScreen() {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
+  const getStatusIcon = (status: string | null | undefined) => {
+    if (!status) return <Clock size={16} color="#64748B" />;
+    switch (status.toLowerCase()) {
       case 'completed':
         return <CheckCircle size={16} color="#10B981" />;
       case 'failed':
@@ -117,6 +222,41 @@ export default function LabourAccessScreen() {
         return <Clock size={16} color="#F59E0B" />;
       default:
         return <Clock size={16} color="#64748B" />;
+    }
+  };
+
+  const formatDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: '2-digit', 
+        year: 'numeric' 
+      });
+    } catch (error) {
+      console.warn('Error formatting date:', dateString, error);
+      return 'Invalid Date';
+    }
+  };
+
+  const formatDateTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: '2-digit', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      console.warn('Error formatting date/time:', dateString, error);
+      return 'Invalid Date';
     }
   };
 
@@ -168,7 +308,7 @@ export default function LabourAccessScreen() {
               </Text>
               <Text style={styles.statusSubtitle}>
                 {accessData?.hasAccess 
-                  ? `${accessData.daysRemaining} days remaining`
+                  ? `${accessData.daysRemaining ?? 0} days remaining`
                   : 'Pay ₹99 for 7-day access'
                 }
               </Text>
@@ -180,21 +320,13 @@ export default function LabourAccessScreen() {
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Start Date</Text>
                 <Text style={styles.detailValue}>
-                  {new Date(accessData.startDate).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: '2-digit', 
-                    year: 'numeric' 
-                  })}
+                  {formatDate(accessData.startDate)}
                 </Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Expiry Date</Text>
                 <Text style={styles.detailValue}>
-                  {new Date(accessData.endDate).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: '2-digit', 
-                    year: 'numeric' 
-                  })}
+                  {formatDate(accessData.endDate)}
                 </Text>
               </View>
             </View>
@@ -212,39 +344,42 @@ export default function LabourAccessScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment History</Text>
           {transactions.length > 0 ? (
-            transactions.map((transaction) => (
-              <View key={transaction.id} style={styles.transactionCard}>
-                <View style={styles.transactionHeader}>
-                  <View style={styles.transactionInfo}>
-                    <Text style={styles.transactionId}>#{transaction.order_id}</Text>
-                    <Text style={styles.transactionDate}>
-                      {new Date(transaction.created_at).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: '2-digit', 
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true
-                      })}
-                    </Text>
+            transactions.map((transaction) => {
+              // Safely extract transaction properties with defaults
+              const transactionId = transaction?.id || `txn-${Math.random()}`;
+              const orderId = transaction?.order_id || 'N/A';
+              const createdAt = transaction?.created_at || null;
+              const status = transaction?.status || 'unknown';
+              const amount = transaction?.amount ?? 0;
+              const transactionIdText = transaction?.transaction_id || null;
+              
+              return (
+                <View key={transactionId} style={styles.transactionCard}>
+                  <View style={styles.transactionHeader}>
+                    <View style={styles.transactionInfo}>
+                      <Text style={styles.transactionId}>#{orderId}</Text>
+                      <Text style={styles.transactionDate}>
+                        {formatDateTime(createdAt)}
+                      </Text>
+                    </View>
+                    <View style={styles.transactionStatus}>
+                      {getStatusIcon(status)}
+                      <Text style={[styles.statusText, { color: getStatusColor(status) }]}>
+                        {status ? status.toUpperCase() : 'UNKNOWN'}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.transactionStatus}>
-                    {getStatusIcon(transaction.status)}
-                    <Text style={[styles.statusText, { color: getStatusColor(transaction.status) }]}>
-                      {transaction.status.toUpperCase()}
-                    </Text>
+                  <View style={styles.transactionDetails}>
+                    <Text style={styles.transactionAmount}>₹{amount.toFixed(2)}</Text>
+                    {transactionIdText && (
+                      <Text style={styles.transactionIdText}>
+                        Txn: {transactionIdText}
+                      </Text>
+                    )}
                   </View>
                 </View>
-                <View style={styles.transactionDetails}>
-                  <Text style={styles.transactionAmount}>₹{transaction.amount}</Text>
-                  {transaction.transaction_id && (
-                    <Text style={styles.transactionIdText}>
-                      Txn: {transaction.transaction_id}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ))
+              );
+            })
           ) : (
             <View style={styles.emptyContainer}>
               <CreditCard size={48} color="#CBD5E1" />

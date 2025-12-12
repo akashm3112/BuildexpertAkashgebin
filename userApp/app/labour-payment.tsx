@@ -15,7 +15,7 @@ export default function LabourPaymentScreen() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
   const { t } = useLanguage();
-  const { grantLabourAccess } = useLabourAccess();
+  const { grantLabourAccess, checkLabourAccess } = useLabourAccess();
   const [selectedMethod, setSelectedMethod] = useState<'paytm' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -36,23 +36,28 @@ export default function LabourPaymentScreen() {
   const initiatePaytmPayment = async () => {
     setIsProcessing(true);
     try {
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication token not found');
+      const { apiPost } = await import('@/utils/apiClient');
+      
+      // Call the backend to initiate payment
+      const response = await apiPost('/api/payments/initiate-labour-payment', {
+        amount: 99,
+        serviceName: 'labors',
+        paymentMethod: 'paytm'
+      });
+
+      if (response.ok && response.data && response.data.status === 'success') {
+        const orderId = response.data.orderId;
+        setOrderId(orderId);
+        
+        // Close payment method modal
+        setShowPaymentModal(false);
+        
+        // For testing: Immediately verify payment (in production, this would be done via Paytm callback)
+        // In production, Paytm would redirect back and call verify-labour-payment
+        await verifyPayment(orderId);
+      } else {
+        throw new Error(response.data?.message || 'Failed to initiate payment');
       }
-
-      
-      // For testing: Make payment successful immediately
-      const testOrderId = 'TEST_ORDER_' + Date.now();
-      setOrderId(testOrderId);
-      
-      // Close payment method modal
-      setShowPaymentModal(false);
-      setIsProcessing(false);
-      
-      // Immediately verify payment for testing
-      verifyPayment(testOrderId, token);
-
     } catch (error: any) {
       setIsProcessing(false);
       setShowPaymentModal(false);
@@ -62,36 +67,31 @@ export default function LabourPaymentScreen() {
     }
   };
 
-  const verifyPayment = async (orderId: string, token: string) => {
+  const verifyPayment = async (orderId: string) => {
     try {
-      // For testing: Make payment successful immediately
-      setIsProcessing(false);
-      setShowPaymentModal(false);
+      setIsProcessing(true);
       
-      // For testing: Grant labour access using context
-      try {
-        await grantLabourAccess();
-        
-        // Also try to call the backend API
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/test/grant-labour-access`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            }
-          });
+      // Call the backend to verify payment and grant access
+      const { apiPost } = await import('@/utils/apiClient');
+      
+      const response = await apiPost('/api/payments/verify-labour-payment', {
+        orderId: orderId
+      });
 
-          const data = await response.json();
-        } catch (apiError) {
+      if (response.ok && response.data && response.data.status === 'success') {
+        // Payment verified and access granted on backend
+        // Now refresh the access data from backend
+        try {
+          await checkLabourAccess();
+        } catch (refreshError) {
+          // Log but don't fail - access is already granted on backend
+          console.warn('Error refreshing access data:', refreshError);
         }
         
-      } catch (error) {
-        console.error('Error granting labour access:', error);
-      }
-      
-      // Add a small delay to ensure backend processing
-      setTimeout(() => {
+        setIsProcessing(false);
+        setShowPaymentModal(false);
+        
+        // Show success message
         showAlert(
           'Payment Successful! 🎉',
           `Your labour service access is now active for 7 days. You will receive a reminder before expiry.`,
@@ -115,14 +115,47 @@ export default function LabourPaymentScreen() {
             }
           ]
         );
-      }, 1000);
-      
+      } else {
+        throw new Error(response.data?.message || 'Payment verification failed');
+      }
     } catch (error: any) {
       setIsProcessing(false);
       setShowPaymentModal(false);
-      showAlert('Payment Failed', error.message || 'Failed to verify payment', 'error', [
-        { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
-      ]);
+      
+      // Check if it's a "already processed" error - that's actually success
+      if (error?.message?.includes('already processed') || error?.message?.includes('Payment already processed')) {
+        // Access was already granted, just refresh data
+        try {
+          await checkLabourAccess();
+        } catch (refreshError) {
+          console.warn('Error refreshing access data:', refreshError);
+        }
+        
+        showAlert(
+          'Payment Already Processed',
+          'Your labour service access is already active.',
+          'success',
+          [
+            { 
+              text: 'View Access Status', 
+              onPress: () => {
+                setShowAlertModal(false);
+                router.push('/labour-access-simple' as any);
+              }, 
+              style: 'primary' 
+            },
+            {
+              text: 'OK',
+              onPress: () => setShowAlertModal(false),
+              style: 'secondary'
+            }
+          ]
+        );
+      } else {
+        showAlert('Payment Failed', error.message || 'Failed to verify payment', 'error', [
+          { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+        ]);
+      }
     }
   };
 

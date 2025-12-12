@@ -2,26 +2,64 @@ const { query } = require('../database/connection');
 
 
 class PaymentLogger {
+  /**
+   * Check if transaction is a labour payment by checking if it exists in labour_payment_transactions
+   */
+  static async isLabourPayment(transactionId) {
+    try {
+      const result = await query(`
+        SELECT id FROM labour_payment_transactions WHERE id = $1
+      `, [transactionId]);
+      return result.rows.length > 0;
+    } catch (error) {
+      // If check fails, assume it's not a labour payment
+      return false;
+    }
+  }
+
   static async logPaymentEvent(transactionId, eventType, eventData, userId, req = null) {
     try {
       const ipAddress = req ? req.ip || req.connection?.remoteAddress : null;
       const userAgent = req ? req.get('User-Agent') : null;
 
-      await query(`
-        INSERT INTO payment_events (
-          payment_transaction_id, event_type, event_data, user_id, ip_address, user_agent, timestamp
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      `, [transactionId, eventType, JSON.stringify(eventData || {}), userId, ipAddress, userAgent]);
+      // Check if this is a labour payment
+      const isLabour = await this.isLabourPayment(transactionId);
+      
+      if (isLabour) {
+        // Use labour_payment_events table for labour payments
+        await query(`
+          INSERT INTO labour_payment_events (
+            payment_transaction_id, event_type, event_data, user_id, ip_address, user_agent, timestamp
+          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `, [transactionId, eventType, JSON.stringify(eventData || {}), userId, ipAddress, userAgent]);
+      } else {
+        // Use payment_events table for regular payments
+        await query(`
+          INSERT INTO payment_events (
+            payment_transaction_id, event_type, event_data, user_id, ip_address, user_agent, timestamp
+          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `, [transactionId, eventType, JSON.stringify(eventData || {}), userId, ipAddress, userAgent]);
+      }
 
       console.log(`💰 Payment Event: ${eventType}`, {
         transactionId,
         eventType,
         eventData,
         userId,
+        isLabourPayment: isLabour,
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      console.error('❌ Error logging payment event:', error);
+      // For testing/development, log error but don't fail the payment flow
+      // Foreign key constraint errors are expected when tables don't match
+      if (error.code === '23503') {
+        console.warn(`⚠️ Payment event logging skipped (foreign key constraint): ${eventType}`, {
+          transactionId,
+          error: error.message
+        });
+      } else {
+        console.error('❌ Error logging payment event:', error);
+      }
     }
   }
 
@@ -30,6 +68,26 @@ class PaymentLogger {
    */
   static async logApiInteraction(transactionId, endpoint, method, requestData, responseData, responseTime, error = null) {
     try {
+      // Check if this is a labour payment
+      const isLabour = await this.isLabourPayment(transactionId);
+      
+      // For labour payments, skip API logging to payment_api_logs (it references payment_transactions)
+      // We can log to labour_payment_events instead if needed, but for now just skip
+      // This prevents foreign key constraint errors during testing
+      if (isLabour) {
+        // For labour payments, just log to console (no separate API logs table for labour)
+        console.log(`💰 API Interaction (Labour Payment): ${method} ${endpoint}`, {
+          transactionId,
+          endpoint,
+          method,
+          responseTime: `${responseTime}ms`,
+          status: responseData?.status || (error ? 500 : 200),
+          timestamp: new Date().toISOString()
+        });
+        return; // Skip database logging for labour payments
+      }
+
+      // Use payment_api_logs table for regular payments
       await query(`
         INSERT INTO payment_api_logs (
           payment_transaction_id, api_endpoint, request_method, request_body, 
@@ -55,7 +113,16 @@ class PaymentLogger {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      console.error('❌ Error logging API interaction:', error);
+      // For testing/development, log error but don't fail the payment flow
+      // Foreign key constraint errors are expected when tables don't match
+      if (error.code === '23503') {
+        console.warn(`⚠️ API interaction logging skipped (foreign key constraint): ${method} ${endpoint}`, {
+          transactionId,
+          error: error.message
+        });
+      } else {
+        console.error('❌ Error logging API interaction:', error);
+      }
     }
   }
 

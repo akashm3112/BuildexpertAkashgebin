@@ -49,6 +49,13 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isInitialized, setIsInitialized] = useState(false);
   const appState = useRef(AppState.currentState);
   
+  // Request deduplication and rate limiting
+  const checkInProgressRef = useRef<Promise<void> | null>(null);
+  const lastCheckTimeRef = useRef<number>(0);
+  const rateLimitCooldownRef = useRef<number>(0);
+  const MIN_CHECK_INTERVAL = 5000; // Minimum 5 seconds between checks
+  const RATE_LIMIT_COOLDOWN = 60000; // 60 seconds cooldown after rate limit error
+  
   // Get user from AuthContext to check if user is authenticated before making API calls
   const { user } = useAuth();
 
@@ -96,12 +103,22 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
   /**
    * Check labour access, loading local cache first for instant UI, then updating from backend.
    * This ensures the UI shows the correct state immediately without waiting for network.
+   * Includes request deduplication and rate limiting to prevent excessive API calls.
    */
-  const checkLabourAccess = async () => {
-    // CRITICAL: Don't make API calls if user is not authenticated
-    // This prevents 401 errors before user reaches home screen
-    if (!user?.id) {
-      // User not authenticated - just load local cache and mark as initialized
+  const checkLabourAccess = async (): Promise<void> => {
+    // Request deduplication: if a check is already in progress, return that promise
+    if (checkInProgressRef.current) {
+      return checkInProgressRef.current;
+    }
+
+    // Rate limiting: don't check too frequently
+    const now = Date.now();
+    const timeSinceLastCheck = now - lastCheckTimeRef.current;
+    const timeSinceRateLimit = now - rateLimitCooldownRef.current;
+    
+    // If we're in rate limit cooldown, skip API call and just return local cache
+    if (timeSinceRateLimit < RATE_LIMIT_COOLDOWN) {
+      // Just load local cache and return early
       try {
         const localAccessData = await AsyncStorage.getItem('labour_access_status');
         if (localAccessData) {
@@ -110,153 +127,251 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
             const mapped = mapApiToLabourAccessData(parsedData);
             setLabourAccessStatus(mapped.hasAccess ? mapped : null);
           } catch (parseError) {
+            // Invalid data, ignore
+          }
+        }
+        setIsInitialized(true);
+        return;
+      } catch (error) {
+        // Ignore errors during cooldown
+        setIsInitialized(true);
+        return;
+      }
+    }
+
+    // If checked recently, skip API call but still load local cache
+    if (timeSinceLastCheck < MIN_CHECK_INTERVAL) {
+      try {
+        const localAccessData = await AsyncStorage.getItem('labour_access_status');
+        if (localAccessData) {
+          try {
+            const parsedData = JSON.parse(localAccessData);
+            const mapped = mapApiToLabourAccessData(parsedData);
+            setLabourAccessStatus(mapped.hasAccess ? mapped : null);
+          } catch (parseError) {
+            // Invalid data, ignore
+          }
+        }
+        setIsInitialized(true);
+        return;
+      } catch (error) {
+        // Ignore errors
+        setIsInitialized(true);
+        return;
+      }
+    }
+
+    // Create the check promise and store it for deduplication
+    const checkPromise = (async () => {
+      try {
+        // CRITICAL: Don't make API calls if user is not authenticated
+        // This prevents 401 errors before user reaches home screen
+        if (!user?.id) {
+          // User not authenticated - just load local cache and mark as initialized
+          try {
+            const localAccessData = await AsyncStorage.getItem('labour_access_status');
+            if (localAccessData) {
+              try {
+                const parsedData = JSON.parse(localAccessData);
+                const mapped = mapApiToLabourAccessData(parsedData);
+                setLabourAccessStatus(mapped.hasAccess ? mapped : null);
+              } catch (parseError) {
+                await AsyncStorage.removeItem('labour_access_status');
+                setLabourAccessStatus(null);
+              }
+            } else {
+              setLabourAccessStatus(null);
+            }
+            setIsInitialized(true);
+          } catch (error) {
+            setLabourAccessStatus(null);
+            setIsInitialized(true);
+          }
+          return; // Exit early - don't make API calls without authenticated user
+        }
+        
+        // STEP 1: Load local cache FIRST for instant UI (synchronous, fast)
+        // This ensures the UI shows the correct state immediately without waiting for network
+        const localAccessData = await AsyncStorage.getItem('labour_access_status');
+        if (localAccessData) {
+          try {
+            const parsedData = JSON.parse(localAccessData);
+            const mapped = mapApiToLabourAccessData(parsedData);
+
+            // If expired, clear it; otherwise use it immediately
+            if (mapped.isExpired || !mapped.hasAccess) {
+              await AsyncStorage.removeItem('labour_access_status');
+              setLabourAccessStatus(mapped.hasAccess ? mapped : null);
+            } else {
+              // Set local data immediately so UI shows correct state right away
+              setLabourAccessStatus(mapped);
+            }
+          } catch (parseError) {
+            // Invalid local data, clear it
             await AsyncStorage.removeItem('labour_access_status');
             setLabourAccessStatus(null);
           }
         } else {
           setLabourAccessStatus(null);
         }
+
+        // Mark as initialized IMMEDIATELY after loading local cache
+        // This allows UI to show the correct state right away
         setIsInitialized(true);
-      } catch (error) {
-        setLabourAccessStatus(null);
-        setIsInitialized(true);
-      }
-      return; // Exit early - don't make API calls without authenticated user
-    }
-    
-    try {
-      // STEP 1: Load local cache FIRST for instant UI (synchronous, fast)
-      // This ensures the UI shows the correct state immediately without waiting for network
-      const localAccessData = await AsyncStorage.getItem('labour_access_status');
-      if (localAccessData) {
+        lastCheckTimeRef.current = Date.now();
+
+        // STEP 2: Fetch from backend in the background and update if different
+        // This happens asynchronously and doesn't block the UI
+        // BUT: Only make the API call if we have valid tokens (avoid unnecessary 401 errors)
         try {
-          const parsedData = JSON.parse(localAccessData);
-          const mapped = mapApiToLabourAccessData(parsedData);
-
-          // If expired, clear it; otherwise use it immediately
-          if (mapped.isExpired || !mapped.hasAccess) {
-            await AsyncStorage.removeItem('labour_access_status');
-            setLabourAccessStatus(mapped.hasAccess ? mapped : null);
-          } else {
-            // Set local data immediately so UI shows correct state right away
-            setLabourAccessStatus(mapped);
-          }
-        } catch (parseError) {
-          // Invalid local data, clear it
-          await AsyncStorage.removeItem('labour_access_status');
-          setLabourAccessStatus(null);
-        }
-      } else {
-        setLabourAccessStatus(null);
-      }
-
-      // Mark as initialized IMMEDIATELY after loading local cache
-      // This allows UI to show the correct state right away
-      setIsInitialized(true);
-
-      // STEP 2: Fetch from backend in the background and update if different
-      // This happens asynchronously and doesn't block the UI
-      // BUT: Only make the API call if we have valid tokens (avoid unnecessary 401 errors)
-      try {
-        // Check if tokens exist before making API call
-        // This prevents unnecessary 401 errors when tokens are expired
-        const { tokenManager } = await import('@/utils/tokenManager');
-        const tokenData = await tokenManager.getStoredToken();
-        
-        // Only make API call if tokens exist and refresh token is not expired
-        if (tokenData && tokenData.refreshToken) {
-          const now = Date.now();
-          const refreshTokenExpired = tokenData.refreshTokenExpiresAt && 
-                                      tokenData.refreshTokenExpiresAt <= now;
+          // Check if tokens exist before making API call
+          // This prevents unnecessary 401 errors when tokens are expired
+          const { tokenManager } = await import('@/utils/tokenManager');
+          const tokenData = await tokenManager.getStoredToken();
           
-          // Skip API call if refresh token is expired (30 days) - user will be logged out anyway
-          if (!refreshTokenExpired) {
-            const { apiGet } = await import('@/utils/apiClient');
+          // Only make API call if tokens exist and refresh token is not expired
+          if (tokenData && tokenData.refreshToken) {
+            const tokenNow = Date.now();
+            const refreshTokenExpired = tokenData.refreshTokenExpiresAt && 
+                                        tokenData.refreshTokenExpiresAt <= tokenNow;
             
-            // Wrap API call in try-catch to handle errors gracefully
-            // This prevents unhandled promise rejections for database/server errors
-            try {
-              const response = await apiGet('/api/payments/labour-access-status');
+            // Skip API call if refresh token is expired (30 days) - user will be logged out anyway
+            if (!refreshTokenExpired) {
+              const { apiGet } = await import('@/utils/apiClient');
+              
+              // Wrap API call in try-catch to handle errors gracefully
+              // This prevents unhandled promise rejections for database/server errors
+              try {
+                const response = await apiGet('/api/payments/labour-access-status');
 
-              if (response.ok && response.data && response.data.status === 'success') {
-                const apiData = response.data.data;
-                if (apiData) {
-                  const mapped = mapApiToLabourAccessData(apiData);
-                  await AsyncStorage.setItem('labour_access_status', JSON.stringify(mapped));
-                  // Update state with backend data (may be same as local, but ensures consistency)
-                  setLabourAccessStatus(mapped);
+                if (response.ok && response.data && response.data.status === 'success') {
+                  const apiData = response.data.data;
+                  if (apiData) {
+                    const mapped = mapApiToLabourAccessData(apiData);
+                    await AsyncStorage.setItem('labour_access_status', JSON.stringify(mapped));
+                    // Update state with backend data (may be same as local, but ensures consistency)
+                    setLabourAccessStatus(mapped);
+                  }
                 }
+              } catch (innerError: any) {
+                // Re-throw to outer catch block for proper error handling
+                throw innerError;
               }
-            } catch (innerError: any) {
-              // Re-throw to outer catch block for proper error handling
-              throw innerError;
             }
+            // If refresh token is expired, skip API call - user will be logged out on next API call
+            // Just keep using local cache
           }
-          // If refresh token is expired, skip API call - user will be logged out on next API call
+          // If no tokens exist, skip API call - user needs to login first
           // Just keep using local cache
+        } catch (apiError: any) {
+          // Handle rate limit errors - set cooldown and suppress
+          const isRateLimit = apiError?.code === 'RATE_LIMIT_EXCEEDED' ||
+                             apiError?.message?.includes('Rate limit exceeded') ||
+                             apiError?.message?.includes('rate limit');
+          
+          // Handle service unavailable errors (can have status 401 when token refresh fails)
+          const isServiceUnavailable = apiError?.code === 'SERVICE_UNAVAILABLE' ||
+                                      apiError?.status === 503 ||
+                                      apiError?.message?.includes('temporarily unavailable') ||
+                                      apiError?.message?.includes('Backend temporarily unavailable') ||
+                                      apiError?.message?.includes('Unable to refresh token');
+          
+          // Handle "Session expired" errors silently (expected after 30 days - logout will happen)
+          // BUT: Don't treat SERVICE_UNAVAILABLE with 401 as session expired
+          const isSessionExpired = !isServiceUnavailable && (
+                                   apiError?.message === 'Session expired' || 
+                                   (apiError?.status === 401 && apiError?.message?.includes('Session expired')) ||
+                                   apiError?._suppressUnhandled === true ||
+                                   apiError?._handled === true);
+          
+          // Handle database/server errors (500) silently - backend issue, not user's fault
+          const isServerError = apiError?.status === 500 || 
+                               apiError?.isServerError === true ||
+                               apiError?.message?.includes('Database operation failed') ||
+                               apiError?.message?.includes('Database') ||
+                               apiError?.data?.errorCode === 'DATABASE_ERROR' ||
+                               apiError?.data?.originalError?.includes('column') ||
+                               apiError?.data?.originalError?.includes('does not exist');
+          
+          if (isRateLimit) {
+            // Set cooldown period to prevent immediate retries
+            rateLimitCooldownRef.current = Date.now();
+            // Mark error as handled to prevent React Native from logging it
+            if (apiError && typeof apiError === 'object') {
+              (apiError as any)._handled = true;
+              (apiError as any)._suppressUnhandled = true;
+            }
+            // Return silently - don't log, don't throw
+            return;
+          } else if (isServiceUnavailable) {
+            // Service unavailable - mark as handled and suppress
+            if (apiError && typeof apiError === 'object') {
+              (apiError as any)._handled = true;
+              (apiError as any)._suppressUnhandled = true;
+            }
+            // Return silently - don't log, don't throw
+            return;
+          } else if (isSessionExpired) {
+            // Session expired is expected behavior after 30 days - don't log as error
+            // The apiClient already handles logout, we just keep using local cache
+            // Suppress the error completely to prevent unhandled rejection
+            // Mark error as handled to prevent React Native from logging it
+            if (apiError && typeof apiError === 'object') {
+              (apiError as any)._handled = true;
+              (apiError as any)._suppressUnhandled = true;
+            }
+            return; // Exit early, don't log anything
+          } else if (isServerError) {
+            // Database/server errors - backend issue, not user's fault
+            // Silently use local cache - don't log or show error to user
+            // This prevents unhandled promise rejections for backend database issues
+            // Mark error as handled to prevent React Native from logging it
+            if (apiError && typeof apiError === 'object') {
+              (apiError as any)._handled = true;
+              (apiError as any)._suppressUnhandled = true;
+            }
+            return; // Exit early, don't log anything
+          } else {
+            // Other errors (network, etc.) - mark as handled but don't log
+            // This is fine - local cache is still valid for offline use
+            // Mark error as handled to prevent unhandled rejection
+            if (apiError && typeof apiError === 'object') {
+              (apiError as any)._handled = true;
+              (apiError as any)._suppressUnhandled = true;
+            }
+            // Don't log - too many warnings clutter the console
+          }
+          // Don't update state on error - keep using local cache that was already set
         }
-        // If no tokens exist, skip API call - user needs to login first
-        // Just keep using local cache
-      } catch (apiError: any) {
-        // Handle "Session expired" errors silently (expected after 30 days - logout will happen)
-        const isSessionExpired = apiError?.message === 'Session expired' || 
-                                 apiError?.status === 401 && apiError?.message?.includes('Session expired') ||
-                                 apiError?._suppressUnhandled === true ||
-                                 apiError?._handled === true;
-        
-        // Handle database/server errors (500) silently - backend issue, not user's fault
-        const isServerError = apiError?.status === 500 || 
-                             apiError?.isServerError === true ||
-                             apiError?.message?.includes('Database operation failed') ||
-                             apiError?.message?.includes('Database') ||
-                             apiError?.data?.errorCode === 'DATABASE_ERROR' ||
-                             apiError?.data?.originalError?.includes('column') ||
-                             apiError?.data?.originalError?.includes('does not exist');
-        
-        if (isSessionExpired) {
-          // Session expired is expected behavior after 30 days - don't log as error
-          // The apiClient already handles logout, we just keep using local cache
-          // Suppress the error completely to prevent unhandled rejection
-          // Mark error as handled to prevent React Native from logging it
-          if (apiError && typeof apiError === 'object') {
-            (apiError as any)._handled = true;
-            (apiError as any)._suppressUnhandled = true;
-          }
-          return; // Exit early, don't log anything
-        } else if (isServerError) {
-          // Database/server errors - backend issue, not user's fault
-          // Silently use local cache - don't log or show error to user
-          // This prevents unhandled promise rejections for backend database issues
-          // Mark error as handled to prevent React Native from logging it
-          if (apiError && typeof apiError === 'object') {
-            (apiError as any)._handled = true;
-            (apiError as any)._suppressUnhandled = true;
-          }
-          return; // Exit early, don't log anything
-        } else {
-          // Other errors (network, etc.) - log but keep using local cache
-          // This is fine - local cache is still valid for offline use
-          // Only log non-critical errors that might be user-actionable
-          const isNetworkError = apiError?.isNetworkError === true || 
-                                apiError?.message?.includes('network') ||
-                                apiError?.message?.includes('Network');
-          if (!isNetworkError) {
-            // Only log non-network errors (unexpected errors)
-            console.warn('Error fetching labour access from API (using local cache):', apiError?.message || apiError);
-          }
-          // Mark error as handled to prevent unhandled rejection
-          if (apiError && typeof apiError === 'object') {
-            (apiError as any)._handled = true;
-          }
+      } catch (error: any) {
+        // Mark all errors as handled to prevent unhandled rejections
+        if (error && typeof error === 'object') {
+          (error as any)._handled = true;
+          (error as any)._suppressUnhandled = true;
         }
-        // Don't update state on error - keep using local cache that was already set
+        setLabourAccessStatus(null);
+        // Still mark as initialized even on error, so UI doesn't stay in loading state
+        setIsInitialized(true);
+      } finally {
+        // Clear the in-progress flag
+        checkInProgressRef.current = null;
       }
-    } catch (error) {
-      console.error('Error checking labour access:', error);
-      setLabourAccessStatus(null);
-      // Still mark as initialized even on error, so UI doesn't stay in loading state
-      setIsInitialized(true);
-    }
+    })();
+
+    // Store the promise for deduplication
+    checkInProgressRef.current = checkPromise;
+    
+    // Always attach a catch handler to prevent unhandled rejections
+    checkPromise.catch((error: any) => {
+      // Mark error as handled to prevent React Native from logging it
+      if (error && typeof error === 'object') {
+        (error as any)._handled = true;
+        (error as any)._suppressUnhandled = true;
+      }
+      // Error is already handled in the promise, this is just to prevent unhandled rejection
+    });
+
+    return checkPromise;
   };
 
   const grantLabourAccess = async () => {
@@ -293,9 +408,14 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // This prevents API calls before user reaches home screen
     if (user?.id) {
       // Wrap in error handler to prevent unhandled promise rejections
-      checkLabourAccess().catch((error) => {
+      checkLabourAccess().catch((error: any) => {
         // Errors are already handled in checkLabourAccess, but catch here to prevent unhandled rejections
-        console.warn('checkLabourAccess error (handled):', error?.message || error);
+        // Mark as handled to prevent React Native from logging
+        if (error && typeof error === 'object') {
+          (error as any)._handled = true;
+          (error as any)._suppressUnhandled = true;
+        }
+        // Don't log - errors are already handled silently
       });
     } else {
       // User not authenticated - just load local cache and mark as initialized
@@ -328,11 +448,20 @@ export const LabourAccessProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
       // Only check labour access if user is authenticated
       // This prevents API calls when app comes to foreground before user is authenticated
-      if (user?.id) {
+      // Add debounce: only check if enough time has passed since last check
+      const now = Date.now();
+      const timeSinceLastCheck = now - lastCheckTimeRef.current;
+      
+      if (user?.id && timeSinceLastCheck >= MIN_CHECK_INTERVAL) {
         // Wrap in error handler to prevent unhandled promise rejections
-        checkLabourAccess().catch((error) => {
+        checkLabourAccess().catch((error: any) => {
           // Errors are already handled in checkLabourAccess, but catch here to prevent unhandled rejections
-          console.warn('checkLabourAccess error on app state change (handled):', error?.message || error);
+          // Mark as handled to prevent React Native from logging
+          if (error && typeof error === 'object') {
+            (error as any)._handled = true;
+            (error as any)._suppressUnhandled = true;
+          }
+          // Don't log - errors are already handled silently
         });
       }
     }

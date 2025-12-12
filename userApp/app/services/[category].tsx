@@ -377,13 +377,12 @@ export default function ServiceListingScreen() {
             if (found.name === 'labors') {
               await checkLabourAccess().catch((error: any) => {
                 // Errors are handled in checkLabourAccess, catch here to prevent unhandled rejections
-                const isSessionExpired = error?.message === 'Session expired' || 
-                                         error?.status === 401 && error?.message?.includes('Session expired') ||
-                                         error?._suppressUnhandled === true ||
-                                         error?._handled === true;
-                if (!isSessionExpired) {
-                  console.warn('checkLabourAccess error (handled):', error?.message || error);
+                // Mark as handled to prevent React Native from logging
+                if (error && typeof error === 'object') {
+                  (error as any)._handled = true;
+                  (error as any)._suppressUnhandled = true;
                 }
+                // Don't log - errors are already handled silently in checkLabourAccess
               });
             }
           } else {
