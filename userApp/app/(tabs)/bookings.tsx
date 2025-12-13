@@ -251,6 +251,7 @@ export default function BookingsScreen() {
           reportReason: b.report_reason,
           reportDescription: b.report_description,
           rating: b.rating,
+          selectedService: b.selected_service, // Add selected services
         }));
         setBookings(mapped);
       } else {

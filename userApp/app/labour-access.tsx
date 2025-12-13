@@ -350,8 +350,19 @@ export default function LabourAccessScreen() {
               const orderId = transaction?.order_id || 'N/A';
               const createdAt = transaction?.created_at || null;
               const status = transaction?.status || 'unknown';
-              const amount = transaction?.amount ?? 0;
+              // Safely convert amount to number with proper fallback
+              const amountValue = transaction?.amount;
+              const amount = typeof amountValue === 'number' && !isNaN(amountValue) 
+                ? amountValue 
+                : typeof amountValue === 'string' 
+                  ? parseFloat(amountValue) || 0 
+                  : 0;
               const transactionIdText = transaction?.transaction_id || null;
+              
+              // Format amount safely
+              const formattedAmount = typeof amount === 'number' && !isNaN(amount)
+                ? amount.toFixed(2)
+                : '0.00';
               
               return (
                 <View key={transactionId} style={styles.transactionCard}>
@@ -370,7 +381,7 @@ export default function LabourAccessScreen() {
                     </View>
                   </View>
                   <View style={styles.transactionDetails}>
-                    <Text style={styles.transactionAmount}>₹{amount.toFixed(2)}</Text>
+                    <Text style={styles.transactionAmount}>₹{formattedAmount}</Text>
                     {transactionIdText && (
                       <Text style={styles.transactionIdText}>
                         Txn: {transactionIdText}

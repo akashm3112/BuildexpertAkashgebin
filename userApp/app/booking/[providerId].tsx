@@ -30,6 +30,7 @@ import { useLabourAccess } from '@/context/LabourAccessContext';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/constants/api';
+import { SERVICE_CATEGORIES } from '@/constants/serviceCategories';
 
 const TIME_SLOTS = [
   '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
@@ -91,6 +92,15 @@ function isTimeSlotInPast(dateIndex: number, timeSlot: string) {
   return slotDate <= today;
 }
 
+interface SubService {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  price: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Provider {
   user_id: string;
   full_name: string;
@@ -99,8 +109,6 @@ interface Provider {
   years_of_experience: number;
   service_description: string;
   provider_service_id: string;
-  service_charge_value: number;
-  service_charge_unit: string;
   working_proof_urls?: string[];
   payment_start_date: string;
   payment_end_date: string;
@@ -108,7 +116,16 @@ interface Provider {
   totalReviews?: number;
   full_address?: string; // Added for location
   state?: string; // Added for state
+  city?: string; // Added for city
   service_name?: string; // Service category name
+  sub_services?: SubService[]; // Sub-services with pricing
+  pricing?: {
+    minPrice: number | null;
+    maxPrice: number | null;
+    priceRange: string | number | null;
+    displayPrice: string;
+    subServiceCount: number;
+  };
 }
 
 export default function BookingScreen() {
@@ -118,7 +135,8 @@ export default function BookingScreen() {
   const { labourAccessStatus } = useLabourAccess();
   const [selectedDate, setSelectedDate] = useState(0);
   const [selectedTime, setSelectedTime] = useState('');
-  const [selectedService, setSelectedService] = useState('');
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set()); // Multiple sub-service IDs
+  const [selectedServicesData, setSelectedServicesData] = useState<Map<string, { name: string; price: number }>>(new Map()); // Store selected services data
   const [loading, setLoading] = useState(false);
   const [fetchingProvider, setFetchingProvider] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -191,7 +209,7 @@ export default function BookingScreen() {
   };
 
   const handleBooking = async () => {
-    if (!selectedTime || !selectedService || !provider) {
+    if (!selectedTime || selectedServices.size === 0 || !provider) {
       showAlert(t('booking.incompleteSelection'), t('booking.selectTimeAndService'), 'warning');
       return;
     }
@@ -226,9 +244,13 @@ export default function BookingScreen() {
     setLoading(true);
     
     try {
+      // For multiple services, send the first selected service ID (backend can be updated later to handle multiple)
+      // Or send comma-separated service IDs
+      const selectedServiceIds = Array.from(selectedServices);
       const bookingData = {
         providerServiceId: provider.provider_service_id,
-        selectedService: selectedService,
+        selectedService: selectedServiceIds.length === 1 ? selectedServiceIds[0] : selectedServiceIds.join(','), // Send first service or comma-separated list
+        selectedServices: selectedServiceIds, // Send array for future support
         appointmentDate: DATES[selectedDate].fullDate,
         appointmentTime: selectedTime
       };
@@ -290,114 +312,58 @@ export default function BookingScreen() {
     router.push('/(tabs)');
   };
 
-  // Generate services based on provider's service category
-  const getServices = (): string[] => {
-    if (!provider) return [];
-    
-    // Get service category from provider
-    const serviceCategory = provider.service_name || '';
-    
-    // Default service options for each category (3 main + Others)
-    const serviceOptions: Record<string, string[]> = {
-      'plumber': [
-        t('serviceOptions.tapRepair'),
-        t('serviceOptions.pipeLeakage'),
-        t('serviceOptions.bathroomFitting'),
-        t('serviceOptions.others')
-      ],
-      'mason-mastri': [
-        t('serviceOptions.wallConstruction'),
-        t('serviceOptions.foundationWork'),
-        t('serviceOptions.brickLaying'),
-        t('serviceOptions.others')
-      ],
-      'electrician': [
-        t('serviceOptions.wiringInstallation'),
-        t('serviceOptions.switchSocketInstallation'),
-        t('serviceOptions.fanInstallation'),
-        t('serviceOptions.others')
-      ],
-      'carpenter': [
-        t('serviceOptions.doorInstallation'),
-        t('serviceOptions.windowInstallation'),
-        t('serviceOptions.furnitureMaking'),
-        t('serviceOptions.others')
-      ],
-      'painter': [
-        t('serviceOptions.interiorPainting'),
-        t('serviceOptions.exteriorPainting'),
-        t('serviceOptions.wallTexture'),
-        t('serviceOptions.others')
-      ],
-      'painting-cleaning': [
-        t('serviceOptions.interiorPainting'),
-        t('serviceOptions.exteriorPainting'),
-        t('serviceOptions.wallTexture'),
-        t('serviceOptions.others')
-      ],
-      'cleaning': [
-        t('serviceOptions.houseCleaning'),
-        t('serviceOptions.officeCleaning'),
-        t('serviceOptions.deepCleaning'),
-        t('serviceOptions.others')
-      ],
-      'granite-tiles': [
-        t('serviceOptions.graniteInstallation'),
-        t('serviceOptions.tileInstallation'),
-        t('serviceOptions.kitchenCountertop'),
-        t('serviceOptions.others')
-      ],
-      'engineer-interior': [
-        t('serviceOptions.interiorDesign'),
-        t('serviceOptions.spacePlanning'),
-        t('serviceOptions.threeDVisualization'),
-        t('serviceOptions.others')
-      ],
-      'labors': [
-        t('serviceOptions.loadingUnloading'),
-        t('serviceOptions.materialTransportation'),
-        t('serviceOptions.siteCleaning'),
-        t('serviceOptions.others')
-      ],
-      'interiors-building': [
-        t('serviceOptions.completeInteriorDesign'),
-        t('serviceOptions.modularKitchen'),
-        t('serviceOptions.wardrobeDesign'),
-        t('serviceOptions.others')
-      ],
-      'stainless-steel': [
-        t('serviceOptions.kitchenSinkInstallation'),
-        t('serviceOptions.staircaseRailing'),
-        t('serviceOptions.gateInstallation'),
-        t('serviceOptions.others')
-      ],
-      'contact-building': [
-        t('serviceOptions.completeHouseConstruction'),
-        t('serviceOptions.commercialBuilding'),
-        t('serviceOptions.renovationServices'),
-        t('serviceOptions.others')
-      ],
-      'glass-mirror': [
-        t('serviceOptions.mirrorInstallation'),
-        t('serviceOptions.glassDoorInstallation'),
-        t('serviceOptions.windowGlassReplacement'),
-        t('serviceOptions.others')
-      ],
-      'borewell': [
-        t('serviceOptions.borewellDrilling'),
-        t('serviceOptions.submersiblePumpInstallation'),
-        t('serviceOptions.borewellMaintenance'),
-        t('serviceOptions.waterTesting')
-      ]
-    };
-    
-    // Return services based on category, or fallback to description parsing
-    if (serviceCategory && serviceOptions[serviceCategory]) {
-      return serviceOptions[serviceCategory];
+  // PRODUCTION: Get only provider's sub-services (no fallback)
+  const getServices = (): Array<{ id: string; name: string; price: number }> => {
+    if (!provider || !provider.sub_services || provider.sub_services.length === 0) {
+      return [];
     }
     
-    // Fallback: parse from service description if category not found
-    return provider.service_description.split(', ').filter((service: string) => service.trim());
+    // Map sub-services to display format
+    return provider.sub_services.map(subService => {
+      // Get display name from serviceCategories or use serviceName
+      const serviceCategory = SERVICE_CATEGORIES.find(cat => cat.id === subService.serviceId);
+      const displayName = serviceCategory?.name || subService.serviceName || subService.serviceId;
+      
+      return {
+        id: subService.serviceId, // Use serviceId as unique identifier
+        name: displayName,
+        price: subService.price
+      };
+    });
+  };
+
+  // Calculate total cost from selected services
+  const calculateTotalCost = (): number => {
+    let total = 0;
+    selectedServices.forEach(serviceId => {
+      const serviceData = selectedServicesData.get(serviceId);
+      if (serviceData) {
+        total += serviceData.price;
+      }
+    });
+    return total;
+  };
+
+  // Handle service selection/deselection
+  const handleServiceToggle = (service: { id: string; name: string; price: number }) => {
+    const newSelectedServices = new Set(selectedServices);
+    const newSelectedServicesData = new Map(selectedServicesData);
+    
+    if (newSelectedServices.has(service.id)) {
+      // Deselect
+      newSelectedServices.delete(service.id);
+      newSelectedServicesData.delete(service.id);
+    } else {
+      // Select
+      newSelectedServices.add(service.id);
+      newSelectedServicesData.set(service.id, {
+        name: service.name,
+        price: service.price
+      });
+    }
+    
+    setSelectedServices(newSelectedServices);
+    setSelectedServicesData(newSelectedServicesData);
   };
 
   if (fetchingProvider) {
@@ -474,15 +440,46 @@ export default function BookingScreen() {
                   <Text style={styles.rating}>⭐ {provider.averageRating?.toFixed(1) || 'N/A'}</Text>
                 </View>
                 <View style={styles.locationContainer}>
-                  <MapPin size={14} color="#64748B" />
-                  <Text style={styles.location}>
-                    {provider.state ? ` ${provider.state}` : ''}
+                  <MapPin size={getResponsiveSpacing(12, 14, 16)} color="#64748B" />
+                  <Text 
+                    style={styles.location}
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                  >
+                    {provider.city && provider.state 
+                      ? `${provider.city}, ${provider.state}` 
+                      : provider.city || provider.state || 'Location not available'}
                   </Text>
                 </View>
               </View>
             </View>
             <View style={styles.priceContainer}>
-              <Text style={styles.price}>₹{provider.service_charge_value}/{provider.service_charge_unit}</Text>
+              {provider.pricing && provider.pricing.minPrice !== null && provider.pricing.maxPrice !== null ? (
+                <View>
+                  {provider.pricing.subServiceCount === 1 ? (
+                    <Text style={styles.price}>
+                      ₹{provider.pricing.minPrice.toLocaleString('en-IN')}
+                    </Text>
+                  ) : provider.pricing.minPrice === provider.pricing.maxPrice ? (
+                    <Text style={styles.price}>
+                      ₹{provider.pricing.minPrice.toLocaleString('en-IN')}
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={styles.price}>
+                        ₹{provider.pricing.minPrice.toLocaleString('en-IN')} - ₹{provider.pricing.maxPrice.toLocaleString('en-IN')}
+                      </Text>
+                      {provider.pricing.subServiceCount > 1 && (
+                        <Text style={styles.priceRangeText}>
+                          {provider.pricing.subServiceCount} services
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.price}>Price on request</Text>
+              )}
             </View>
           </View>
         </View>
@@ -503,41 +500,60 @@ export default function BookingScreen() {
           </View>
         )}
 
-        {/* Service Selection */}
+        {/* Service Selection - Multiple Selection */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
             {t('booking.selectService', { serviceName: provider.service_name ? `${provider.service_name.charAt(0).toUpperCase() + provider.service_name.slice(1)}` : t('booking.service') })}
           </Text>
+          {selectedServices.size > 0 && (
+            <Text style={styles.selectionHint}>
+              {selectedServices.size} {selectedServices.size === 1 ? 'service' : 'services'} selected
+            </Text>
+          )}
           <View style={styles.servicesGrid}>
             {getServices().length > 0 ? (
-              getServices().map((service, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.serviceOption,
-                    selectedService === service && styles.selectedServiceOption
-                  ]}
-                  onPress={() => setSelectedService(service)}
-                >
-                  <Text 
+              getServices().map((service, index) => {
+                const isSelected = selectedServices.has(service.id);
+                return (
+                  <TouchableOpacity
+                    key={service.id || index}
                     style={[
-                      styles.serviceText,
-                      selectedService === service && styles.selectedServiceText
+                      styles.serviceOption,
+                      isSelected && styles.selectedServiceOption
                     ]}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
+                    onPress={() => handleServiceToggle(service)}
+                    activeOpacity={0.7}
                   >
-                    {service}
-                  </Text>
-                  {selectedService === service && (
-                    <CheckCircle size={16} color="#FFFFFF" />
-                  )}
-                </TouchableOpacity>
-              ))
+                    <View style={styles.serviceOptionContent}>
+                      <Text 
+                        style={[
+                          styles.serviceText,
+                          isSelected && styles.selectedServiceText
+                        ]}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                      >
+                        {service.name}
+                      </Text>
+                      <Text 
+                        style={[
+                          styles.servicePrice,
+                          isSelected && styles.selectedServicePrice
+                        ]}
+                      >
+                        ₹{service.price.toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <CheckCircle size={getResponsiveSpacing(16, 18, 20)} color="#FFFFFF" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })
             ) : (
               <View style={styles.noServicesContainer}>
                 <Text style={styles.noServicesText}>
-                  {t('booking.noSpecificServices')}
+                  No sub-services available for this provider
                 </Text>
               </View>
             )}
@@ -621,40 +637,90 @@ export default function BookingScreen() {
           <Text style={styles.summaryTitle}>{t('booking.bookingSummary')}</Text>
           
           <View style={styles.summaryRow}>
-            <User size={16} color="#64748B" />
+            <User size={16} color="#64748B" style={styles.summaryIcon} />
             <Text style={styles.summaryLabel}>{t('booking.provider')}:</Text>
-            <Text style={styles.summaryValue}>{provider.full_name}</Text>
+            <View style={styles.summaryValueContainer}>
+              <Text 
+                style={styles.summaryValue}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
+                {provider.full_name}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.summaryRow}>
-            <Calendar size={16} color="#64748B" />
+            <Calendar size={16} color="#64748B" style={styles.summaryIcon} />
             <Text style={styles.summaryLabel}>{t('booking.date')}:</Text>
-            <Text style={styles.summaryValue}>
-              {selectedDate !== null ? DATES[selectedDate].date : t('booking.notSelected')}
-            </Text>
+            <View style={styles.summaryValueContainer}>
+              <Text style={styles.summaryValue}>
+                {selectedDate !== null ? DATES[selectedDate].date : t('booking.notSelected')}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.summaryRow}>
-            <Clock size={16} color="#64748B" />
+            <Clock size={16} color="#64748B" style={styles.summaryIcon} />
             <Text style={styles.summaryLabel}>{t('booking.time')}:</Text>
-            <Text style={styles.summaryValue}>
-              {selectedTime || t('booking.notSelected')}
-            </Text>
+            <View style={styles.summaryValueContainer}>
+              <Text style={styles.summaryValue}>
+                {selectedTime || t('booking.notSelected')}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.summaryRow}>
-            <CreditCard size={16} color="#64748B" />
+            <CreditCard size={16} color="#64748B" style={styles.summaryIcon} />
             <Text style={styles.summaryLabel}>{t('booking.service')}:</Text>
-            <Text style={styles.summaryValue}>
-              {selectedService || t('booking.notSelected')}
-            </Text>
+            <View style={styles.summaryValueContainer}>
+              {selectedServices.size > 0 ? (
+                <Text 
+                  style={styles.summaryValue}
+                  numberOfLines={3}
+                  ellipsizeMode="tail"
+                >
+                  {Array.from(selectedServices)
+                    .map((serviceId) => {
+                      const serviceData = selectedServicesData.get(serviceId);
+                      return serviceData?.name || serviceId;
+                    })
+                    .join(', ')}
+                </Text>
+              ) : (
+                <Text style={styles.summaryValue}>{t('booking.notSelected')}</Text>
+              )}
+            </View>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>{t('booking.estimatedCost')}:</Text>
-            <Text style={styles.totalValue}>₹{provider.service_charge_value}/{provider.service_charge_unit}</Text>
+            <View style={styles.totalValueContainer}>
+              {selectedServices.size > 0 ? (
+                <>
+                  <Text style={styles.totalValue}>
+                    ₹{calculateTotalCost().toLocaleString('en-IN')}
+                  </Text>
+                  {selectedServices.size > 1 && (
+                    <Text style={styles.totalBreakdown}>
+                      ({selectedServices.size} services)
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.totalValue}>
+                  {provider.pricing && provider.pricing.minPrice !== null && provider.pricing.maxPrice !== null
+                    ? provider.pricing.subServiceCount === 1
+                      ? `₹${provider.pricing.minPrice.toLocaleString('en-IN')}`
+                      : provider.pricing.minPrice === provider.pricing.maxPrice
+                        ? `₹${provider.pricing.minPrice.toLocaleString('en-IN')}`
+                        : `₹${provider.pricing.minPrice.toLocaleString('en-IN')} - ₹${provider.pricing.maxPrice.toLocaleString('en-IN')}`
+                    : 'Select services'}
+                </Text>
+              )}
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -664,10 +730,10 @@ export default function BookingScreen() {
         <TouchableOpacity
           style={[
             styles.bookButton,
-            (!selectedTime || !selectedService || loading) && styles.bookButtonDisabled
+            (!selectedTime || selectedServices.size === 0 || loading) && styles.bookButtonDisabled
           ]}
           onPress={handleBooking}
-          disabled={!selectedTime || !selectedService || loading}
+          disabled={!selectedTime || selectedServices.size === 0 || loading}
         >
           <Text style={styles.bookButtonText}>
             {loading ? t('booking.confirmingBooking') : t('booking.confirmBooking')}
@@ -847,11 +913,15 @@ const styles = StyleSheet.create({
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    minWidth: 0, // Allow text to shrink
   },
   location: {
-    fontSize: getResponsiveSpacing(10, 12, 14),
+    fontSize: getResponsiveSpacing(11, 12, 14),
     color: '#64748B',
-    marginLeft: getResponsiveSpacing(3, 4, 5),
+    marginLeft: getResponsiveSpacing(4, 5, 6),
+    flex: 1,
+    flexWrap: 'wrap',
   },
   priceContainer: {
     alignItems: 'flex-end',
@@ -860,6 +930,13 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveSpacing(14, 16, 18),
     fontWeight: '600',
     color: '#3B82F6',
+    marginBottom: 2,
+  },
+  priceRangeText: {
+    fontSize: getResponsiveSpacing(10, 11, 12),
+    fontWeight: '400',
+    color: '#64748B',
+    marginTop: 2,
   },
   section: {
     marginBottom: getResponsiveSpacing(16, 24, 32),
@@ -868,7 +945,13 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveSpacing(16, 18, 20),
     fontWeight: '600',
     color: '#1E293B',
-    marginBottom: getResponsiveSpacing(12, 16, 20),
+    marginBottom: getResponsiveSpacing(8, 10, 12),
+  },
+  selectionHint: {
+    fontSize: getResponsiveSpacing(12, 13, 14),
+    fontWeight: '500',
+    color: '#3B82F6',
+    marginBottom: getResponsiveSpacing(10, 12, 14),
   },
   servicesGrid: {
     flexDirection: 'row',
@@ -876,29 +959,55 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: getResponsiveSpacing(8, 12, 16),
   },
+  serviceOptionContent: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  servicePrice: {
+    fontSize: getResponsiveSpacing(12, 13, 14),
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: getResponsiveSpacing(2, 3, 4),
+  },
+  selectedServicePrice: {
+    color: '#FFFFFF',
+  },
   serviceOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingVertical: getResponsiveSpacing(10, 12, 14),
-    paddingHorizontal: getResponsiveSpacing(12, 16, 18),
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: getResponsiveSpacing(8, 12, 16),
-    width: '48%',
     justifyContent: 'space-between',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: getResponsiveSpacing(12, 14, 16),
+    paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    marginBottom: getResponsiveSpacing(10, 12, 14),
+    width: '48%',
+    minHeight: getResponsiveSpacing(70, 80, 90),
   },
   selectedServiceOption: {
     backgroundColor: '#3B82F6',
     borderColor: '#3B82F6',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   serviceText: {
-    fontSize: getResponsiveSpacing(12, 14, 16),
-    color: '#64748B',
-    fontWeight: '500',
+    fontSize: getResponsiveSpacing(13, 14, 15),
+    fontWeight: '600',
+    color: '#1E293B',
     flex: 1,
-    maxWidth: getResponsiveSpacing(100, 120, 140),
+    marginBottom: getResponsiveSpacing(4, 5, 6),
+    lineHeight: getResponsiveSpacing(18, 20, 22),
   },
   selectedServiceText: {
     color: '#FFFFFF',
@@ -1008,21 +1117,35 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: getResponsiveSpacing(8, 12, 16),
+    minHeight: getResponsiveSpacing(20, 24, 28), // Ensure consistent row height
+  },
+  summaryIcon: {
+    marginTop: getResponsiveSpacing(2, 3, 4), // Align icon with text baseline
+    flexShrink: 0, // Prevent icon from shrinking
   },
   summaryLabel: {
     fontSize: getResponsiveSpacing(12, 14, 16),
     color: '#64748B',
     marginLeft: getResponsiveSpacing(6, 8, 10),
     marginRight: getResponsiveSpacing(6, 8, 10),
-    minWidth: getResponsiveSpacing(50, 60, 70),
+    minWidth: getResponsiveSpacing(60, 70, 80), // Fixed width for consistent alignment
+    flexShrink: 0, // Prevent label from shrinking
+  },
+  summaryValueContainer: {
+    flex: 1,
+    minWidth: 0, // Allow flex to shrink below content size
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
   },
   summaryValue: {
     fontSize: getResponsiveSpacing(12, 14, 16),
     color: '#1E293B',
     fontWeight: '500',
-    flex: 1,
+    textAlign: 'right',
+    flexShrink: 1, // Allow text to shrink
+    maxWidth: '100%', // Prevent overflow
   },
   divider: {
     height: 1,
@@ -1033,16 +1156,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: getResponsiveSpacing(24, 28, 32), // Ensure consistent height
   },
   totalLabel: {
     fontSize: getResponsiveSpacing(14, 16, 18),
     fontWeight: '600',
     color: '#1E293B',
+    flexShrink: 0, // Prevent label from shrinking
+  },
+  totalValueContainer: {
+    alignItems: 'flex-end',
+    flex: 1,
+    minWidth: 0, // Allow flex to shrink
+    marginLeft: getResponsiveSpacing(8, 12, 16), // Add margin for spacing
   },
   totalValue: {
     fontSize: getResponsiveSpacing(16, 18, 20),
     fontWeight: '700',
     color: '#3B82F6',
+    textAlign: 'right',
+    flexShrink: 1, // Allow text to shrink if needed
+  },
+  totalBreakdown: {
+    fontSize: getResponsiveSpacing(10, 12, 14),
+    fontWeight: '400',
+    color: '#64748B',
+    textAlign: 'right',
+    marginTop: 2,
   },
   footer: {
     backgroundColor: '#FFFFFF',

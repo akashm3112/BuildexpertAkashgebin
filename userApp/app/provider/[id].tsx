@@ -225,14 +225,22 @@ export default function ProviderDetailScreen() {
                 <Text style={styles.reviews}>({provider.totalReviews || 0} reviews)</Text>
               </View>
               <View style={styles.locationRow}>
-                <MapPin size={14} color="#64748B" />
-                <Text style={styles.location}>{provider.state || 'State not specified'}</Text>
+                <MapPin size={getResponsiveSpacing(12, 14, 16)} color="#64748B" />
+                <Text 
+                  style={styles.location}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
+                  {provider.city && provider.state 
+                    ? `${provider.city}, ${provider.state}` 
+                    : provider.city || provider.state || 'Location not available'}
+                </Text>
               </View>
             </View>
           </View>
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
-              <Award size={getResponsiveSpacing(18, 20, 22)} color="#3B82F6" />
+              <Award size={getResponsiveSpacing(14, 16, 18)} color="#3B82F6" />
               <Text style={styles.statValue}>
                 {provider.years_of_experience} {t('serviceListing.years')}
               </Text>
@@ -242,17 +250,42 @@ export default function ProviderDetailScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Clock size={getResponsiveSpacing(18, 20, 22)} color="#10B981" />
-              <Text style={styles.statValue}>
-                ₹{provider.service_charge_value}/{provider.service_charge_unit}
-              </Text>
+              <Clock size={getResponsiveSpacing(14, 16, 18)} color="#10B981" />
+              {provider.pricing && provider.pricing.minPrice !== null && provider.pricing.maxPrice !== null ? (
+                <View style={styles.priceContainer}>
+                  {provider.pricing.subServiceCount === 1 ? (
+                    <Text style={styles.statValue}>
+                      ₹{provider.pricing.minPrice.toLocaleString('en-IN')}
+                    </Text>
+                  ) : provider.pricing.minPrice === provider.pricing.maxPrice ? (
+                    <Text style={styles.statValue}>
+                      ₹{provider.pricing.minPrice.toLocaleString('en-IN')}
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={styles.statValue}>
+                        ₹{provider.pricing.minPrice.toLocaleString('en-IN')} - ₹{provider.pricing.maxPrice.toLocaleString('en-IN')}
+                      </Text>
+                      {provider.pricing.subServiceCount > 1 && (
+                        <Text style={styles.priceRangeText}>
+                          {provider.pricing.subServiceCount} services
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.statValue}>
+                  Price on request
+                </Text>
+              )}
               <Text style={styles.statLabel}>
                 {t('providerDetail.startingPrice')}
               </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Calendar size={getResponsiveSpacing(18, 20, 22)} color="#F59E0B" />
+              <Calendar size={getResponsiveSpacing(14, 16, 18)} color="#F59E0B" />
               <Text style={styles.statValue}>
                 {t('providerDetail.available')}
               </Text>
@@ -448,34 +481,50 @@ const styles = StyleSheet.create({
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    minWidth: 0, // Allow text to shrink
   },
   location: {
-    fontSize: 14,
+    fontSize: getResponsiveFontSize(12, 13, 14),
     color: '#64748B',
-    marginLeft: 4,
+    marginLeft: getResponsiveSpacing(4, 5, 6),
+    flex: 1,
+    flexWrap: 'wrap',
   },
   statsContainer: {
     flexDirection: 'row',
     backgroundColor: '#F8FAFC',
-    borderRadius: getResponsiveSpacing(10, 12, 14),
-    padding: getResponsiveSpacing(14, 16, 18),
+    borderRadius: getResponsiveSpacing(8, 10, 12),
+    padding: getResponsiveSpacing(8, 10, 12),
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: getResponsiveSpacing(4, 5, 6),
   },
   statValue: {
-    fontSize: getResponsiveFontSize(13, 14, 15),
+    fontSize: getResponsiveFontSize(11, 12, 13),
     fontWeight: '600',
     color: '#1E293B',
-    marginTop: getResponsiveSpacing(4, 5, 6),
-    marginBottom: getResponsiveSpacing(2, 3, 4),
+    marginTop: getResponsiveSpacing(2, 3, 4),
+    marginBottom: getResponsiveSpacing(1, 2, 3),
     textAlign: 'center',
     width: '100%',
   },
+  priceContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  priceRangeText: {
+    fontSize: getResponsiveFontSize(8, 9, 10),
+    fontWeight: '400',
+    color: '#64748B',
+    marginTop: getResponsiveSpacing(1, 2, 3),
+    textAlign: 'center',
+  },
   statLabel: {
-    fontSize: getResponsiveFontSize(11, 12, 13),
+    fontSize: getResponsiveFontSize(9, 10, 11),
     color: '#64748B',
     textAlign: 'center',
     width: '100%',
@@ -483,7 +532,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     backgroundColor: '#E2E8F0',
-    marginHorizontal: getResponsiveSpacing(12, 16, 20),
+    marginHorizontal: getResponsiveSpacing(6, 8, 10),
   },
   section: {
     marginBottom: 24,

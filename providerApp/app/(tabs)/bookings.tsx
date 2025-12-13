@@ -22,6 +22,25 @@ import { useBookings } from '@/context/BookingContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { API_BASE_URL } from '@/constants/api';
 import { SERVICE_CATEGORIES } from '@/constants/serviceCategories';
+
+// Helper function to get service names from comma-separated service IDs
+const getServiceNamesFromIds = (selectedService: string | null | undefined): string => {
+  if (!selectedService || selectedService.trim() === '') {
+    return 'N/A';
+  }
+  
+  const serviceIds = selectedService.split(',').map(id => id.trim()).filter(id => id);
+  if (serviceIds.length === 0) {
+    return 'N/A';
+  }
+  
+  const serviceNames = serviceIds.map(id => {
+    const service = SERVICE_CATEGORIES.find(s => s.id === id);
+    return service ? service.name : id;
+  });
+  
+  return serviceNames.join(', ');
+};
 import { tokenManager } from '../../utils/tokenManager';
 import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
@@ -36,6 +55,7 @@ import {
   User,
   AlertTriangle,
   Star, // Import Star icon for ratings
+  CreditCard,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, parseISO } from 'date-fns';
@@ -596,6 +616,20 @@ export default function BookingsScreen() {
               </Text>
             </View>
           </View>
+
+          {item.selected_service && (
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <CreditCard size={16} color="#8B5CF6" />
+              </View>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Sub-Services</Text>
+                <Text style={styles.detailText} numberOfLines={2} ellipsizeMode="tail">
+                  {getServiceNamesFromIds(item.selected_service)}
+                </Text>
+              </View>
+            </View>
+          )}
 
         </View>
 

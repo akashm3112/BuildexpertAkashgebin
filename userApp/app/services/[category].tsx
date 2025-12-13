@@ -252,8 +252,6 @@ interface Provider {
   years_of_experience: number;
   service_description: string;
   provider_service_id: string;
-  service_charge_value: number;
-  service_charge_unit: string;
   working_proof_urls?: string[];
   payment_start_date: string;
   payment_end_date: string;
@@ -261,6 +259,13 @@ interface Provider {
   totalReviews?: number;
   state: string;
   city?: string;
+  pricing?: {
+    minPrice: number | null;
+    maxPrice: number | null;
+    priceRange: string | number | null;
+    displayPrice: string;
+    subServiceCount: number;
+  };
 }
 
 export default function ServiceListingScreen() {
@@ -929,15 +934,44 @@ export default function ServiceListingScreen() {
         <View style={styles.detailsRow}>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>{t('serviceListing.experience')}</Text>
-            <Text style={styles.detailValue}>{item.years_of_experience} {t('serviceListing.years')}</Text>
+            <Text style={styles.detailValue}>
+              {item.years_of_experience} {t('serviceListing.years')}
+            </Text>
           </View>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>{t('serviceListing.price')}</Text>
-            <Text style={styles.priceValue}>₹{item.service_charge_value}/{item.service_charge_unit}</Text>
+            {item.pricing && item.pricing.minPrice !== null && item.pricing.maxPrice !== null ? (
+              <View style={styles.priceContainer}>
+                {item.pricing.subServiceCount === 1 ? (
+                  <Text style={styles.priceValue}>
+                    ₹{item.pricing.minPrice.toLocaleString('en-IN')}
+                  </Text>
+                ) : item.pricing.minPrice === item.pricing.maxPrice ? (
+                  <Text style={styles.priceValue}>
+                    ₹{item.pricing.minPrice.toLocaleString('en-IN')}
+                  </Text>
+                ) : (
+                  <>
+                    <Text style={styles.priceValue}>
+                      ₹{item.pricing.minPrice.toLocaleString('en-IN')} - ₹{item.pricing.maxPrice.toLocaleString('en-IN')}
+                    </Text>
+                    {item.pricing.subServiceCount > 1 && (
+                      <Text style={styles.priceRange}>
+                        {item.pricing.subServiceCount} services
+                      </Text>
+                    )}
+                  </>
+                )}
+              </View>
+            ) : (
+              <Text style={styles.priceValue}>Price on request</Text>
+            )}
           </View>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>{t('serviceListing.availability')}</Text>
-            <Text style={styles.availabilityValue}>{t('serviceListing.availableToday')}</Text>
+            <Text style={styles.availabilityValue}>
+              {t('serviceListing.availableToday')}
+            </Text>
           </View>
         </View>
 
@@ -1725,29 +1759,55 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderRadius: 8,
     paddingHorizontal: getResponsiveSpacing(10, 12, 14),
+    gap: getResponsiveSpacing(8, 10, 12),
   },
   detailItem: {
+    flex: 1,
     alignItems: 'center',
+    minWidth: 0, // Allow flex items to shrink below their content size
+    maxWidth: '33.33%', // Ensure equal distribution
   },
   detailLabel: {
     fontSize: getResponsiveSpacing(10, 12, 14),
     color: '#64748B',
     marginBottom: getResponsiveSpacing(3, 4, 5),
+    textAlign: 'center',
+    width: '100%',
   },
   detailValue: {
     fontSize: getResponsiveSpacing(12, 14, 16),
     fontWeight: '500',
     color: '#1E293B',
+    textAlign: 'center',
+    width: '100%',
+  },
+  priceContainer: {
+    width: '100%',
+    alignItems: 'center',
+    minWidth: 0, // Allow container to shrink
   },
   priceValue: {
-    fontSize: getResponsiveSpacing(12, 14, 16),
+    fontSize: getResponsiveSpacing(12, 13, 14),
     fontWeight: '600',
     color: '#3B82F6',
+    textAlign: 'center',
+    width: '100%',
+    flexWrap: 'wrap',
+  },
+  priceRange: {
+    fontSize: getResponsiveSpacing(9, 10, 11),
+    fontWeight: '400',
+    color: '#64748B',
+    marginTop: 2,
+    textAlign: 'center',
+    width: '100%',
   },
   availabilityValue: {
     fontSize: getResponsiveSpacing(10, 12, 14),
     fontWeight: '500',
     color: '#10B981',
+    textAlign: 'center',
+    width: '100%',
   },
   servicesSection: {
     marginBottom: getResponsiveSpacing(12, 16, 20),

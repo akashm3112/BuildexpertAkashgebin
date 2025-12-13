@@ -87,7 +87,7 @@ export default function FeaturedProviders() {
               specialty: p.service_name,
               rating: p.averageRating || 0,
               reviews: p.totalReviews || 0,
-              price: `₹${p.service_charge_value}/${p.service_charge_unit}`,
+              price: p.pricing?.displayPrice || 'Price on request',
               verified: true,
               image: workImages[0] || p.profile_pic_url || 'https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=600',
               providerServiceId: p.provider_service_id,

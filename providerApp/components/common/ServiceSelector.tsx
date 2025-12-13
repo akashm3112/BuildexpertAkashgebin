@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { ChevronDown, Search, X } from 'lucide-react-native';
 import { useLanguage } from '@/context/LanguageContext';
-import { INDIAN_CITIES, IndianCity, getCitiesByState } from '@/constants/indianCities';
+import { SERVICE_CATEGORIES } from '@/constants/serviceCategories';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isSmallScreen = screenWidth < 375;
@@ -25,69 +25,78 @@ const getResponsiveSpacing = (small: number, medium: number, large: number) => {
   return large;
 };
 
-interface CitySelectorProps {
+interface ServiceSelectorProps {
   value: string;
-  onSelect: (city: string) => void;
-  state: string; // Required: state must be selected first
+  onSelect: (serviceId: string) => void;
   placeholder?: string;
   error?: string;
   disabled?: boolean;
   style?: any;
+  excludeServiceId?: string; // Exclude the current main service from the list
+  excludeServiceIds?: string[]; // Exclude multiple service IDs (for sub-services to prevent duplicates)
+  allowedServiceIds?: string[]; // Only show these service IDs (for sub-services related to main service)
 }
 
-export default function CitySelector({
+export default function ServiceSelector({
   value,
   onSelect,
-  state,
   placeholder,
   error,
   disabled = false,
   style,
-}: CitySelectorProps) {
+  excludeServiceId,
+  excludeServiceIds = [],
+  allowedServiceIds,
+}: ServiceSelectorProps) {
   const { t } = useLanguage();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Get cities for the selected state
-  const availableCities = useMemo(() => {
-    if (!state) return [];
-    return getCitiesByState(state);
-  }, [state]);
-
-  const selectedCity = useMemo(() => {
-    return availableCities.find(city => city.name === value);
-  }, [value, availableCities]);
-
-  // Helper function to get translated city name
-  const getTranslatedCityName = useMemo(() => {
-    return (cityName: string): string => {
-      const translationKey = `cities.${cityName}`;
-      const translated = t(translationKey);
-      // If translation exists and is different from the key, return it; otherwise return original name
-      return translated !== translationKey ? translated : cityName;
-    };
-  }, [t]);
-
-  const filteredCities = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return availableCities;
+  // Filter services based on:
+  // 1. If allowedServiceIds is provided, only show those services (for sub-services)
+  // 2. Exclude the main service being registered
+  // 3. Exclude any already selected sub-services (but keep the current value)
+  const availableServices = useMemo(() => {
+    let services = SERVICE_CATEGORIES;
+    
+    // If allowedServiceIds is provided, filter to only those services
+    if (allowedServiceIds && allowedServiceIds.length > 0) {
+      services = services.filter(service => allowedServiceIds.includes(service.id));
     }
-    return availableCities.filter(city => {
-      const cityName = city.name.toLowerCase();
-      const translatedName = getTranslatedCityName(city.name).toLowerCase();
-      const query = searchQuery.toLowerCase();
-      return cityName.includes(query) || translatedName.includes(query);
-    });
-  }, [searchQuery, availableCities, t]);
+    
+    // Exclude the main service and other selected sub-services
+    const excludedIds = new Set([
+      ...(excludeServiceId ? [excludeServiceId] : []),
+      ...excludeServiceIds.filter(id => id !== value), // Exclude others but not the current value
+    ]);
+    
+    return services.filter(service => !excludedIds.has(service.id));
+  }, [excludeServiceId, excludeServiceIds, value, allowedServiceIds]);
 
-  const handleCitySelect = (city: IndianCity) => {
-    onSelect(city.name);
+  const selectedService = useMemo(() => {
+    return availableServices.find(service => service.id === value);
+  }, [value, availableServices]);
+
+  const filteredServices = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return availableServices;
+    }
+    return availableServices.filter(service => {
+      const serviceName = service.name.toLowerCase();
+      const translatedName = (t(`serviceCategories.${service.id}`) || service.name).toLowerCase();
+      const query = searchQuery.toLowerCase();
+      return serviceName.includes(query) || translatedName.includes(query) || service.id.includes(query);
+    });
+  }, [searchQuery, availableServices, t]);
+
+  const handleServiceSelect = (serviceId: string) => {
+    onSelect(serviceId);
     setIsModalVisible(false);
     setSearchQuery('');
   };
 
   const handleOpenModal = () => {
-    if (!disabled && state) {
+    if (!disabled) {
       setIsModalVisible(true);
     }
   };
@@ -97,25 +106,35 @@ export default function CitySelector({
     setSearchQuery('');
   };
 
-  // Force re-render when language changes
   useEffect(() => {
-    // This will trigger a re-render when the language context changes
+    // Trigger re-render when language changes
   }, [t]);
 
-  const renderCityItem = ({ item }: { item: IndianCity }) => (
+  const renderServiceItem = ({ item }: { item: typeof SERVICE_CATEGORIES[0] }) => (
     <TouchableOpacity
       style={[
-        styles.cityItem,
-        selectedCity?.name === item.name && styles.selectedCityItem,
+        styles.serviceItem,
+        selectedService?.id === item.id && styles.selectedServiceItem,
       ]}
-      onPress={() => handleCitySelect(item)}
+      onPress={() => handleServiceSelect(item.id)}
     >
-      <Text style={[
-        styles.cityName,
-        selectedCity?.name === item.name && styles.selectedCityName,
-      ]}>
-        {getTranslatedCityName(item.name)}
-      </Text>
+      <View style={styles.serviceItemContent}>
+        <Text style={styles.serviceIcon}>{item.icon}</Text>
+        <View style={styles.serviceTextContainer}>
+          <Text style={[
+            styles.serviceName,
+            selectedService?.id === item.id && styles.selectedServiceName,
+          ]}>
+            {t(`serviceCategories.${item.id}`) || item.name}
+          </Text>
+          <Text style={[
+            styles.serviceDescription,
+            selectedService?.id === item.id && styles.selectedServiceDescription,
+          ]}>
+            {item.description}
+          </Text>
+        </View>
+      </View>
     </TouchableOpacity>
   );
 
@@ -126,31 +145,23 @@ export default function CitySelector({
           styles.selector,
           error && styles.selectorError,
           disabled && styles.selectorDisabled,
-          !state && styles.selectorDisabled,
         ]}
         onPress={handleOpenModal}
-        disabled={disabled || !state}
+        disabled={disabled}
       >
         <Text style={[
           styles.selectorText,
-          !selectedCity && styles.placeholderText,
-          (disabled || !state) && styles.disabledText,
+          !selectedService && styles.placeholderText,
+          disabled && styles.disabledText,
         ]}>
-          {!state 
-            ? t('cities.selectStateFirst') || 'Please select state first'
-            : selectedCity 
-              ? getTranslatedCityName(selectedCity.name)
-              : placeholder || t('cities.selectCity') || 'Select city'}
+          {selectedService 
+            ? `${selectedService.icon} ${t(`serviceCategories.${selectedService.id}`) || selectedService.name}` 
+            : placeholder || 'Select Service'}
         </Text>
-        <ChevronDown size={20} color={(disabled || !state) ? '#9CA3AF' : '#6B7280'} />
+        <ChevronDown size={20} color={disabled ? '#9CA3AF' : '#6B7280'} />
       </TouchableOpacity>
 
       {error && <Text style={styles.errorText}>{error}</Text>}
-      {!state && !error && (
-        <Text style={styles.helperText}>
-          {t('cities.selectStateFirst') || 'Please select state first'}
-        </Text>
-      )}
 
       <Modal
         visible={isModalVisible}
@@ -160,9 +171,7 @@ export default function CitySelector({
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {t('cities.citiesIn') || 'Cities in'} {state}
-            </Text>
+            <Text style={styles.modalTitle}>Select Service</Text>
             <TouchableOpacity onPress={handleCloseModal} style={styles.closeButton}>
               <X size={24} color="#6B7280" />
             </TouchableOpacity>
@@ -172,7 +181,7 @@ export default function CitySelector({
             <Search size={20} color="#9CA3AF" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder={t('cities.searchCity') || 'Search city'}
+              placeholder="Search services..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -180,22 +189,14 @@ export default function CitySelector({
             />
           </View>
 
-          {availableCities.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {t('cities.noCitiesAvailable') || 'No cities available for this state'}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={filteredCities}
-              renderItem={renderCityItem}
-              keyExtractor={(item, index) => `${item.name}-${index}`}
-              style={styles.cityList}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.cityListContent}
-            />
-          )}
+          <FlatList
+            data={filteredServices}
+            renderItem={renderServiceItem}
+            keyExtractor={(item) => item.id}
+            style={styles.serviceList}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.serviceListContent}
+          />
         </View>
       </Modal>
     </View>
@@ -212,7 +213,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#D1D5DB',
     borderRadius: getResponsiveSpacing(8, 10, 12),
     paddingHorizontal: getResponsiveSpacing(12, 16, 20),
     paddingVertical: getResponsiveSpacing(12, 14, 16),
@@ -243,12 +244,6 @@ const styles = StyleSheet.create({
     marginTop: getResponsiveSpacing(4, 6, 8),
     marginLeft: getResponsiveSpacing(4, 6, 8),
   },
-  helperText: {
-    color: '#6B7280',
-    fontSize: getResponsiveSpacing(12, 14, 16),
-    marginTop: getResponsiveSpacing(4, 6, 8),
-    marginLeft: getResponsiveSpacing(4, 6, 8),
-  },
   modalContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -267,7 +262,6 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveSpacing(18, 20, 22),
     fontWeight: '600',
     color: '#1F2937',
-    flex: 1,
   },
   closeButton: {
     padding: getResponsiveSpacing(4, 6, 8),
@@ -290,41 +284,52 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveSpacing(14, 16, 18),
     color: '#1F2937',
   },
-  cityList: {
+  serviceList: {
     flex: 1,
   },
-  cityListContent: {
+  serviceListContent: {
     paddingBottom: getResponsiveSpacing(20, 24, 28),
   },
-  cityItem: {
+  serviceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),
     paddingVertical: getResponsiveSpacing(12, 14, 16),
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
-  selectedCityItem: {
+  selectedServiceItem: {
     backgroundColor: '#EFF6FF',
     borderBottomColor: '#DBEAFE',
   },
-  cityName: {
+  serviceItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  serviceIcon: {
+    fontSize: getResponsiveSpacing(24, 28, 32),
+    marginRight: getResponsiveSpacing(12, 16, 20),
+  },
+  serviceTextContainer: {
+    flex: 1,
+  },
+  serviceName: {
     fontSize: getResponsiveSpacing(14, 16, 18),
     fontWeight: '500',
     color: '#1F2937',
+    marginBottom: getResponsiveSpacing(2, 4, 6),
   },
-  selectedCityName: {
+  selectedServiceName: {
     color: '#1D4ED8',
     fontWeight: '600',
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: getResponsiveSpacing(40, 50, 60),
-  },
-  emptyText: {
-    fontSize: getResponsiveSpacing(14, 16, 18),
+  serviceDescription: {
+    fontSize: getResponsiveSpacing(12, 14, 16),
     color: '#6B7280',
-    textAlign: 'center',
+  },
+  selectedServiceDescription: {
+    color: '#3B82F6',
   },
 });
 

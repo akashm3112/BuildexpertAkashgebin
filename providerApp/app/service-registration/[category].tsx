@@ -14,14 +14,16 @@ import {
   StatusBar,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Camera, X, Upload } from 'lucide-react-native';
+import { ArrowLeft, Camera, X, Upload, Plus, Trash2 } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
-import { getServiceById } from '@/constants/serviceCategories';
+import { getServiceById, SERVICE_CATEGORIES } from '@/constants/serviceCategories';
+import { getRelatedSubServices } from '@/constants/serviceSubServices';
 import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import StateSelector from '@/components/common/StateSelector';
 import CitySelector from '@/components/common/CitySelector';
+import ServiceSelector from '@/components/common/ServiceSelector';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -39,6 +41,12 @@ const getResponsiveSpacing = (small: number, medium: number, large: number) => {
   return large;
 };
 
+interface SubService {
+  id: string; // Unique ID for this sub-service row
+  serviceId: string; // Selected service ID from dropdown
+  price: string; // Price/cost for this sub-service
+}
+
 interface FormData {
   fullName: string;
   phone: string;
@@ -46,10 +54,10 @@ interface FormData {
   city: string;
   address: string;
   experience: string;
-  charges: string;
   description: string;
   photos: string[];
   engineeringCertificate?: string;
+  subServices: SubService[]; // Array of sub-services
 }
 
 export default function ServiceRegistration() {
@@ -87,10 +95,10 @@ export default function ServiceRegistration() {
     city: '',
     address: '',
     experience: '',
-    charges: '',
     description: '',
     photos: [],
     engineeringCertificate: undefined,
+    subServices: [], // Initialize with empty array
   });
 
   useEffect(() => {
@@ -275,10 +283,18 @@ export default function ServiceRegistration() {
             city: serviceData.city || '',
             address: serviceData.full_address || '',
             experience: serviceData.years_of_experience?.toString() || '',
-            charges: serviceData.service_charge_value?.toString() || '',
             description: serviceData.service_description || '',
             photos: workingProofUrls,
             engineeringCertificate: engineeringCertificateUrl,
+            // Load sub-services if available (frontend-only feature for now)
+            // Backend may not have this data yet, so handle gracefully
+            subServices: Array.isArray(serviceData.sub_services) 
+              ? serviceData.sub_services.map((sub: any, idx: number) => ({
+                  id: sub.id || `sub-service-${idx}-${Date.now()}`,
+                  serviceId: sub.serviceId || sub.service_id || '',
+                  price: sub.price?.toString() || sub.cost?.toString() || '',
+                }))
+              : [],
           });
           
         } else {
@@ -484,6 +500,57 @@ export default function ServiceRegistration() {
     }));
   };
 
+  // Handle adding a new sub-service
+  const handleAddSubService = () => {
+    const newSubService: SubService = {
+      id: `sub-service-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      serviceId: '',
+      price: '',
+    };
+    setFormData((prev) => ({
+      ...prev,
+      subServices: [...prev.subServices, newSubService],
+    }));
+  };
+
+  // Handle removing a sub-service
+  const handleRemoveSubService = (id: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      subServices: prev.subServices.filter((subService) => subService.id !== id),
+    }));
+  };
+
+  // Handle sub-service service selection change
+  const handleSubServiceChange = (id: string, field: 'serviceId' | 'price', value: string) => {
+    setFormData((prev) => {
+      // If changing price, only allow numeric characters and decimal point
+      if (field === 'price') {
+        // Remove all non-numeric characters except decimal point
+        const numericValue = value.replace(/[^0-9.]/g, '');
+        // Ensure only one decimal point
+        const parts = numericValue.split('.');
+        const sanitizedValue = parts.length > 2 
+          ? parts[0] + '.' + parts.slice(1).join('')
+          : numericValue;
+        
+        return {
+          ...prev,
+          subServices: prev.subServices.map((subService) =>
+            subService.id === id ? { ...subService, [field]: sanitizedValue } : subService
+          ),
+        };
+      }
+      
+      return {
+        ...prev,
+        subServices: prev.subServices.map((subService) =>
+          subService.id === id ? { ...subService, [field]: value } : subService
+        ),
+      };
+    });
+  };
+
   // Convert file URI to base64
   const convertToBase64 = async (uri: string): Promise<string> => {
     try {
@@ -652,17 +719,29 @@ export default function ServiceRegistration() {
 
   const handleSubmit = async () => {
     const newErrors: Partial<Record<keyof FormData, string>> = {};
-    if (!formData.state.trim()) newErrors.state = 'State is required.';
-    if (!formData.city.trim()) newErrors.city = 'City is required.';
-    if (!formData.address.trim()) newErrors.address = 'Address is required.';
-    if (!formData.experience.trim()) newErrors.experience = 'Years of experience is required.';
-    if (!formData.charges.trim()) newErrors.charges = 'Service charges are required.';
+    if (!formData.state.trim()) newErrors.state = t('serviceRegistration.stateRequired');
+    if (!formData.city.trim()) newErrors.city = t('serviceRegistration.cityRequired');
+    if (!formData.address.trim()) newErrors.address = t('serviceRegistration.addressRequired');
+    if (!formData.experience.trim()) newErrors.experience = t('serviceRegistration.experienceRequired');
     if (isEngineerOrInterior && !formData.engineeringCertificate) {
-      newErrors.engineeringCertificate = 'Engineering certificate is mandatory.';
+      newErrors.engineeringCertificate = t('serviceRegistration.engineeringCertificateMandatory');
     }
     if (!isEngineerOrInterior && formData.photos.length === 0) {
       newErrors.photos = 'Please upload at least one previous project photo.';
     }
+    
+    // Validate sub-services: at least one required, and all must have both serviceId and price
+    if (formData.subServices.length === 0) {
+      newErrors.subServices = t('serviceRegistration.atLeastOneSubServiceRequired');
+    } else {
+      const invalidSubServices = formData.subServices.filter(
+        (subService) => !subService.serviceId.trim() || !subService.price.trim()
+      );
+      if (invalidSubServices.length > 0) {
+        newErrors.subServices = t('serviceRegistration.allSubServicesMustBeFilled');
+      }
+    }
+    
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
       showAlert(t('alerts.missingInformation'), t('alerts.fillRequiredFieldsAndErrors'), 'warning');
@@ -759,14 +838,19 @@ export default function ServiceRegistration() {
       const payload: any = {
         yearsOfExperience: parseInt(formData.experience, 10),
         serviceDescription: formData.description,
-        serviceChargeValue: parseFloat(formData.charges),
-        serviceChargeUnit: 'INR',
         state: formData.state,
         city: formData.city,
         fullAddress: formData.address,
         workingProofUrls: workingProofUrls,
         isEngineeringProvider: isEngineerOrInterior,
-        engineeringCertificateUrl: engineeringCertificateUrl || undefined
+        engineeringCertificateUrl: engineeringCertificateUrl || undefined,
+        // Sub-services data
+        subServices: formData.subServices
+          .filter(subService => subService.serviceId && subService.price) // Only include valid sub-services
+          .map(subService => ({
+            serviceId: subService.serviceId,
+            price: parseFloat(subService.price) || 0,
+          })),
       };
       
       
@@ -1073,23 +1157,156 @@ export default function ServiceRegistration() {
               {errors.experience && <Text style={styles.errorText} numberOfLines={2} ellipsizeMode="tail">{errors.experience}</Text>}
             </View>
 
+            {/* Sub-Services Section */}
             <View style={styles.formSection}>
-              <Text style={styles.label} numberOfLines={1} ellipsizeMode="tail">{t('serviceRegistration.serviceCharges')} *</Text>
-              <TextInput
-                style={[
-                  styles.input, 
-                  errors.charges && styles.inputError,
-                  isViewMode && { backgroundColor: '#F1F5F9', color: '#9CA3AF' }
-                ]}
-                value={formData.charges}
-                onChangeText={(value) => handleInputChange('charges', value)}
-                placeholder={t('serviceRegistration.chargesPlaceholder')}
-                placeholderTextColor="#9CA3AF"
-                returnKeyType="next"
-                clearButtonMode="while-editing"
-                editable={!isViewMode}
-              />
-              {errors.charges && <Text style={styles.errorText} numberOfLines={2} ellipsizeMode="tail">{errors.charges}</Text>}
+              <Text style={styles.label} numberOfLines={1} ellipsizeMode="tail">{t('serviceRegistration.subServices')} *</Text>
+              <Text style={styles.helperText} numberOfLines={2} ellipsizeMode="tail">
+                {t('serviceRegistration.subServicesHelper')}
+              </Text>
+              {formData.subServices.length > 0 ? (
+                <View style={styles.subServicesContainer}>
+                  <View style={styles.subServicesList}>
+                    {formData.subServices.map((subService, index) => {
+                      const selectedService = SERVICE_CATEGORIES.find(s => s.id === subService.serviceId);
+                      
+                      // Get related sub-services for the main service category
+                      const relatedSubServiceIds = getRelatedSubServices(category as string);
+                      
+                      // Get all other selected service IDs to exclude them from this dropdown
+                      // This ensures once a service is selected in one sub-service, it disappears from all others
+                      const otherSelectedServiceIds = formData.subServices
+                        .filter(s => s.id !== subService.id && s.serviceId && s.serviceId.trim() !== '')
+                        .map(s => s.serviceId)
+                        .filter((id): id is string => Boolean(id));
+                      
+                      return (
+                        <View key={subService.id} style={styles.subServiceCard}>
+                          <View style={styles.subServiceCardHeader}>
+                            <View style={styles.subServiceCardHeaderLeft}>
+                              <View style={styles.subServiceIndexBadge}>
+                                <Text style={styles.subServiceIndexText}>{index + 1}</Text>
+                              </View>
+                              <View style={styles.subServiceInfo}>
+                                {selectedService ? (
+                                  <>
+                                    <Text style={styles.subServiceName}>
+                                      {selectedService.icon} {selectedService.name}
+                                    </Text>
+                                    {subService.price && (
+                                      <Text style={styles.subServicePricePreview}>
+                                        ₹{subService.price}
+                                      </Text>
+                                    )}
+                                  </>
+                                ) : (
+                                  <View style={styles.subServicePlaceholder}>
+                                    <Text style={styles.subServicePlaceholderText}>
+                                    {t('serviceRegistration.selectServiceAndAddPrice')}
+                                  </Text>
+                                  <Text style={styles.subServicePlaceholderHint}>
+                                    {t('serviceRegistration.chooseFromOptionsBelow')}
+                                  </Text>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+                            {!isViewMode && (
+                              <TouchableOpacity
+                                style={styles.subServiceDeleteButton}
+                                onPress={() => handleRemoveSubService(subService.id)}
+                                activeOpacity={0.6}
+                              >
+                                <Trash2 size={18} color="#EF4444" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          
+                          <View style={styles.subServiceCardBody}>
+                            <View style={styles.subServiceInputGroup}>
+                              <Text style={styles.subServiceInputLabel}>{t('serviceRegistration.serviceType')}</Text>
+                              <ServiceSelector
+                                value={subService.serviceId}
+                                onSelect={(serviceId) => handleSubServiceChange(subService.id, 'serviceId', serviceId)}
+                                placeholder={t('serviceRegistration.chooseRelatedService')}
+                                disabled={isViewMode}
+                                excludeServiceId={category as string}
+                                excludeServiceIds={otherSelectedServiceIds}
+                                allowedServiceIds={relatedSubServiceIds}
+                                error={errors.subServices && !subService.serviceId.trim() ? t('serviceRegistration.serviceTypeRequired') : undefined}
+                                style={styles.subServiceSelector}
+                              />
+                            </View>
+                            
+                            <View style={styles.subServiceInputGroup}>
+                              <Text style={styles.subServiceInputLabel}>{t('serviceRegistration.servicePrice')}</Text>
+                              <View style={[
+                                styles.priceInputContainer,
+                                errors.subServices && !subService.price.trim() && styles.priceInputError
+                              ]}>
+                                <View style={styles.priceInputPrefix}>
+                                  <Text style={styles.priceInputPrefixText}>₹</Text>
+                                </View>
+                                <TextInput
+                                  style={[
+                                    styles.priceInput,
+                                    isViewMode && styles.priceInputDisabled
+                                  ]}
+                                  value={subService.price}
+                                  onChangeText={(value) => handleSubServiceChange(subService.id, 'price', value)}
+                                  placeholder={t('serviceRegistration.enterPrice')}
+                                  placeholderTextColor="#9CA3AF"
+                                  keyboardType="numeric"
+                                  editable={!isViewMode}
+                                />
+                              </View>
+                              {errors.subServices && !subService.price.trim() && (
+                                <Text style={styles.subServiceErrorText}>{t('serviceRegistration.priceRequired')}</Text>
+                              )}
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  
+                  {!isViewMode && (
+                    <TouchableOpacity
+                      style={styles.addAnotherButton}
+                      onPress={handleAddSubService}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.addAnotherButtonIcon}>
+                        <Plus size={20} color="#3B82F6" />
+                      </View>
+                      <Text style={styles.addAnotherButtonText}>{t('serviceRegistration.addAnotherService')}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                !isViewMode && (
+                  <TouchableOpacity
+                    style={styles.emptyStateContainer}
+                    onPress={handleAddSubService}
+                    activeOpacity={0.9}
+                  >
+                    <View style={styles.emptyStateContent}>
+                      <View style={styles.emptyStateIconContainer}>
+                        <View style={styles.emptyStateIconCircle}>
+                          <Plus size={28} color="#3B82F6" strokeWidth={2.5} />
+                        </View>
+                      </View>
+                      <Text style={styles.emptyStateTitle}>{t('serviceRegistration.noAdditionalServicesYet')}</Text>
+                      <Text style={styles.emptyStateDescription}>
+                        {t('serviceRegistration.addServicesDescription')}
+                      </Text>
+                      <View style={styles.emptyStateButton}>
+                        <Plus size={18} color="#FFFFFF" />
+                        <Text style={styles.emptyStateButtonText}>{t('serviceRegistration.addYourFirstService')}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                )
+              )}
             </View>
 
             <View style={styles.formSection}>
@@ -1528,5 +1745,371 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: getResponsiveSpacing(8, 10, 12),
     textAlign: 'center',
+  },
+  // Sub-Services Styles - Premium UI/UX
+  subServicesHeaderContainer: {
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+    paddingBottom: getResponsiveSpacing(16, 20, 24),
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  subServicesHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  subServicesHeaderIcon: {
+    width: getResponsiveSpacing(44, 48, 52),
+    height: getResponsiveSpacing(44, 48, 52),
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: getResponsiveSpacing(12, 14, 16),
+  },
+  subServicesHeaderIconText: {
+    fontSize: getResponsiveSpacing(20, 22, 24),
+  },
+  subServicesHeaderText: {
+    flex: 1,
+  },
+  subServicesTitle: {
+    fontSize: getResponsiveSpacing(17, 19, 21),
+    fontFamily: 'Inter-SemiBold',
+    color: '#111827',
+    marginBottom: getResponsiveSpacing(6, 8, 10),
+    ...Platform.select({
+      ios: {
+        letterSpacing: -0.3,
+      },
+      android: {
+        letterSpacing: -0.2,
+      },
+    }),
+  },
+  subServicesDescription: {
+    fontSize: getResponsiveSpacing(13, 14, 15),
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    lineHeight: getResponsiveSpacing(20, 22, 24),
+  },
+  subServicesContainer: {
+    gap: getResponsiveSpacing(16, 20, 24),
+  },
+  subServicesList: {
+    gap: getResponsiveSpacing(16, 20, 24),
+  },
+  subServiceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: getResponsiveSpacing(16, 18, 20),
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  subServiceCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: getResponsiveSpacing(16, 18, 20),
+    paddingBottom: getResponsiveSpacing(12, 14, 16),
+    backgroundColor: '#FAFBFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  subServiceCardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: getResponsiveSpacing(12, 14, 16),
+    marginRight: getResponsiveSpacing(12, 16, 20), // Space between content and delete button
+  },
+  subServiceIndexBadge: {
+    width: getResponsiveSpacing(32, 36, 40),
+    height: getResponsiveSpacing(32, 36, 40),
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  subServiceIndexText: {
+    fontSize: getResponsiveSpacing(14, 15, 16),
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+  },
+  subServiceInfo: {
+    flex: 1,
+  },
+  subServiceName: {
+    fontSize: getResponsiveSpacing(15, 16, 17),
+    fontFamily: 'Inter-SemiBold',
+    color: '#111827',
+    marginBottom: getResponsiveSpacing(2, 4, 6),
+  },
+  subServicePricePreview: {
+    fontSize: getResponsiveSpacing(13, 14, 15),
+    fontFamily: 'Inter-Medium',
+    color: '#059669',
+  },
+  subServicePlaceholder: {
+    flex: 1,
+  },
+  subServicePlaceholderText: {
+    fontSize: getResponsiveSpacing(14, 15, 16),
+    fontFamily: 'Inter-Medium',
+    color: '#6B7280',
+    marginBottom: getResponsiveSpacing(2, 4, 6),
+  },
+  subServicePlaceholderHint: {
+    fontSize: getResponsiveSpacing(12, 13, 14),
+    fontFamily: 'Inter-Regular',
+    color: '#9CA3AF',
+    ...Platform.select({
+      ios: {
+        fontStyle: 'italic',
+      },
+      android: {
+        fontStyle: 'italic',
+      },
+    }),
+  },
+  subServiceDeleteButton: {
+    width: getResponsiveSpacing(36, 40, 44), // Minimum 44px for iOS touch target
+    height: getResponsiveSpacing(36, 40, 44),
+    borderRadius: getResponsiveSpacing(8, 10, 12),
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    minWidth: 44, // Ensure minimum touch target size
+    minHeight: 44,
+  },
+  subServiceCardBody: {
+    padding: getResponsiveSpacing(16, 18, 20),
+    gap: getResponsiveSpacing(16, 20, 24),
+  },
+  subServiceInputGroup: {
+    gap: getResponsiveSpacing(8, 10, 12),
+  },
+  subServiceInputLabel: {
+    fontSize: getResponsiveSpacing(13, 14, 15),
+    fontFamily: 'Inter-Medium',
+    color: '#374151',
+    ...Platform.select({
+      ios: {
+        letterSpacing: -0.2,
+      },
+      android: {
+        letterSpacing: -0.1,
+      },
+    }),
+  },
+  subServiceSelector: {
+    marginBottom: 0,
+  },
+  subServiceErrorText: {
+    fontSize: getResponsiveSpacing(11, 12, 13),
+    fontFamily: 'Inter-Regular',
+    color: '#EF4444',
+    marginTop: getResponsiveSpacing(4, 6, 8),
+    marginLeft: getResponsiveSpacing(4, 6, 8),
+  },
+  priceInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    overflow: 'hidden',
+    minHeight: getResponsiveSpacing(52, 56, 60),
+  },
+  priceInputError: {
+    borderColor: '#EF4444',
+  },
+  priceInputPrefix: {
+    paddingHorizontal: getResponsiveSpacing(16, 18, 20),
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    backgroundColor: '#F9FAFB',
+    borderRightWidth: 1,
+    borderRightColor: '#E5E7EB',
+  },
+  priceInputPrefixText: {
+    fontSize: getResponsiveSpacing(16, 17, 18),
+    fontFamily: 'Inter-SemiBold',
+    color: '#374151',
+  },
+  priceInput: {
+    flex: 1,
+    fontSize: getResponsiveSpacing(15, 16, 17),
+    fontFamily: 'Inter-Regular',
+    color: '#111827',
+    paddingHorizontal: getResponsiveSpacing(16, 18, 20),
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    minHeight: getResponsiveSpacing(52, 56, 60),
+    ...Platform.select({
+      ios: {
+        paddingVertical: getResponsiveSpacing(14, 16, 18),
+      },
+      android: {
+        paddingVertical: getResponsiveSpacing(12, 14, 16),
+        textAlignVertical: 'center',
+      },
+    }),
+  },
+  priceInputDisabled: {
+    backgroundColor: '#F9FAFB',
+    color: '#9CA3AF',
+  },
+  addAnotherButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    borderRadius: getResponsiveSpacing(14, 16, 18),
+    paddingVertical: getResponsiveSpacing(16, 18, 20),
+    gap: getResponsiveSpacing(10, 12, 14),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
+  },
+  addAnotherButtonIcon: {
+    width: getResponsiveSpacing(32, 36, 40),
+    height: getResponsiveSpacing(32, 36, 40),
+    borderRadius: getResponsiveSpacing(8, 10, 12),
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addAnotherButtonText: {
+    fontSize: getResponsiveSpacing(15, 16, 17),
+    fontFamily: 'Inter-SemiBold',
+    color: '#3B82F6',
+  },
+  emptyStateContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: getResponsiveSpacing(20, 22, 24),
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  emptyStateContent: {
+    padding: getResponsiveSpacing(40, 48, 56),
+    alignItems: 'center',
+  },
+  emptyStateIconContainer: {
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+  },
+  emptyStateIconCircle: {
+    width: getResponsiveSpacing(72, 80, 88),
+    height: getResponsiveSpacing(72, 80, 88),
+    borderRadius: getResponsiveSpacing(36, 40, 44),
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#DBEAFE',
+  },
+  emptyStateTitle: {
+    fontSize: getResponsiveSpacing(18, 20, 22),
+    fontFamily: 'Inter-SemiBold',
+    color: '#111827',
+    marginBottom: getResponsiveSpacing(10, 12, 14),
+    textAlign: 'center',
+    ...Platform.select({
+      ios: {
+        letterSpacing: -0.3,
+      },
+      android: {
+        letterSpacing: -0.2,
+      },
+    }),
+  },
+  emptyStateDescription: {
+    fontSize: getResponsiveSpacing(14, 15, 16),
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: getResponsiveSpacing(22, 24, 26),
+    marginBottom: getResponsiveSpacing(24, 28, 32),
+    paddingHorizontal: getResponsiveSpacing(8, 12, 16),
+  },
+  emptyStateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F6',
+    borderRadius: getResponsiveSpacing(12, 14, 16),
+    paddingHorizontal: getResponsiveSpacing(24, 28, 32),
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    gap: getResponsiveSpacing(8, 10, 12),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  emptyStateButtonText: {
+    fontSize: getResponsiveSpacing(15, 16, 17),
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+    ...Platform.select({
+      ios: {
+        letterSpacing: -0.2,
+      },
+      android: {
+        letterSpacing: -0.1,
+      },
+    }),
   },
 });

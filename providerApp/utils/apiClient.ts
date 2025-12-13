@@ -497,15 +497,23 @@ const requestInterceptor = async (config: RequestConfig, forceTokenRefresh: bool
       } else {
         // PRODUCTION FIX: If no token available, throw error instead of making unauthenticated request
         // This prevents "Network request failed" errors when user is not logged in
-        throw normalizeError({ 
+        const authError = normalizeError({ 
           message: 'Authentication required. Please login.', 
           status: 401,
           code: 'NO_TOKEN'
         }, new Response());
+        (authError as any)._handled = true;
+        (authError as any)._suppressUnhandled = true;
+        throw authError;
       }
     } catch (tokenError: any) {
-      // If token retrieval fails, check if it's a "no token" error
-      if (tokenError?.code === 'NO_TOKEN' || tokenError?.message?.includes('No token')) {
+      // If it's already a NO_TOKEN error, re-throw it (it's already marked as handled)
+      if (tokenError?.code === 'NO_TOKEN' || tokenError?.message?.includes('No token') || tokenError?.message?.includes('Authentication required')) {
+        // Ensure it's marked as handled
+        if (!tokenError?._handled) {
+          (tokenError as any)._handled = true;
+          (tokenError as any)._suppressUnhandled = true;
+        }
         throw tokenError; // Re-throw authentication errors
       }
       // For other token errors, log warning but continue (will get 401 from backend)
@@ -989,13 +997,18 @@ const executeRequest = async <T = any>(
       
       lastError = normalizeError(error);
 
-      // Suppress "Session expired" errors from being retried or logged as unhandled
+      // Suppress "Session expired" and "NO_TOKEN" errors from being retried or logged as unhandled
       const isSessionExpired = lastError.message === 'Session expired' || 
                                lastError.message?.includes('Session expired') ||
                                (lastError.status === 401 && lastError.message?.includes('Session expired'));
-      if (isSessionExpired) {
+      const isNoTokenError = lastError.code === 'NO_TOKEN' || 
+                            lastError.message?.includes('Authentication required') ||
+                            (lastError.status === 401 && lastError.code === 'NO_TOKEN');
+      
+      if (isSessionExpired || isNoTokenError) {
         (lastError as any)._suppressUnhandled = true;
-        // Don't retry session expired errors
+        (lastError as any)._handled = true;
+        // Don't retry session expired or NO_TOKEN errors
         break;
       }
 
@@ -1012,12 +1025,16 @@ const executeRequest = async <T = any>(
     }
   }
 
-  // Suppress "Session expired" errors from being logged
+  // Suppress "Session expired" and "NO_TOKEN" errors from being logged
   if (!config.skipErrorHandling && lastError && globalErrorHandler) {
     const isSessionExpired = lastError.message === 'Session expired' || 
                              lastError.message?.includes('Session expired') ||
                              (lastError.status === 401 && lastError.message?.includes('Session expired'));
-    if (!isSessionExpired) {
+    const isNoTokenError = lastError.code === 'NO_TOKEN' || 
+                          lastError.message?.includes('Authentication required') ||
+                          (lastError.status === 401 && lastError.code === 'NO_TOKEN');
+    
+    if (!isSessionExpired && !isNoTokenError) {
       globalErrorHandler(lastError);
     } else {
       // Mark as handled to prevent React Native from logging it
@@ -1026,14 +1043,17 @@ const executeRequest = async <T = any>(
     }
   }
   
-  // For "Session expired" errors, we need to prevent React Native from logging them
-  // The error is already handled (logout triggered), so we just need to suppress the log
+  // For "Session expired" and "NO_TOKEN" errors, we need to prevent React Native from logging them
+  // The error is already handled (logout triggered or user needs to login), so we just need to suppress the log
   const finalError = lastError || normalizeError({ message: 'Request failed after retries' });
   const isSessionExpired = finalError.message === 'Session expired' || 
                            finalError.message?.includes('Session expired') ||
                            (finalError.status === 401 && finalError.message?.includes('Session expired'));
+  const isNoTokenError = finalError.code === 'NO_TOKEN' || 
+                        finalError.message?.includes('Authentication required') ||
+                        (finalError.status === 401 && finalError.code === 'NO_TOKEN');
   
-  if (isSessionExpired) {
+  if (isSessionExpired || isNoTokenError) {
     (finalError as any)._handled = true;
     (finalError as any)._suppressUnhandled = true;
   }

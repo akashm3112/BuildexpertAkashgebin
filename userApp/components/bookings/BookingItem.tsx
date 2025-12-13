@@ -12,13 +12,34 @@ import {
   Dimensions,
   useWindowDimensions
 } from 'react-native';
-import { Calendar, Flag, Star, X, XCircle, Phone, MapPin } from 'lucide-react-native';
+import { Calendar, Flag, Star, X, XCircle, Phone, MapPin, CreditCard } from 'lucide-react-native';
 import { Modal } from '@/components/common/Modal';
 import WebRTCCallButton from '@/components/calls/WebRTCCallButton';
 import { format, parseISO } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useBookings } from '@/context/BookingContext';
+
+import { SERVICE_CATEGORIES } from '@/constants/serviceCategories';
+
+// Helper function to get service names from comma-separated service IDs
+const getServiceNamesFromIds = (selectedService: string | null | undefined): string => {
+  if (!selectedService || selectedService.trim() === '') {
+    return 'N/A';
+  }
+  
+  const serviceIds = selectedService.split(',').map(id => id.trim()).filter(id => id);
+  if (serviceIds.length === 0) {
+    return 'N/A';
+  }
+  
+  const serviceNames = serviceIds.map(id => {
+    const service = SERVICE_CATEGORIES.find(s => s.id === id);
+    return service ? service.name : id;
+  });
+  
+  return serviceNames.join(', ');
+};
 
 interface BookingProps {
   booking: {
@@ -36,6 +57,7 @@ interface BookingProps {
       review?: string;
       created_at: string;
     } | null;
+    selectedService?: string; // Add selected services
   };
   onStatusChange?: (bookingId: string, newStatus: string) => void;
   onBookingReported?: (bookingId: string) => void;
@@ -432,6 +454,20 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
               <Text style={styles.detailText} numberOfLines={1} ellipsizeMode="tail">{t('bookingItem.atYourLocation')}</Text>
             </View>
           </View>
+          
+          {booking.selectedService && (
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <CreditCard size={16} color="#8B5CF6" />
+              </View>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Sub-Services</Text>
+                <Text style={styles.detailText} numberOfLines={2} ellipsizeMode="tail">
+                  {getServiceNamesFromIds(booking.selectedService)}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
         
         {/* Action buttons */}

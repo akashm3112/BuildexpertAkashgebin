@@ -25,14 +25,12 @@ const calculateEarnings = async (providerUserId) => {
     // Calculate earnings for this month (completed bookings only)
     // Use updated_at to filter by when the booking was completed, not when it was created
     // Database is in IST timezone, so we compare dates directly
-    // PRODUCTION FIX: Prioritize stored provider_id and service_charge_value from bookings table
+    // PRODUCTION FIX: service_charge_value is now stored directly in bookings table
     // This ensures earnings persist even after service deletion
-    // Use LEFT JOIN so bookings are included even if service is deleted
     // Filter by b.provider_id (stored value) - all bookings should have this after migration
     const thisMonthEarnings = await getRows(`
-      SELECT COALESCE(SUM(COALESCE(b.service_charge_value, ps.service_charge_value, 0)), 0) as total_earnings
+      SELECT COALESCE(SUM(COALESCE(b.service_charge_value, 0)), 0) as total_earnings
       FROM bookings b
-      LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
       WHERE b.provider_id = $1
         AND b.status = 'completed'
         AND DATE(b.updated_at) >= DATE_TRUNC('month', CURRENT_DATE)::date
@@ -42,9 +40,8 @@ const calculateEarnings = async (providerUserId) => {
     // Calculate earnings for today (completed bookings only)
     // Use updated_at to filter by when the booking was completed today
     const todayEarnings = await getRows(`
-      SELECT COALESCE(SUM(COALESCE(b.service_charge_value, ps.service_charge_value, 0)), 0) as total_earnings
+      SELECT COALESCE(SUM(COALESCE(b.service_charge_value, 0)), 0) as total_earnings
       FROM bookings b
-      LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
       WHERE b.provider_id = $1
         AND b.status = 'completed'
         AND DATE(b.updated_at) = CURRENT_DATE
@@ -52,9 +49,8 @@ const calculateEarnings = async (providerUserId) => {
 
     // Calculate pending earnings (pending and accepted bookings - not yet completed)
     const pendingEarnings = await getRows(`
-      SELECT COALESCE(SUM(COALESCE(b.service_charge_value, ps.service_charge_value, 0)), 0) as total_earnings
+      SELECT COALESCE(SUM(COALESCE(b.service_charge_value, 0)), 0) as total_earnings
       FROM bookings b
-      LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
       WHERE b.provider_id = $1
         AND b.status IN ('pending', 'accepted')
     `, [providerProfileId]);

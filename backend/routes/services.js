@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { query, getRow, getRows } = require('../database/connection');
+const { query, getRow, getRows, withTransaction } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const { uploadMultipleImages, deleteMultipleImages } = require('../utils/cloudinary');
 const { formatNotificationTimestamp } = require('../utils/timezone');
@@ -12,6 +12,8 @@ const { sanitizeBody, sanitizeQuery } = require('../middleware/inputSanitization
 const { DatabaseConnectionError, NotFoundError, ValidationError, AuthorizationError } = require('../utils/errorTypes');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { validateOrThrow, throwIfMissing } = require('../utils/errorHelpers');
+const { validateSubServices, getDatabaseServiceName } = require('../utils/subServicesValidation');
+const { getFrontendCategoryId } = require('../utils/serviceMapping');
 
 const router = express.Router();
 
@@ -122,8 +124,6 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
       ps.id as provider_service_id,
       ps.service_id,
       sm.name as service_name,
-      ps.service_charge_value,
-      ps.service_charge_unit,
       ps.payment_status,
       ps.payment_start_date,
       ps.payment_end_date,
@@ -155,6 +155,96 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
     ORDER BY ps.created_at DESC
   `, [req.user.id]);
 
+  // PRODUCTION OPTIMIZATION: Check table existence once instead of in loop
+  let tableExists = false;
+  try {
+    const tableCheck = await getRow(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'provider_sub_services'
+      );
+    `);
+    tableExists = tableCheck && tableCheck.exists;
+  } catch (error) {
+    logger.warn('Could not check provider_sub_services table existence', { error: error.message });
+  }
+
+  // PRODUCTION OPTIMIZATION: Batch fetch all sub-services in one query instead of N queries
+  let allSubServices = [];
+  if (tableExists && registeredServices.length > 0) {
+    try {
+      const providerServiceIds = registeredServices.map(s => s.provider_service_id);
+      allSubServices = await getRows(`
+        SELECT 
+          pss.id,
+          pss.provider_service_id,
+          pss.service_id,
+          sm.name as service_name,
+          pss.price,
+          pss.created_at,
+          pss.updated_at
+        FROM provider_sub_services pss
+        JOIN services_master sm ON pss.service_id = sm.id
+        WHERE pss.provider_service_id = ANY($1::uuid[])
+        ORDER BY pss.provider_service_id, pss.created_at ASC
+      `, [providerServiceIds]);
+    } catch (error) {
+      logger.warn('Could not fetch sub-services', { error: error.message });
+      allSubServices = [];
+    }
+  }
+
+  // Group sub-services by provider_service_id for O(1) lookup
+  const subServicesByProviderServiceId = new Map();
+  allSubServices.forEach(ss => {
+    if (!subServicesByProviderServiceId.has(ss.provider_service_id)) {
+      subServicesByProviderServiceId.set(ss.provider_service_id, []);
+    }
+    subServicesByProviderServiceId.get(ss.provider_service_id).push(ss);
+  });
+
+  // Map services with their sub-services
+  const servicesWithSubServices = registeredServices.map((service) => {
+    const subServices = subServicesByProviderServiceId.get(service.provider_service_id) || [];
+
+    // Calculate pricing summary from sub-services
+    let pricingSummary = {
+      minPrice: null,
+      maxPrice: null,
+      priceRange: null,
+      subServiceCount: subServices.length
+    };
+
+    if (subServices.length > 0) {
+      const prices = subServices.map(ss => parseFloat(ss.price)).filter(p => !isNaN(p) && p > 0);
+      if (prices.length > 0) {
+        pricingSummary.minPrice = Math.min(...prices);
+        pricingSummary.maxPrice = Math.max(...prices);
+        
+        if (pricingSummary.minPrice === pricingSummary.maxPrice) {
+          pricingSummary.priceRange = pricingSummary.minPrice;
+        } else {
+          pricingSummary.priceRange = `${pricingSummary.minPrice} - ${pricingSummary.maxPrice}`;
+        }
+      }
+    }
+
+    return {
+      ...service,
+      sub_services: subServices.map(ss => ({
+        id: ss.id,
+        serviceId: getFrontendCategoryId(ss.service_name), // Map database service name to frontend category ID
+        serviceName: ss.service_name,
+        price: parseFloat(ss.price),
+        createdAt: ss.created_at,
+        updatedAt: ss.updated_at
+      })),
+      // Pricing summary for display
+      pricing: pricingSummary
+    };
+  });
+
   logger.info('Found registered services', {
     userId: req.user.id,
     count: registeredServices.length
@@ -162,12 +252,14 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
 
   // PRODUCTION FIX: Ensure working_proof_urls is properly serialized as array
   // PostgreSQL TEXT[] arrays are automatically parsed by pg library, but ensure they're arrays
-  const serializedServices = registeredServices.map(service => ({
+  const serializedServices = servicesWithSubServices.map(service => ({
     ...service,
     // Ensure working_proof_urls is always an array (pg library should handle this, but be explicit)
     working_proof_urls: Array.isArray(service.working_proof_urls) 
       ? service.working_proof_urls 
-      : (service.working_proof_urls ? [service.working_proof_urls] : [])
+      : (service.working_proof_urls ? [service.working_proof_urls] : []),
+    // Ensure sub_services is always an array
+    sub_services: service.sub_services || []
   }));
 
   res.json({
@@ -223,8 +315,6 @@ router.get('/:id/providers', asyncHandler(async (req, res) => {
       pp.years_of_experience,
       pp.service_description,
       ps.id as provider_service_id,
-      ps.service_charge_value,
-      ps.service_charge_unit,
       ps.working_proof_urls,
       ps.payment_start_date,
       ps.payment_end_date,
@@ -251,10 +341,70 @@ router.get('/:id/providers', asyncHandler(async (req, res) => {
   const total = parseInt(countResult.total);
   const totalPages = Math.ceil(total / limit);
 
+  // PRODUCTION OPTIMIZATION: Batch fetch all sub-services in one query
+  let allSubServices = [];
+  if (providers.length > 0) {
+    try {
+      const tableExists = await getRow(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'provider_sub_services'
+        );
+      `);
+      
+      if (tableExists && tableExists.exists) {
+        const providerServiceIds = providers.map(p => p.provider_service_id);
+        allSubServices = await getRows(`
+          SELECT 
+            pss.id,
+            pss.provider_service_id,
+            pss.service_id,
+            sm.name as service_name,
+            pss.price,
+            pss.created_at,
+            pss.updated_at
+          FROM provider_sub_services pss
+          JOIN services_master sm ON pss.service_id = sm.id
+          WHERE pss.provider_service_id = ANY($1::uuid[])
+          ORDER BY pss.provider_service_id, pss.created_at ASC
+        `, [providerServiceIds]);
+      }
+    } catch (error) {
+      logger.warn('Could not fetch sub-services for providers', { error: error.message });
+      allSubServices = [];
+    }
+  }
+
+  // Group sub-services by provider_service_id for O(1) lookup
+  const subServicesByProviderServiceId = new Map();
+  allSubServices.forEach(ss => {
+    if (!subServicesByProviderServiceId.has(ss.provider_service_id)) {
+      subServicesByProviderServiceId.set(ss.provider_service_id, []);
+    }
+    subServicesByProviderServiceId.get(ss.provider_service_id).push(ss);
+  });
+
+  const providersWithSubServices = providers.map((provider) => {
+    const subServices = subServicesByProviderServiceId.get(provider.provider_service_id) || [];
+    
+    return {
+      ...provider,
+      sub_services: subServices.map(ss => ({
+        id: ss.id,
+        serviceId: getFrontendCategoryId(ss.service_name),
+        serviceName: ss.service_name,
+        price: parseFloat(ss.price),
+        createdAt: ss.created_at,
+        updatedAt: ss.updated_at
+      }))
+    };
+  });
+
   res.json({
     status: 'success',
     data: {
-      providers,
+      providers: providersWithSubServices,
       pagination: {
         currentPage: parseInt(page),
         totalPages,
@@ -282,8 +432,6 @@ router.get('/:id/providers/:providerId', asyncHandler(async (req, res) => {
       pp.is_engineering_provider,
       pp.engineering_certificate_url,
       ps.id as provider_service_id,
-      ps.service_charge_value,
-      ps.service_charge_unit,
       ps.working_proof_urls,
       ps.payment_start_date,
       ps.payment_end_date
@@ -295,6 +443,38 @@ router.get('/:id/providers/:providerId', asyncHandler(async (req, res) => {
 
   if (!provider) {
     throw new NotFoundError('Provider', providerId);
+  }
+
+  // Get sub-services for this provider service (if table exists)
+  let subServices = [];
+  try {
+    const tableExists = await getRow(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'provider_sub_services'
+      );
+    `);
+    
+    if (tableExists && tableExists.exists) {
+      subServices = await getRows(`
+        SELECT 
+          pss.id,
+          pss.service_id,
+          sm.name as service_name,
+          pss.price,
+          pss.created_at,
+          pss.updated_at
+        FROM provider_sub_services pss
+        JOIN services_master sm ON pss.service_id = sm.id
+        WHERE pss.provider_service_id = $1
+        ORDER BY pss.created_at ASC
+      `, [providerId]);
+    }
+  } catch (error) {
+    // Table doesn't exist yet - return empty array
+    logger.warn('provider_sub_services table does not exist yet', { error: error.message });
+    subServices = [];
   }
 
   // Get provider's ratings
@@ -334,15 +514,20 @@ router.put('/:id/providers', auth, requireRole(['provider']), asyncHandler(async
     const {
       yearsOfExperience,
       serviceDescription,
-      serviceChargeValue,
-      serviceChargeUnit,
       state,
       city,
       fullAddress,
+      subServices = [],
       workingProofUrls = [],
       isEngineeringProvider = false,
       engineeringCertificateUrl
     } = req.body;
+
+    // Validate sub-services
+    const subServicesValidation = validateSubServices(subServices, id);
+    if (!subServicesValidation.valid) {
+      throw new ValidationError(`Sub-services validation failed: ${subServicesValidation.errors.join(', ')}`);
+    }
 
     // Map frontend category ID to database service name
     const serviceName = categoryToServiceMap[id];
@@ -455,34 +640,107 @@ router.put('/:id/providers', auth, requireRole(['provider']), asyncHandler(async
       }
   }
 
-  // Update provider_profiles fields
-  await query(`
+  // PRODUCTION OPTIMIZATION: Use transaction for atomic updates
+  // All updates (profile, service, sub-services) must succeed or all fail
+  await withTransaction(async (client) => {
+    // Update provider_profiles fields
+    await client.query(`
       UPDATE provider_profiles
       SET years_of_experience = $1,
           service_description = $2,
           is_engineering_provider = $3,
           engineering_certificate_url = $4
       WHERE id = $5
-  `, [yearsOfExperience, serviceDescription, isEngineeringProvider, cloudinaryCertificateUrl, providerProfile.id]);
+    `, [yearsOfExperience, serviceDescription, isEngineeringProvider, cloudinaryCertificateUrl, providerProfile.id]);
 
-  // Update provider_services fields with Cloudinary URLs
-  if (cloudinaryUrls.length > 0) {
-      await query(`
+    // Update provider_services fields with Cloudinary URLs (without service_charge columns)
+    if (cloudinaryUrls.length > 0) {
+      await client.query(`
         UPDATE provider_services
-        SET service_charge_value = $1,
-            service_charge_unit = $2,
-            working_proof_urls = $3
-        WHERE id = $4
-    `, [serviceChargeValue, serviceChargeUnit, cloudinaryUrls, existingService.id]);
-  } else {
-    await query(`
-      UPDATE provider_services
-      SET service_charge_value = $1,
-          service_charge_unit = $2,
-          working_proof_urls = NULL
-      WHERE id = $3
-    `, [serviceChargeValue, serviceChargeUnit, existingService.id]);
-  }
+        SET working_proof_urls = $1
+        WHERE id = $2
+      `, [cloudinaryUrls, existingService.id]);
+    } else {
+      await client.query(`
+        UPDATE provider_services
+        SET working_proof_urls = NULL
+        WHERE id = $1
+      `, [existingService.id]);
+    }
+
+    // PRODUCTION OPTIMIZATION: Atomic sub-services update
+    // Delete existing sub-services
+    await client.query(`
+      DELETE FROM provider_sub_services 
+      WHERE provider_service_id = $1
+    `, [existingService.id]);
+
+    // PRODUCTION OPTIMIZATION: Batch insert new sub-services
+    if (subServices && subServices.length > 0) {
+      // Pre-validate all sub-services before inserting
+      const subServiceRecords = [];
+      const subServiceNames = subServices.map(ss => getDatabaseServiceName(ss.serviceId));
+      
+      // Batch fetch all sub-service records in one query
+      if (subServiceNames.length > 0) {
+        const subServiceRecordsResult = await client.query(`
+          SELECT id, name FROM services_master WHERE name = ANY($1::text[])
+        `, [subServiceNames]);
+        
+        const subServiceMap = new Map(
+          subServiceRecordsResult.rows.map(r => [r.name, r.id])
+        );
+
+        // Validate and prepare sub-services for batch insert
+        for (const subService of subServices) {
+          const subServiceName = getDatabaseServiceName(subService.serviceId);
+          const subServiceRecordId = subServiceMap.get(subServiceName);
+          
+          if (!subServiceRecordId) {
+            logger.warn(`Sub-service not found in database: ${subServiceName}`, {
+              subServiceId: subService.serviceId,
+              providerServiceId: existingService.id
+            });
+            continue;
+          }
+
+          const price = parseFloat(subService.price);
+          if (isNaN(price) || price <= 0) {
+            logger.warn(`Invalid price for sub-service: ${subServiceName}`, {
+              price: subService.price,
+              providerServiceId: existingService.id
+            });
+            continue;
+          }
+
+          subServiceRecords.push({
+            provider_service_id: existingService.id,
+            service_id: subServiceRecordId,
+            price: price
+          });
+        }
+
+        // Batch insert all sub-services at once
+        if (subServiceRecords.length > 0) {
+          const values = subServiceRecords.map((_, index) => {
+            const baseIndex = index * 3;
+            return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`;
+          }).join(', ');
+          
+          const params = subServiceRecords.flatMap(ss => [
+            ss.provider_service_id,
+            ss.service_id,
+            ss.price
+          ]);
+
+          await client.query(`
+            INSERT INTO provider_sub_services (provider_service_id, service_id, price)
+            VALUES ${values}
+          `, params);
+        }
+      }
+    }
+  }, { name: 'update-provider-service-with-sub-services' });
 
   // Optionally update address (insert new address)
   if (state && fullAddress) {
@@ -505,10 +763,11 @@ router.put('/:id/providers', auth, requireRole(['provider']), asyncHandler(async
 router.post('/:id/providers', auth, requireRole(['provider']), [
   body('yearsOfExperience').isInt({ min: 0 }).withMessage('Years of experience must be a positive number'),
   body('serviceDescription').notEmpty().withMessage('Service description is required'),
-  body('serviceChargeValue').isFloat({ min: 0 }).withMessage('Service charge must be a positive number'),
-  body('serviceChargeUnit').notEmpty().withMessage('Service charge unit is required'),
   body('state').notEmpty().withMessage('State is required'),
   body('fullAddress').notEmpty().withMessage('Full address is required'),
+  body('subServices').isArray({ min: 1 }).withMessage('At least one sub-service is required'),
+  body('subServices.*.serviceId').notEmpty().withMessage('Sub-service service ID is required'),
+  body('subServices.*.price').isFloat({ min: 0.01 }).withMessage('Sub-service price must be a positive number'),
   body('workingProofUrls').optional().isArray().withMessage('Working proof URLs must be an array'),
   body('isEngineeringProvider').optional().isBoolean().withMessage('isEngineeringProvider must be a boolean'),
   body('engineeringCertificateUrl').optional().isString().withMessage('Engineering certificate URL must be a string')
@@ -519,14 +778,19 @@ router.post('/:id/providers', auth, requireRole(['provider']), [
     const {
       yearsOfExperience,
       serviceDescription,
-      serviceChargeValue,
-      serviceChargeUnit,
       state,
       fullAddress,
+      subServices = [],
       workingProofUrls = [],
       isEngineeringProvider = false,
       engineeringCertificateUrl
     } = req.body;
+
+    // Validate sub-services
+    const subServicesValidation = validateSubServices(subServices, id);
+    if (!subServicesValidation.valid) {
+      throw new ValidationError(`Sub-services validation failed: ${subServicesValidation.errors.join(', ')}`);
+    }
 
     // Ensure workingProofUrls is always a valid array
     let validWorkingProofUrls = [];
@@ -660,33 +924,107 @@ router.post('/:id/providers', auth, requireRole(['provider']), [
       }
   }
 
-  // Insert address
+  // PRODUCTION OPTIMIZATION: Use transaction to ensure atomicity
+  // All database operations (address, provider_service, sub-services) must succeed or all fail
   const { city } = req.body;
-  await query(`
+  
+  const newProviderService = await withTransaction(async (client) => {
+    // Insert address
+    await client.query(`
       INSERT INTO addresses (user_id, type, state, city, full_address)
       VALUES ($1, 'home', $2, $3, $4)
       ON CONFLICT DO NOTHING
-  `, [req.user.id, state, city || null, fullAddress]);
+    `, [req.user.id, state, city || null, fullAddress]);
 
-  // Insert provider service with Cloudinary URLs
-  let serviceResult;
-  if (cloudinaryUrls.length > 0) {
-      // Debug logging removed for production
-      serviceResult = await query(`
-        INSERT INTO provider_services (provider_id, service_id, service_charge_value, service_charge_unit, working_proof_urls)
-        VALUES ($1, $2, $3, $4, $5)
+    // Insert provider service with Cloudinary URLs (without service_charge columns)
+    let serviceResult;
+    if (cloudinaryUrls.length > 0) {
+      serviceResult = await client.query(`
+        INSERT INTO provider_services (provider_id, service_id, working_proof_urls)
+        VALUES ($1, $2, $3)
         RETURNING *
-    `, [providerProfile.id, service.id, serviceChargeValue, serviceChargeUnit, cloudinaryUrls]);
-  } else {
-    // Debug logging removed for production
-    serviceResult = await query(`
-      INSERT INTO provider_services (provider_id, service_id, service_charge_value, service_charge_unit, working_proof_urls)
-      VALUES ($1, $2, $3, $4, '{}')
-      RETURNING *
-    `, [providerProfile.id, service.id, serviceChargeValue, serviceChargeUnit]);
-  }
+      `, [providerProfile.id, service.id, cloudinaryUrls]);
+    } else {
+      serviceResult = await client.query(`
+        INSERT INTO provider_services (provider_id, service_id, working_proof_urls)
+        VALUES ($1, $2, '{}')
+        RETURNING *
+      `, [providerProfile.id, service.id]);
+    }
 
-  const newProviderService = serviceResult.rows[0];
+    const providerService = serviceResult.rows[0];
+
+    // PRODUCTION OPTIMIZATION: Batch insert sub-services for better performance
+    if (subServices && subServices.length > 0) {
+      // Pre-validate all sub-services before inserting
+      const subServiceRecords = [];
+      const subServiceNames = subServices.map(ss => getDatabaseServiceName(ss.serviceId));
+      
+      // Batch fetch all sub-service records in one query
+      if (subServiceNames.length > 0) {
+        const subServiceRecordsResult = await client.query(`
+          SELECT id, name FROM services_master WHERE name = ANY($1::text[])
+        `, [subServiceNames]);
+        
+        const subServiceMap = new Map(
+          subServiceRecordsResult.rows.map(r => [r.name, r.id])
+        );
+
+        // Validate and prepare sub-services for batch insert
+        for (const subService of subServices) {
+          const subServiceName = getDatabaseServiceName(subService.serviceId);
+          const subServiceRecordId = subServiceMap.get(subServiceName);
+          
+          if (!subServiceRecordId) {
+            logger.warn(`Sub-service not found in database: ${subServiceName}`, {
+              subServiceId: subService.serviceId,
+              providerServiceId: providerService.id
+            });
+            continue;
+          }
+
+          const price = parseFloat(subService.price);
+          if (isNaN(price) || price <= 0) {
+            logger.warn(`Invalid price for sub-service: ${subServiceName}`, {
+              price: subService.price,
+              providerServiceId: providerService.id
+            });
+            continue;
+          }
+
+          subServiceRecords.push({
+            provider_service_id: providerService.id,
+            service_id: subServiceRecordId,
+            price: price
+          });
+        }
+
+        // Batch insert all sub-services at once
+        if (subServiceRecords.length > 0) {
+          const values = subServiceRecords.map((_, index) => {
+            const baseIndex = index * 3;
+            return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`;
+          }).join(', ');
+          
+          const params = subServiceRecords.flatMap(ss => [
+            ss.provider_service_id,
+            ss.service_id,
+            ss.price
+          ]);
+
+          await client.query(`
+            INSERT INTO provider_sub_services (provider_service_id, service_id, price)
+            VALUES ${values}
+            ON CONFLICT (provider_service_id, service_id) DO UPDATE
+            SET price = EXCLUDED.price, updated_at = NOW()
+          `, params);
+        }
+      }
+    }
+
+    return providerService;
+  }, { name: 'create-provider-service-with-sub-services' });
+
   const serviceBasePrice = parseFloat(defaultPricingPlan?.price ?? service.base_price ?? 0);
 
   // Check if this is a labor service (free registration)

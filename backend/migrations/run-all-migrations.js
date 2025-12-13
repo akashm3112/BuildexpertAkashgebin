@@ -37,6 +37,7 @@ const addBookingProviderViewedColumn = require('./023-add-booking-provider-viewe
 const addNotificationCreatedAtIndex = require('./024-add-notification-created-at-index');
 const addServiceChargeToBookings = require('./025-add-service-charge-to-bookings');
 const fixBookingsCascadeDelete = require('./026-fix-bookings-cascade-delete');
+const addSubServicesRemoveServiceCharge = require('./027-add-sub-services-remove-service-charge');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -221,6 +222,13 @@ const migrations = [
     description: 'Changes bookings.provider_service_id foreign key from CASCADE to SET NULL to preserve bookings when service is deleted',
     function: fixBookingsCascadeDelete,
     required: true // Required to prevent bookings from being deleted when service is deleted
+  },
+  {
+    id: '027',
+    name: 'Add Sub Services and Remove Service Charge',
+    description: 'Creates provider_sub_services table for dynamic sub-services and removes service_charge_value/service_charge_unit columns from provider_services',
+    function: addSubServicesRemoveServiceCharge,
+    required: true // Required for new sub-services feature
   }
 ];
 

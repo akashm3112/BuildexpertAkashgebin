@@ -127,7 +127,7 @@ router.use(sanitizeBody());
 // @access  Private
 router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreateBooking], asyncHandler(async (req, res) => {
 
-    const { providerServiceId, selectedService, appointmentDate, appointmentTime } = req.body;
+    const { providerServiceId, selectedService, selectedServices, appointmentDate, appointmentTime } = req.body;
 
     // Check if provider service exists and is active
     const providerService = await getRow(`
@@ -193,14 +193,67 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
   // Create booking (store normalized time for consistency)
   // Mark as unread for provider (new booking notification)
   // Store service_charge_value and provider_id to persist earnings even if service is deleted
+  // Calculate service charge from sub-services based on selected_service(s)
   const timeToStore = normalizedAppointmentTime;
-  const serviceChargeValue = providerService.service_charge_value || 0;
   const providerId = providerService.provider_id;
+  
+  // Get service charge from sub-services
+  // Support both single selectedService (backward compatibility) and multiple selectedServices
+  let serviceChargeValue = 0;
+  const servicesToProcess = selectedServices && Array.isArray(selectedServices) && selectedServices.length > 0
+    ? selectedServices
+    : selectedService
+      ? [selectedService]
+      : [];
+  
+  if (servicesToProcess.length > 0) {
+    try {
+      // Map frontend category IDs to database service names
+      const { getDatabaseServiceName } = require('../utils/subServicesValidation');
+      const subServiceNames = servicesToProcess
+        .map(serviceId => getDatabaseServiceName(serviceId))
+        .filter(name => name !== null);
+      
+      if (subServiceNames.length > 0) {
+        // Batch fetch all sub-service prices in a single query
+        const { getRows } = require('../database/connection');
+        const subServiceRecords = await getRows(`
+          SELECT pss.price
+          FROM provider_sub_services pss
+          JOIN services_master sm ON pss.service_id = sm.id
+          WHERE pss.provider_service_id = $1
+            AND sm.name = ANY($2::text[])
+        `, [providerServiceId, subServiceNames]);
+        
+        // Sum all prices for multiple services
+        if (subServiceRecords && subServiceRecords.length > 0) {
+          serviceChargeValue = subServiceRecords.reduce((total, record) => {
+            const price = parseFloat(record.price) || 0;
+            return total + price;
+          }, 0);
+        }
+      }
+    } catch (error) {
+      logger.warn('Could not find sub-service prices, using 0', {
+        selectedServices: servicesToProcess,
+        providerServiceId,
+        error: error.message
+      });
+      serviceChargeValue = 0;
+    }
+  }
+  
+  // Store selected services as comma-separated string for backward compatibility
+  // Use selectedServices array if available, otherwise fall back to selectedService
+  const selectedServiceToStore = selectedServices && Array.isArray(selectedServices) && selectedServices.length > 0
+    ? selectedServices.join(',')
+    : selectedService || '';
+  
   const result = await query(`
       INSERT INTO bookings (user_id, provider_service_id, provider_id, selected_service, appointment_date, appointment_time, service_charge_value, is_viewed_by_provider)
       VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE)
       RETURNING *
-    `, [req.user.id, providerServiceId, providerId, selectedService, appointmentDate, timeToStore, serviceChargeValue]);
+    `, [req.user.id, providerServiceId, providerId, selectedServiceToStore, appointmentDate, timeToStore, serviceChargeValue]);
 
   const newBooking = result.rows[0];
 
@@ -369,8 +422,6 @@ router.get('/:id', auth, asyncHandler(async (req, res) => {
         u.phone as provider_phone,
         u.profile_pic_url as provider_profile_pic_url,
         sm.name as service_name,
-        ps.service_charge_value,
-        ps.service_charge_unit,
         ps.working_proof_urls
       FROM bookings b
       JOIN provider_services ps ON b.provider_service_id = ps.id

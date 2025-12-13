@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { NotFoundError, ValidationError } = require('../utils/errorTypes');
 const config = require('../utils/config');
+const { getFrontendCategoryId } = require('../utils/serviceMapping');
 
 // Use node-fetch if global fetch is not available (Node.js < 18)
 let fetch;
@@ -164,8 +165,6 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
       pp.years_of_experience,
       pp.service_description,
       ps.id as provider_service_id,
-      ps.service_charge_value,
-      ps.service_charge_unit,
       ps.working_proof_urls,
       ps.payment_start_date,
       ps.payment_end_date,
@@ -185,8 +184,7 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
     GROUP BY 
       u.id, u.full_name, u.phone, u.profile_pic_url,
       pp.years_of_experience, pp.service_description,
-      ps.id, ps.service_charge_value, ps.service_charge_unit,
-      ps.working_proof_urls, ps.payment_start_date, ps.payment_end_date,
+      ps.id, ps.working_proof_urls, ps.payment_start_date, ps.payment_end_date,
       ps.created_at, a.state, a.city, sm.name
     ${orderByClause}
     LIMIT $${paramCount} OFFSET $${paramCount + 1}
@@ -211,13 +209,103 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
     'borewell': 'Borewell Drilling, Pump Installation, Maintenance, Water Testing'
   };
 
+  // PRODUCTION OPTIMIZATION: Batch fetch all sub-services for pricing
+  let allSubServices = [];
+  if (providers.length > 0) {
+    try {
+      const tableExists = await getRow(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'provider_sub_services'
+        );
+      `);
+      
+      if (tableExists && tableExists.exists) {
+        const providerServiceIds = providers.map(p => p.provider_service_id);
+        allSubServices = await getRows(`
+          SELECT 
+            pss.provider_service_id,
+            pss.price
+          FROM provider_sub_services pss
+          WHERE pss.provider_service_id = ANY($1::uuid[])
+          ORDER BY pss.provider_service_id, pss.price ASC
+        `, [providerServiceIds]);
+      }
+    } catch (error) {
+      logger.warn('Could not fetch sub-services for pricing', { error: error.message });
+      allSubServices = [];
+    }
+  }
+
+  // Group sub-services by provider_service_id and calculate pricing summary
+  const pricingByProviderServiceId = new Map();
+  allSubServices.forEach(ss => {
+    if (!pricingByProviderServiceId.has(ss.provider_service_id)) {
+      pricingByProviderServiceId.set(ss.provider_service_id, []);
+    }
+    pricingByProviderServiceId.get(ss.provider_service_id).push(parseFloat(ss.price));
+  });
+
+  // Calculate pricing summary for each provider
+  const calculatePricingSummary = (prices) => {
+    if (!prices || prices.length === 0) {
+      return {
+        minPrice: null,
+        maxPrice: null,
+        priceRange: null,
+        displayPrice: 'Price on request',
+        subServiceCount: 0
+      };
+    }
+
+    const validPrices = prices.filter(p => !isNaN(p) && p > 0);
+    if (validPrices.length === 0) {
+      return {
+        minPrice: null,
+        maxPrice: null,
+        priceRange: null,
+        displayPrice: 'Price on request',
+        subServiceCount: 0
+      };
+    }
+
+    const minPrice = Math.min(...validPrices);
+    const maxPrice = Math.max(...validPrices);
+    const subServiceCount = validPrices.length;
+
+    let displayPrice;
+    if (subServiceCount === 1) {
+      displayPrice = `₹${minPrice}`;
+    } else if (minPrice === maxPrice) {
+      displayPrice = `₹${minPrice}`;
+    } else {
+      displayPrice = `Starting from ₹${minPrice}`;
+    }
+
+    return {
+      minPrice,
+      maxPrice,
+      priceRange: minPrice === maxPrice ? minPrice : `${minPrice} - ${maxPrice}`,
+      displayPrice,
+      subServiceCount
+    };
+  };
+
   // Update service descriptions based on service category and normalize rating fields
-  const updatedProviders = providers.map(provider => ({
-    ...provider,
-    service_description: serviceDescriptions[provider.service_name] || provider.service_description,
-    averageRating: parseFloat(provider.average_rating) || 0,
-    totalReviews: parseInt(provider.total_reviews) || 0
-  }));
+  const updatedProviders = providers.map(provider => {
+    const prices = pricingByProviderServiceId.get(provider.provider_service_id) || [];
+    const pricing = calculatePricingSummary(prices);
+
+    return {
+      ...provider,
+      service_description: serviceDescriptions[provider.service_name] || provider.service_description,
+      averageRating: parseFloat(provider.average_rating) || 0,
+      totalReviews: parseInt(provider.total_reviews) || 0,
+      // Pricing information from sub-services
+      pricing: pricing
+    };
+  });
 
   // Get total count - use only WHERE clause parameters (not ORDER BY parameters)
   // Create a separate params array for count query that excludes location sorting params
@@ -280,8 +368,6 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
       pp.is_engineering_provider,
       pp.engineering_certificate_url,
       ps.id as provider_service_id,
-      ps.service_charge_value,
-      ps.service_charge_unit,
       ps.working_proof_urls,
       ps.payment_start_date,
       ps.payment_end_date,
@@ -295,6 +381,38 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
 
   if (!provider) {
     throw new NotFoundError('Provider', providerId);
+  }
+
+  // Get sub-services for this provider service (if table exists)
+  let subServices = [];
+  try {
+    const tableExists = await getRow(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'provider_sub_services'
+      );
+    `);
+    
+    if (tableExists && tableExists.exists) {
+      subServices = await getRows(`
+        SELECT 
+          pss.id,
+          pss.service_id,
+          sm.name as service_name,
+          pss.price,
+          pss.created_at,
+          pss.updated_at
+        FROM provider_sub_services pss
+        JOIN services_master sm ON pss.service_id = sm.id
+        WHERE pss.provider_service_id = $1
+        ORDER BY pss.created_at ASC
+      `, [providerId]);
+    }
+  } catch (error) {
+    // Table doesn't exist yet - return empty array
+    logger.warn('provider_sub_services table does not exist yet', { error: error.message });
+    subServices = [];
   }
 
   // Service descriptions mapping based on service category
@@ -342,10 +460,19 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
     status: 'success',
     data: {
       provider: {
-        ...updatedProvider,
-        ratings,
+        ...provider,
+        serviceDescription: serviceDescriptions[provider.service_name] || provider.service_description,
         averageRating: Math.round(avgRating * 10) / 10,
-        totalReviews: ratings.length
+        totalReviews: ratings.length,
+        sub_services: subServices.map(ss => ({
+          id: ss.id,
+          serviceId: getFrontendCategoryId(ss.service_name),
+          serviceName: ss.service_name,
+          price: parseFloat(ss.price),
+          createdAt: ss.created_at,
+          updatedAt: ss.updated_at
+        })),
+        ratings
       }
     }
   });
@@ -382,8 +509,6 @@ router.get('/featured-providers', asyncHandler(async (req, res) => {
       u.full_name,
       sm.name as service_name,
       ps.working_proof_urls,
-      ps.service_charge_value,
-      ps.service_charge_unit,
       u.profile_pic_url
     FROM provider_services ps
     JOIN provider_profiles pp ON ps.provider_id = pp.id

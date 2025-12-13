@@ -29,17 +29,33 @@ const getResponsiveFontSize = (small: number, medium: number, large: number) => 
   return large;
 };
 
+interface SubService {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  price: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface PricingSummary {
+  minPrice: number | null;
+  maxPrice: number | null;
+  priceRange: string | number | null;
+  subServiceCount: number;
+}
+
 interface RegisteredService {
   provider_service_id: string;
   service_id: string;
   service_name: string;
-  service_charge_value: number;
-  service_charge_unit: string;
   payment_status: string;
   payment_start_date?: string;
   payment_end_date?: string;
   days_until_expiry?: number;
   created_at: string;
+  sub_services?: SubService[];
+  pricing?: PricingSummary;
 }
 
 interface ServiceStatus {
@@ -180,22 +196,7 @@ export default function ServicesScreen() {
     return { color: '#10B981', text: `${Math.floor(daysUntilExpiry)} days remaining`, urgent: false };
   };
 
-  const getTranslatedChargeUnit = (unit: string) => {
-    switch (unit) {
-      case 'per day':
-        return t('services.perDay');
-      case 'per hour':
-        return t('services.perHour');
-      case 'per project':
-        return t('services.perProject');
-      case 'per consultation':
-        return t('services.perConsultation');
-      case 'per sq ft':
-        return t('services.perSquareFoot');
-      default:
-        return unit;
-    }
-  };
+  // Removed getTranslatedChargeUnit - no longer needed with sub-services pricing model
 
   const getServiceCategoryInfo = (serviceName: string) => {
     // Map backend service names to frontend category info
@@ -411,10 +412,36 @@ export default function ServicesScreen() {
 
                 {/* Price section */}
                 <View style={styles.priceSection}>
-                  <Text style={styles.priceLabel}>Service Charge</Text>
-                  <Text style={styles.priceValue}>
-                    ₹{service.service_charge_value} {getTranslatedChargeUnit(service.service_charge_unit)}
-                  </Text>
+                  <Text style={styles.priceLabel}>Service Pricing</Text>
+                  {service.pricing && service.pricing.minPrice !== null ? (
+                    <>
+                      {service.pricing.subServiceCount === 1 ? (
+                        <Text style={styles.priceValue}>
+                          ₹{service.pricing.minPrice}
+                        </Text>
+                      ) : service.pricing.minPrice === service.pricing.maxPrice ? (
+                        <Text style={styles.priceValue}>
+                          ₹{service.pricing.minPrice}
+                        </Text>
+                      ) : (
+                        <>
+                          <Text style={styles.priceValue}>
+                            Starting from ₹{service.pricing.minPrice}
+                          </Text>
+                          <Text style={styles.priceRange}>
+                            Range: ₹{service.pricing.priceRange}
+                          </Text>
+                        </>
+                      )}
+                      <Text style={styles.subServiceCount}>
+                        {service.pricing.subServiceCount} {service.pricing.subServiceCount === 1 ? 'service' : 'services'} available
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={styles.priceValue}>
+                      Pricing not set
+                    </Text>
+                  )}
                 </View>
 
                 {/* Expiry Information */}
@@ -625,6 +652,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#059669',
     lineHeight: getResponsiveFontSize(22, 24, 26),
+    marginBottom: getResponsiveSpacing(2, 4, 6),
+  },
+  priceRange: {
+    fontSize: getResponsiveFontSize(12, 13, 14),
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: getResponsiveSpacing(2, 4, 6),
+  },
+  subServiceCount: {
+    fontSize: getResponsiveFontSize(11, 12, 13),
+    fontWeight: '400',
+    color: '#94A3B8',
+    marginTop: getResponsiveSpacing(4, 6, 8),
+    fontStyle: 'italic',
   },
   statusBadge: {
     flexDirection: 'row',

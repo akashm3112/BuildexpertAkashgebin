@@ -317,9 +317,22 @@ export default function HomeScreen() {
         socketRef.current.emit('join', user.id);
         
         // Listen for real-time earnings updates
-        socketRef.current.on('earnings_updated', (data: any) => {
+        socketRef.current.on('earnings_updated', async (data: any) => {
           if (data.status === 'success' && data.data.earnings) {
-            setEarnings(data.data.earnings);
+            // Format earnings with Indian number formatting
+            const { formatIndianNumber } = await import('@/utils/numberFormatter');
+            
+            // Extract numeric values from formatted strings (e.g., "₹1,000" -> 1000)
+            const extractNumber = (formatted: string): number => {
+              const cleaned = formatted.replace(/[₹,]/g, '');
+              return parseFloat(cleaned) || 0;
+            };
+            
+            setEarnings({
+              thisMonth: formatIndianNumber(extractNumber(data.data.earnings.thisMonth)),
+              today: formatIndianNumber(extractNumber(data.data.earnings.today)),
+              pending: formatIndianNumber(extractNumber(data.data.earnings.pending)),
+            });
             setIsLoadingEarnings(false); // Stop loading when we get real-time data
           }
         });
@@ -641,7 +654,20 @@ export default function HomeScreen() {
         const data = await response.json();
         
         if (data.status === 'success' && data.data.earnings) {
-          setEarnings(data.data.earnings);
+          // Format earnings with Indian number formatting
+          const { formatIndianNumber } = await import('@/utils/numberFormatter');
+          
+          // Extract numeric values from formatted strings (e.g., "₹1,000" -> 1000)
+          const extractNumber = (formatted: string): number => {
+            const cleaned = formatted.replace(/[₹,]/g, '');
+            return parseFloat(cleaned) || 0;
+          };
+          
+          setEarnings({
+            thisMonth: formatIndianNumber(extractNumber(data.data.earnings.thisMonth)),
+            today: formatIndianNumber(extractNumber(data.data.earnings.today)),
+            pending: formatIndianNumber(extractNumber(data.data.earnings.pending)),
+          });
         }
       } else {
         // Set default values if API fails

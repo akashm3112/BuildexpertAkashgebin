@@ -286,14 +286,12 @@ router.get('/services', asyncHandler(async (req, res) => {
 // @desc    Update provider service details
 // @access  Private
 router.put('/services/:id', [
-  body('serviceChargeValue').optional().isFloat({ min: 0 }).withMessage('Service charge must be a positive number'),
-  body('serviceChargeUnit').optional().notEmpty().withMessage('Service charge unit cannot be empty'),
   body('workingProofUrls').optional().isArray().withMessage('Working proof URLs must be an array')
 ], asyncHandler(async (req, res) => {
   validateOrThrow(req);
 
   const { id } = req.params;
-  const { serviceChargeValue, serviceChargeUnit, workingProofUrls } = req.body;
+  const { workingProofUrls } = req.body;
 
   // Check if service belongs to provider
   const existingService = await getRow(`
@@ -310,17 +308,8 @@ router.put('/services/:id', [
     const updateValues = [];
     let paramCount = 1;
 
-    if (serviceChargeValue !== undefined) {
-      updateFields.push(`service_charge_value = $${paramCount}`);
-      updateValues.push(serviceChargeValue);
-      paramCount++;
-    }
-
-    if (serviceChargeUnit) {
-      updateFields.push(`service_charge_unit = $${paramCount}`);
-      updateValues.push(serviceChargeUnit);
-      paramCount++;
-    }
+    // Note: service_charge_value and service_charge_unit have been removed
+    // Sub-services are now managed through the service registration endpoints
 
     // Handle working proof images upload to Cloudinary
     if (workingProofUrls !== undefined) {

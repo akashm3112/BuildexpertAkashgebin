@@ -37,6 +37,7 @@ class DatabaseOptimizer {
         b.status,
         b.appointment_date,
         b.appointment_time,
+        b.selected_service,
         b.address,
         b.description,
         b.created_at,
@@ -48,12 +49,13 @@ class DatabaseOptimizer {
         ` : `
           u.full_name as customer_name,
           u.phone as customer_phone,
+          a_customer.state as customer_state,
+          a_customer.full_address as customer_address,
         `}
         -- Service info
         sm.name as service_name,
         ps.id as provider_service_id,
-        ps.service_charge_value,
-        ps.service_charge_unit,
+        b.service_charge_value,
         ps.working_proof_urls,
         -- Rating info (if exists)
         r.rating as rating_value,
@@ -64,6 +66,9 @@ class DatabaseOptimizer {
       JOIN provider_profiles pp ON ps.provider_id = pp.id
       JOIN users u ON ${userType === 'user' ? 'pp.user_id' : 'b.user_id'} = u.id
       JOIN services_master sm ON ps.service_id = sm.id
+      ${userType === 'provider' ? `
+        LEFT JOIN addresses a_customer ON a_customer.user_id = b.user_id AND a_customer.type = 'home'
+      ` : ''}
       LEFT JOIN ratings r ON r.booking_id = b.id
       ${whereClause}
       ORDER BY b.created_at DESC
@@ -88,13 +93,13 @@ class DatabaseOptimizer {
       status: b.status,
       appointment_date: b.appointment_date,
       appointment_time: b.appointment_time,
+      selected_service: b.selected_service,
       address: b.address,
       description: b.description,
       created_at: b.created_at,
       service_name: b.service_name,
       provider_service_id: b.provider_service_id,
       service_charge_value: b.service_charge_value,
-      service_charge_unit: b.service_charge_unit,
       working_proof_urls: b.working_proof_urls,
       ...(userType === 'user' ? {
         provider_name: b.provider_name,
@@ -103,6 +108,8 @@ class DatabaseOptimizer {
       } : {
         customer_name: b.customer_name,
         customer_phone: b.customer_phone,
+        customer_state: b.customer_state,
+        customer_address: b.customer_address,
       }),
       rating: b.rating_value !== null ? {
         rating: b.rating_value,
@@ -141,13 +148,12 @@ class DatabaseOptimizer {
         pp.is_engineering_provider,
         pp.engineering_certificate_url,
         ps.id as provider_service_id,
-        ps.service_charge_value,
-        ps.service_charge_unit,
         ps.working_proof_urls,
         ps.payment_start_date,
         ps.payment_end_date,
         sm.name as service_name,
         a.state,
+        a.city,
         a.full_address
       FROM provider_services ps
       JOIN provider_profiles pp ON ps.provider_id = pp.id
@@ -159,6 +165,109 @@ class DatabaseOptimizer {
 
     if (!provider) {
       return null;
+    }
+
+    // PRODUCTION OPTIMIZATION: Fetch sub-services for pricing
+    let pricing = {
+      minPrice: null,
+      maxPrice: null,
+      priceRange: null,
+      displayPrice: 'Price on request',
+      subServiceCount: 0
+    };
+
+    try {
+      const tableExists = await getRow(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'provider_sub_services'
+        );
+      `);
+      
+      if (tableExists && tableExists.exists) {
+        const subServices = await getRows(`
+          SELECT price
+          FROM provider_sub_services
+          WHERE provider_service_id = $1
+          ORDER BY price ASC
+        `, [providerServiceId]);
+
+        if (subServices && subServices.length > 0) {
+          const prices = subServices.map(ss => parseFloat(ss.price)).filter(p => !isNaN(p) && p > 0);
+          if (prices.length > 0) {
+            const minPrice = Math.min(...prices);
+            const maxPrice = Math.max(...prices);
+            const subServiceCount = prices.length;
+
+            let displayPrice;
+            if (subServiceCount === 1) {
+              displayPrice = `₹${minPrice}`;
+            } else if (minPrice === maxPrice) {
+              displayPrice = `₹${minPrice}`;
+            } else {
+              displayPrice = `Starting from ₹${minPrice}`;
+            }
+
+            pricing = {
+              minPrice,
+              maxPrice,
+              priceRange: minPrice === maxPrice ? minPrice : `${minPrice} - ${maxPrice}`,
+              displayPrice,
+              subServiceCount
+            };
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn('Could not fetch sub-services for provider pricing', { 
+        providerServiceId, 
+        error: error.message 
+      });
+    }
+
+    // PRODUCTION: Fetch full sub-services details for booking screen
+    let subServices = [];
+    try {
+      const tableExists = await getRow(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'provider_sub_services'
+        );
+      `);
+      
+      if (tableExists && tableExists.exists) {
+        const { getFrontendCategoryId } = require('./serviceMapping');
+        subServices = await getRows(`
+          SELECT 
+            pss.id,
+            pss.service_id,
+            sm.name as service_name,
+            pss.price,
+            pss.created_at,
+            pss.updated_at
+          FROM provider_sub_services pss
+          JOIN services_master sm ON pss.service_id = sm.id
+          WHERE pss.provider_service_id = $1
+          ORDER BY pss.created_at ASC
+        `, [providerServiceId]);
+
+        // Map to frontend format
+        subServices = subServices.map(ss => ({
+          id: ss.id,
+          serviceId: getFrontendCategoryId(ss.service_name) || ss.service_name,
+          serviceName: ss.service_name,
+          price: parseFloat(ss.price),
+          createdAt: ss.created_at,
+          updatedAt: ss.updated_at
+        }));
+      }
+    } catch (error) {
+      logger.warn('Could not fetch sub-services details', { 
+        providerServiceId, 
+        error: error.message 
+      });
     }
 
     // Get ratings with customer names in a single query
@@ -186,7 +295,9 @@ class DatabaseOptimizer {
       ...provider,
       ratings,
       average_rating: Math.round(avgRating * 10) / 10, // Round to 1 decimal place
-      total_ratings: ratings.length
+      total_ratings: ratings.length,
+      pricing: pricing, // Include pricing information from sub-services
+      sub_services: subServices // Include full sub-services array for booking screen
     };
   }
 
@@ -301,8 +412,6 @@ class DatabaseOptimizer {
       registeredServices = await getRows(`
         SELECT 
           ps.id,
-          ps.service_charge_value,
-          ps.service_charge_unit,
           ps.payment_status,
           ps.payment_start_date,
           ps.payment_end_date,
