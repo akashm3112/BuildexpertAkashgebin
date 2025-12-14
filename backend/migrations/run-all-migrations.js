@@ -38,6 +38,7 @@ const addNotificationCreatedAtIndex = require('./024-add-notification-created-at
 const addServiceChargeToBookings = require('./025-add-service-charge-to-bookings');
 const fixBookingsCascadeDelete = require('./026-fix-bookings-cascade-delete');
 const addSubServicesRemoveServiceCharge = require('./027-add-sub-services-remove-service-charge');
+const addComprehensiveIndexes = require('./028-comprehensive-database-indexes');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -229,6 +230,13 @@ const migrations = [
     description: 'Creates provider_sub_services table for dynamic sub-services and removes service_charge_value/service_charge_unit columns from provider_services',
     function: addSubServicesRemoveServiceCharge,
     required: true // Required for new sub-services feature
+  },
+  {
+    id: '028',
+    name: 'Comprehensive Database Indexes',
+    description: 'Adds critical indexes on service_id, state, city, and all frequently queried columns for production optimization. Includes composite indexes for common query patterns.',
+    function: addComprehensiveIndexes,
+    required: true // Required for optimal database performance
   }
 ];
 
