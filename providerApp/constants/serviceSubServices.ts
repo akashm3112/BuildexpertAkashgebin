@@ -25,39 +25,41 @@ const ALL_SERVICE_IDS = SERVICE_CATEGORIES.map(s => s.id);
 export const SERVICE_SUB_SERVICES_MAP: Record<string, string[]> = {
   // Painting related sub-services
   'painting': [
-    'plumber',
-    'cleaning',
-    'glass-mirror',
-    'interiors-building',
+    'Room painting',
+    'Fancy wall painting',
+    'Wall stricking',
+    'Full house painting',
+    'wall panelling',
   ],
 
   // Engineer/Interior related sub-services
   'engineer-interior': [
-    'plumber',
-    'granite-tiles',
-    'painting',
-    'mason-mastri',
-    'stainless-steel',
-    'glass-mirror',
-    'interiors-building',
-    'cleaning',
+    '2D planning floor',
+    'Structural planning',
+    '3D house elevation',
+    'Interior design',
+    'Shop interior planning/Business plan',
   ],
 
   // Plumber related sub-services
   'plumber': [
-    'mason-mastri',
-    'borewell',
-    'cleaning',
-    'contact-building',
+    'Sanatory & pit construction',
+    'Fixing & cleaning of bathroom',
+    'A to Z plumbing contract',
+    'Tap installation',
+    'Shower installation',
   ],
 
   // Granite & Tiles related sub-services
   'granite-tiles': [
-    'mason-mastri',
-    'plumber',
-    'cleaning',
-    'interiors-building',
-  ],
+    'Wall fitting',
+    'Floor fitting',
+    'Parking tail fitting',
+    'Granite fitting',
+    'Brokern tail fitting',
+    'Wall stickering',
+    'A to Z contract of the building tails fitting',
+    ],
 
   // Contact & Building related sub-services
   'contact-building': [
@@ -88,25 +90,26 @@ export const SERVICE_SUB_SERVICES_MAP: Record<string, string[]> = {
 
   // Interiors of the Building related sub-services
   'interiors-building': [
-    'painting',
-    'glass-mirror',
-    'granite-tiles',
-    'cleaning',
-    'stainless-steel',
+    'Shop interior',
+    'Kitchen interior',
+    'Room interior',
+    'Top interior',
+    'A to Z interior',
   ],
 
   // Stainless Steel related sub-services
   'stainless-steel': [
-    'mason-mastri',
-    'plumber',
-    'contact-building',
-    'cleaning',
+    'S.S fitting',
+    'M.S fitting',
+    'S.S with glass fitting',
   ],
 
   // Cleaning related sub-services
   'cleaning': [
-    'plumber',
-    'glass-mirror',
+    'Sump cleaning',
+    'Tank cleaning',
+    'Bathroom cleaning',
+    'Total house cleaning',
   ],
 
   // Glass & Mirror related sub-services

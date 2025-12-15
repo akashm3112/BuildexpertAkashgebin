@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar, Animated, Platform, Alert, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar, Animated, Platform, Alert, TextInput, RefreshControl, Modal } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { UserCheck, Phone, Mail, Calendar, MapPin, Briefcase, UserX, Search, Filter, MoreVertical, Trash2, Shield, Eye, Star } from 'lucide-react-native';
+import { UserCheck, Phone, Mail, Calendar, MapPin, Briefcase, UserX, Search, Filter, Trash2, Shield, Eye, Star } from 'lucide-react-native';
 import { SafeView } from '@/components/SafeView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/constants/api';
@@ -30,6 +31,12 @@ const getResponsiveFontSize = (small: number, medium: number, large: number) => 
   return large;
 };
 
+// Updated palette to match provided blue reference
+const PRIMARY_BLUE = '#4E8EF7';
+const PRIMARY_BLUE_BORDER = '#3B82F6';
+const DANGER_RED = '#EF4444';
+const DANGER_RED_BORDER = '#DC2626';
+
 interface Provider {
   id: string;
   full_name: string;
@@ -49,12 +56,22 @@ interface Provider {
 export default function ProviderReportsScreen() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const handleViewDetails = (provider: Provider) => {
+    router.push({
+      pathname: '/admin/provider-details',
+      params: { provider: JSON.stringify(provider) },
+    });
+  };
   const [providers, setProviders] = useState<Provider[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'all' | 'verified' | 'unverified'>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<Provider | null>(null);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successName, setSuccessName] = useState('');
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -159,40 +176,30 @@ export default function ProviderReportsScreen() {
     await loadProviders();
   };
 
-  const removeProvider = async (providerId: string, providerName: string) => {
-    Alert.alert(
-      'Remove Provider',
-      `Are you sure you want to remove ${providerName}? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { tokenManager } = await import('@/utils/tokenManager');
+  const performRemove = async (target: Provider) => {
+    try {
+      const { tokenManager } = await import('@/utils/tokenManager');
       const token = await tokenManager.getValidToken();
-              const response = await fetch(`${API_BASE_URL}/api/admin/providers/${providerId}`, {
-                method: 'DELETE',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                },
-              });
-
-              if (response.ok) {
-                setProviders(providers.filter(provider => provider.id !== providerId));
-                Alert.alert('Success', 'Provider removed successfully');
-              } else {
-                Alert.alert('Error', 'Failed to remove provider');
-              }
-            } catch (error) {
-              console.error('Error removing provider:', error);
-              Alert.alert('Error', 'Failed to remove provider');
-            }
-          },
+      const response = await fetch(`${API_BASE_URL}/api/admin/providers/${target.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
         },
-      ]
-    );
+      });
+      if (response.ok) {
+        setProviders(prev => prev.filter(provider => provider.id !== target.id));
+        setSuccessName(target.full_name);
+        setShowSuccessModal(true);
+      } else {
+        Alert.alert('Error', 'Failed to remove provider');
+      }
+    } catch (error) {
+      console.error('Error removing provider:', error);
+      Alert.alert('Error', 'Failed to remove provider');
+    } finally {
+      setShowRemoveModal(false);
+      setRemoveTarget(null);
+    }
   };
 
   const filteredProviders = providers.filter(provider => {
@@ -260,15 +267,12 @@ export default function ProviderReportsScreen() {
             </View>
           </View>
           
-          <TouchableOpacity style={styles.moreButton}>
-            <MoreVertical size={getResponsiveValue(16, 18, 20)} color="#6B7280" />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.providerDetails}>
           <View style={styles.detailRow}>
             <View style={styles.detailIconContainer}>
-              <Phone size={getResponsiveValue(14, 16, 18)} color="#3B82F6" />
+              <Phone size={getResponsiveValue(14, 16, 18)} color="white" />
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Phone</Text>
@@ -278,7 +282,7 @@ export default function ProviderReportsScreen() {
           
           <View style={styles.detailRow}>
             <View style={styles.detailIconContainer}>
-              <Mail size={getResponsiveValue(14, 16, 18)} color="#3B82F6" />
+              <Mail size={getResponsiveValue(14, 16, 18)} color="white" />
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Email</Text>
@@ -289,7 +293,7 @@ export default function ProviderReportsScreen() {
           {item.state && item.city && (
             <View style={styles.detailRow}>
               <View style={styles.detailIconContainer}>
-                <MapPin size={getResponsiveValue(14, 16, 18)} color="#3B82F6" />
+                <MapPin size={getResponsiveValue(14, 16, 18)} color="white" />
               </View>
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Location</Text>
@@ -301,7 +305,7 @@ export default function ProviderReportsScreen() {
           {item.years_of_experience && (
             <View style={styles.detailRow}>
               <View style={styles.detailIconContainer}>
-                <Briefcase size={getResponsiveValue(14, 16, 18)} color="#3B82F6" />
+                <Briefcase size={getResponsiveValue(14, 16, 18)} color="white" />
               </View>
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Experience</Text>
@@ -312,7 +316,7 @@ export default function ProviderReportsScreen() {
           
           <View style={styles.detailRow}>
             <View style={styles.detailIconContainer}>
-              <Star size={getResponsiveValue(14, 16, 18)} color="#3B82F6" />
+              <Star size={getResponsiveValue(14, 16, 18)} color="white" />
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Services</Text>
@@ -322,7 +326,7 @@ export default function ProviderReportsScreen() {
           
           <View style={styles.detailRow}>
             <View style={styles.detailIconContainer}>
-              <Calendar size={getResponsiveValue(14, 16, 18)} color="#3B82F6" />
+              <Calendar size={getResponsiveValue(14, 16, 18)} color="white" />
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Joined</Text>
@@ -333,7 +337,7 @@ export default function ProviderReportsScreen() {
           {item.last_login && (
             <View style={styles.detailRow}>
               <View style={styles.detailIconContainer}>
-                <Shield size={getResponsiveValue(14, 16, 18)} color="#3B82F6" />
+                <Shield size={getResponsiveValue(14, 16, 18)} color="white" />
               </View>
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Last Login</Text>
@@ -351,14 +355,17 @@ export default function ProviderReportsScreen() {
         )}
 
         <View style={styles.providerActions}>
-          <TouchableOpacity style={styles.viewButton}>
-            <Eye size={getResponsiveValue(14, 16, 18)} color="#3B82F6" />
+          <TouchableOpacity style={styles.viewButton} onPress={() => handleViewDetails(item)}>
+            <Eye size={getResponsiveValue(14, 16, 18)} color="white" />
             <Text style={styles.viewButtonText}>View Details</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.removeButton}
-            onPress={() => removeProvider(item.id, item.full_name)}
+            onPress={() => {
+              setRemoveTarget(item);
+              setShowRemoveModal(true);
+            }}
           >
             <Trash2 size={getResponsiveValue(14, 16, 18)} color="white" />
             <Text style={styles.removeButtonText}>Remove</Text>
@@ -500,6 +507,65 @@ export default function ProviderReportsScreen() {
           }
         />
       )}
+
+      <Modal
+        transparent
+        visible={showRemoveModal}
+        animationType="fade"
+        onRequestClose={() => setShowRemoveModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFillObject} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Remove Provider</Text>
+            <Text style={styles.modalMessage}>
+              {removeTarget ? `Are you sure you want to remove ${removeTarget.full_name}? This action cannot be undone.` : ''}
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => {
+                  setShowRemoveModal(false);
+                  setRemoveTarget(null);
+                }}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonDestructive]}
+                onPress={() => removeTarget && performRemove(removeTarget)}
+              >
+                <Text style={styles.modalButtonText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={showSuccessModal}
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFillObject} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Success</Text>
+            <Text style={styles.modalMessage}>
+              {successName ? `${successName} was removed successfully.` : 'Provider removed successfully.'}
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowSuccessModal(false)}
+              >
+                <Text style={styles.modalButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeView>
   );
 }
@@ -739,7 +805,9 @@ const styles = StyleSheet.create({
     width: getResponsiveValue(32, 36, 40),
     height: getResponsiveValue(32, 36, 40),
     borderRadius: 8,
-    backgroundColor: '#EBF4FF',
+    backgroundColor: PRIMARY_BLUE,
+    borderWidth: 1,
+    borderColor: PRIMARY_BLUE_BORDER,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: getResponsiveSpacing(10, 12, 14),
@@ -798,14 +866,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: getResponsiveSpacing(10, 12, 14),
     borderRadius: 12,
-    backgroundColor: '#EBF4FF',
+    backgroundColor: PRIMARY_BLUE,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
+    borderColor: PRIMARY_BLUE,
   },
   viewButtonText: {
     fontSize: getResponsiveFontSize(13, 14, 15),
     fontWeight: '600',
-    color: '#3B82F6',
+    color: 'white',
     marginLeft: 6,
   },
   removeButton: {
@@ -815,14 +883,68 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: getResponsiveSpacing(10, 12, 14),
     borderRadius: 12,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: DANGER_RED,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: DANGER_RED_BORDER,
   },
   removeButtonText: {
     fontSize: getResponsiveFontSize(13, 14, 15),
     fontWeight: '600',
-    color: '#EF4444',
+    color: 'white',
     marginLeft: 6,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: getResponsiveFontSize(18, 19, 20),
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: getResponsiveFontSize(14, 15, 16),
+    color: '#374151',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  modalButton: {
+    minWidth: 100,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: PRIMARY_BLUE,
+  },
+  modalButtonDestructive: {
+    backgroundColor: DANGER_RED,
+  },
+  modalButtonText: {
+    color: 'white',
+    fontSize: getResponsiveFontSize(13, 14, 15),
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
 });
