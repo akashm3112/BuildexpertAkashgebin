@@ -177,29 +177,29 @@ export default function ProviderReportsScreen() {
   };
 
   const performRemove = async (target: Provider) => {
-    try {
-      const { tokenManager } = await import('@/utils/tokenManager');
+            try {
+              const { tokenManager } = await import('@/utils/tokenManager');
       const token = await tokenManager.getValidToken();
       const response = await fetch(`${API_BASE_URL}/api/admin/providers/${target.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      if (response.ok) {
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                },
+              });
+              if (response.ok) {
         setProviders(prev => prev.filter(provider => provider.id !== target.id));
         setSuccessName(target.full_name);
         setShowSuccessModal(true);
-      } else {
-        Alert.alert('Error', 'Failed to remove provider');
-      }
-    } catch (error) {
-      console.error('Error removing provider:', error);
-      Alert.alert('Error', 'Failed to remove provider');
+              } else {
+                Alert.alert('Error', 'Failed to remove provider');
+              }
+            } catch (error) {
+              console.error('Error removing provider:', error);
+              Alert.alert('Error', 'Failed to remove provider');
     } finally {
       setShowRemoveModal(false);
       setRemoveTarget(null);
-    }
+            }
   };
 
   const filteredProviders = providers.filter(provider => {

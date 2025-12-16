@@ -233,7 +233,11 @@ export default function ReportCustomerScreen() {
           <Text style={styles.headerTitle}>Report Customer</Text>
         </View>
 
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollView} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.content}>
             <View style={styles.iconContainer}>
               <AlertTriangle size={48} color="#DC2626" />

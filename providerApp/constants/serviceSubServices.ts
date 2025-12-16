@@ -64,28 +64,17 @@ export const SERVICE_SUB_SERVICES_MAP: Record<string, string[]> = {
   // Contact & Building related sub-services
   'contact-building': [
     'mason-mastri',
-    'plumber',
-    'granite-tiles',
-    'painting',
-    'stainless-steel',
-    'borewell',
+    
   ],
 
   // Labor related sub-services
   'labor': [
-    'mason-mastri',
-    'plumber',
-    'cleaning',
-    'contact-building',
+    'per hour charges',
   ],
 
   // Mason/Mastri related sub-services
   'mason-mastri': [
-    'plumber',
-    'granite-tiles',
-    'painting',
-    'contact-building',
-    'stainless-steel',
+    'Per sqft charges construction',
   ],
 
   // Interiors of the Building related sub-services
@@ -114,16 +103,14 @@ export const SERVICE_SUB_SERVICES_MAP: Record<string, string[]> = {
 
   // Glass & Mirror related sub-services
   'glass-mirror': [
-    'cleaning',
-    'interiors-building',
-    'painting',
+    'glass fitting',
+    'mirror fitting',
   ],
 
   // Borewell related sub-services
   'borewell': [
-    'plumber',
-    'mason-mastri',
-    'cleaning',
+    'Regular borewell drilling (per sqft charges)',
+    'premium borewell drilling (per sqft charges)',
   ],
 };
 

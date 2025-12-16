@@ -385,7 +385,11 @@ export default function MobileVerificationScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {/* Simple Icon */}
           <View style={styles.iconSection}>
             <View style={styles.iconContainer}>

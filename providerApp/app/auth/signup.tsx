@@ -358,7 +358,11 @@ export default function SignUpScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={dynamicStyles.scrollContent}>
+        <ScrollView 
+          contentContainerStyle={dynamicStyles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={dynamicStyles.header}>
             <Text style={dynamicStyles.title}>Create Account</Text>
             <Text style={dynamicStyles.subtitle}>Join our construction marketplace</Text>

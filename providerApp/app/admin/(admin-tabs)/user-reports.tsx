@@ -145,30 +145,30 @@ export default function UserReportsScreen() {
   };
 
   const performRemove = async (target: User) => {
-    try {
-      const { tokenManager } = await import('@/utils/tokenManager');
+            try {
+              const { tokenManager } = await import('@/utils/tokenManager');
       const token = await tokenManager.getValidToken();
       const response = await fetch(`${API_BASE_URL}/api/admin/users/${target.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                },
+              });
 
-      if (response.ok) {
+              if (response.ok) {
         setUsers(prev => prev.filter(user => user.id !== target.id));
         setSuccessName(target.full_name);
         setShowSuccessModal(true);
-      } else {
-        Alert.alert('Error', 'Failed to remove user');
-      }
-    } catch (error) {
-      console.error('Error removing user:', error);
-      Alert.alert('Error', 'Failed to remove user');
+              } else {
+                Alert.alert('Error', 'Failed to remove user');
+              }
+            } catch (error) {
+              console.error('Error removing user:', error);
+              Alert.alert('Error', 'Failed to remove user');
     } finally {
       setShowRemoveModal(false);
       setRemoveTarget(null);
-    }
+            }
   };
 
   const filteredUsers = users.filter(user => {
