@@ -673,4 +673,75 @@ export default {
     contactPhone: 'ಫೋನ್: +1 (555) 123-4567',
     contactAddress: 'ವಿಳಾಸ: 123 ಮೇನ್ ಸ್ಟ್ರೀಟ್, ನಗರ, ರಾಜ್ಯ 12345',
   },
+  subServices: {
+    painting: {
+      'room-painting': 'ಕೊಠಡಿ ಬಣ್ಣ',
+      'fancy-wall-painting': 'ಫ್ಯಾನ್ಸಿ ಗೋಡೆ ಬಣ್ಣ',
+      'wall-striking': 'ಗೋಡೆ ಸ್ಟ್ರೈಕಿಂಗ್',
+      'full-house-painting': 'ಪೂರ್ಣ ಮನೆ ಬಣ್ಣ',
+      'wall-panelling': 'ಗೋಡೆ ಪ್ಯಾನೆಲಿಂಗ್',
+    },
+    'engineer-interior': {
+      '2d-planning-floor': '2D ಯೋಜನೆ ನೆಲ',
+      'structural-planning': 'ರಚನಾತ್ಮಕ ಯೋಜನೆ',
+      '3d-house-elevation': '3D ಮನೆ ಎಲಿವೇಷನ್',
+      'interior-design': 'ಒಳಾಂಗಣ ವಿನ್ಯಾಸ',
+      'shop-interior-planning': 'ಅಂಗಡಿ ಒಳಾಂಗಣ ಯೋಜನೆ/ವ್ಯಾಪಾರ ಯೋಜನೆ',
+    },
+    plumber: {
+      'sanitary-pit-construction': 'ಸ್ಯಾನಿಟರಿ ಮತ್ತು ಗುಂಡಿ ನಿರ್ಮಾಣ',
+      'bathroom-fixing-cleaning': 'ಸ್ನಾನಗೃಹ ಸರಿಪಡಿಸುವಿಕೆ ಮತ್ತು ಸ್ವಚ್ಛತೆ',
+      'a-to-z-plumbing-contract': 'ಎ ಟು ಜೆಡ್ ಪ್ಲಂಬಿಂಗ್ ಒಪ್ಪಂದ',
+      'tap-installation': 'ನಳಿಕೆ ಸ್ಥಾಪನೆ',
+      'shower-installation': 'ಶವರ್ ಸ್ಥಾಪನೆ',
+    },
+    'granite-tiles': {
+      'wall-fitting': 'ಗೋಡೆ ಫಿಟ್ಟಿಂಗ್',
+      'floor-fitting': 'ನೆಲ ಫಿಟ್ಟಿಂಗ್',
+      'parking-tile-fitting': 'ಪಾರ್ಕಿಂಗ್ ಟೈಲ್ ಫಿಟ್ಟಿಂಗ್',
+      'granite-fitting': 'ಗ್ರಾನೈಟ್ ಫಿಟ್ಟಿಂಗ್',
+      'broken-tile-fitting': 'ಮುರಿದ ಟೈಲ್ ಫಿಟ್ಟಿಂಗ್',
+      'wall-stickering': 'ಗೋಡೆ ಸ್ಟಿಕರಿಂಗ್',
+      'a-to-z-tiles-contract': 'ಕಟ್ಟಡ ಟೈಲ್ಸ್ ಫಿಟ್ಟಿಂಗ್ನ ಎ ಟು ಜೆಡ್ ಒಪ್ಪಂದ',
+    },
+    'contact-building': {
+      'general-contractor': 'ಸಾಮಾನ್ಯ ಠೇಕೆದಾರ',
+      'prime-contractor': 'ಪ್ರಧಾನ ಠೇಕೆದಾರ',
+      'speciality-trade-contractor': 'ವಿಶೇಷ ವ್ಯಾಪಾರ ಠೇಕೆದಾರ',
+      'design-build-contractor': 'ವಿನ್ಯಾಸ ಮತ್ತು ನಿರ್ಮಾಣ ಠೇಕೆದಾರ',
+      'residential-commercial-contractor': 'ವಸತಿ/ವಾಣಿಜ್ಯ ಠೇಕೆದಾರ',
+    },
+    labor: {
+      'per-hour-charges': 'ಪ್ರತಿ ಗಂಟೆ ಶುಲ್ಕ',
+    },
+    'mason-mastri': {
+      'per-sqft-construction': 'ಪ್ರತಿ ಚದರ ಅಡಿ ನಿರ್ಮಾಣ ಶುಲ್ಕ',
+    },
+    'interiors-building': {
+      'shop-interior': 'ಅಂಗಡಿ ಒಳಾಂಗಣ',
+      'kitchen-interior': 'ಅಡುಗೆಮನೆ ಒಳಾಂಗಣ',
+      'room-interior': 'ಕೊಠಡಿ ಒಳಾಂಗಣ',
+      'top-interior': 'ಟಾಪ್ ಒಳಾಂಗಣ',
+      'a-to-z-interior': 'ಎ ಟು ಜೆಡ್ ಒಳಾಂಗಣ',
+    },
+    'stainless-steel': {
+      'ss-fitting': 'ಎಸ್.ಎಸ್. ಫಿಟ್ಟಿಂಗ್',
+      'ms-fitting': 'ಎಂ.ಎಸ್. ಫಿಟ್ಟಿಂಗ್',
+      'ss-with-glass-fitting': 'ಗಾಜಿನೊಂದಿಗೆ ಎಸ್.ಎಸ್. ಫಿಟ್ಟಿಂಗ್',
+    },
+    cleaning: {
+      'sump-cleaning': 'ಸಂಪ್ ಸ್ವಚ್ಛತೆ',
+      'tank-cleaning': 'ಟ್ಯಾಂಕ್ ಸ್ವಚ್ಛತೆ',
+      'bathroom-cleaning': 'ಸ್ನಾನಗೃಹ ಸ್ವಚ್ಛತೆ',
+      'total-house-cleaning': 'ಪೂರ್ಣ ಮನೆ ಸ್ವಚ್ಛತೆ',
+    },
+    'glass-mirror': {
+      'glass-fitting': 'ಗಾಜು ಫಿಟ್ಟಿಂಗ್',
+      'mirror-fitting': 'ಕನ್ನಡಿ ಫಿಟ್ಟಿಂಗ್',
+    },
+    borewell: {
+      'regular-borewell-drilling': 'ನಿಯಮಿತ ಬೋರ್ ಬಾವಿ ಕೊರೆಯುವಿಕೆ (ಪ್ರತಿ ಚದರ ಅಡಿ ಶುಲ್ಕ)',
+      'premium-borewell-drilling': 'ಪ್ರೀಮಿಯಂ ಬೋರ್ ಬಾವಿ ಕೊರೆಯುವಿಕೆ (ಪ್ರತಿ ಚದರ ಅಡಿ ಶುಲ್ಕ)',
+    },
+  },
 };

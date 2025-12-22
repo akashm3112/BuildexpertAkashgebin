@@ -655,4 +655,75 @@ export default {
     contactPhone: 'फ़ोन: +1 (555) 123-4567',
     contactAddress: 'पता: 123 मेन स्ट्रीट, शहर, राज्य 12345',
   },
+  subServices: {
+    painting: {
+      'room-painting': 'कमरा पेंटिंग',
+      'fancy-wall-painting': 'फैंसी दीवार पेंटिंग',
+      'wall-striking': 'दीवार स्ट्राइकिंग',
+      'full-house-painting': 'पूरे घर की पेंटिंग',
+      'wall-panelling': 'दीवार पैनलिंग',
+    },
+    'engineer-interior': {
+      '2d-planning-floor': '2D प्लानिंग फ्लोर',
+      'structural-planning': 'संरचनात्मक योजना',
+      '3d-house-elevation': '3D घर एलिवेशन',
+      'interior-design': 'इंटीरियर डिजाइन',
+      'shop-interior-planning': 'दुकान इंटीरियर प्लानिंग/व्यापार योजना',
+    },
+    plumber: {
+      'sanitary-pit-construction': 'सैनिटरी और गड्ढा निर्माण',
+      'bathroom-fixing-cleaning': 'बाथरूम की मरम्मत और सफाई',
+      'a-to-z-plumbing-contract': 'ए टू जेड प्लंबिंग कॉन्ट्रैक्ट',
+      'tap-installation': 'नल स्थापना',
+      'shower-installation': 'शॉवर स्थापना',
+    },
+    'granite-tiles': {
+      'wall-fitting': 'दीवार फिटिंग',
+      'floor-fitting': 'फर्श फिटिंग',
+      'parking-tile-fitting': 'पार्किंग टाइल फिटिंग',
+      'granite-fitting': 'ग्रेनाइट फिटिंग',
+      'broken-tile-fitting': 'टूटी टाइल फिटिंग',
+      'wall-stickering': 'दीवार स्टिकरिंग',
+      'a-to-z-tiles-contract': 'इमारत टाइल्स फिटिंग का ए टू जेड कॉन्ट्रैक्ट',
+    },
+    'contact-building': {
+      'general-contractor': 'सामान्य ठेकेदार',
+      'prime-contractor': 'प्रमुख ठेकेदार',
+      'speciality-trade-contractor': 'विशेष व्यापार ठेकेदार',
+      'design-build-contractor': 'डिजाइन और निर्माण ठेकेदार',
+      'residential-commercial-contractor': 'आवासीय/व्यावसायिक ठेकेदार',
+    },
+    labor: {
+      'per-hour-charges': 'प्रति घंटा शुल्क',
+    },
+    'mason-mastri': {
+      'per-sqft-construction': 'प्रति वर्ग फुट निर्माण शुल्क',
+    },
+    'interiors-building': {
+      'shop-interior': 'दुकान इंटीरियर',
+      'kitchen-interior': 'रसोई इंटीरियर',
+      'room-interior': 'कमरा इंटीरियर',
+      'top-interior': 'टॉप इंटीरियर',
+      'a-to-z-interior': 'ए टू जेड इंटीरियर',
+    },
+    'stainless-steel': {
+      'ss-fitting': 'एस.एस. फिटिंग',
+      'ms-fitting': 'एम.एस. फिटिंग',
+      'ss-with-glass-fitting': 'ग्लास के साथ एस.एस. फिटिंग',
+    },
+    cleaning: {
+      'sump-cleaning': 'सुम्प सफाई',
+      'tank-cleaning': 'टैंक सफाई',
+      'bathroom-cleaning': 'बाथरूम सफाई',
+      'total-house-cleaning': 'पूरे घर की सफाई',
+    },
+    'glass-mirror': {
+      'glass-fitting': 'ग्लास फिटिंग',
+      'mirror-fitting': 'मिरर फिटिंग',
+    },
+    borewell: {
+      'regular-borewell-drilling': 'नियमित बोरवेल ड्रिलिंग (प्रति वर्ग फुट शुल्क)',
+      'premium-borewell-drilling': 'प्रीमियम बोरवेल ड्रिलिंग (प्रति वर्ग फुट शुल्क)',
+    },
+  },
 };

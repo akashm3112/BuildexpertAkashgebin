@@ -725,4 +725,75 @@ export default {
     contactPhone: 'ഫോൺ: +1 (555) 123-4567',
     contactAddress: 'വിലാസം: 123 മെയിൻ സ്ട്രീറ്റ്, നഗരം, സംസ്ഥാനം 12345',
   },
+  subServices: {
+    painting: {
+      'room-painting': 'മുറി പെയിന്റിംഗ്',
+      'fancy-wall-painting': 'ഫാൻസി മതിൽ പെയിന്റിംഗ്',
+      'wall-striking': 'മതിൽ സ്ട്രൈക്കിംഗ്',
+      'full-house-painting': 'പൂർണ്ണ വീട് പെയിന്റിംഗ്',
+      'wall-panelling': 'മതിൽ പാനലിംഗ്',
+    },
+    'engineer-interior': {
+      '2d-planning-floor': '2D പ്ലാനിംഗ് ഫ്ലോർ',
+      'structural-planning': 'ഘടനാപരമായ ആസൂത്രണം',
+      '3d-house-elevation': '3D വീട് എലിവേഷൻ',
+      'interior-design': 'ഇന്റീരിയർ ഡിസൈൻ',
+      'shop-interior-planning': 'ഷോപ്പ് ഇന്റീരിയർ പ്ലാനിംഗ്/ബിസിനസ് പ്ലാൻ',
+    },
+    plumber: {
+      'sanitary-pit-construction': 'സാനിറ്ററി & പിറ്റ് നിർമ്മാണം',
+      'bathroom-fixing-cleaning': 'ബാത്ത്റൂം ഫിക്സിംഗ് & ക്ലീനിംഗ്',
+      'a-to-z-plumbing-contract': 'എ ടു സെഡ് പ്ലംബിംഗ് കോൺട്രാക്റ്റ്',
+      'tap-installation': 'ടാപ്പ് ഇൻസ്റ്റാളേഷൻ',
+      'shower-installation': 'ഷവർ ഇൻസ്റ്റാളേഷൻ',
+    },
+    'granite-tiles': {
+      'wall-fitting': 'മതിൽ ഫിറ്റിംഗ്',
+      'floor-fitting': 'ഫ്ലോർ ഫിറ്റിംഗ്',
+      'parking-tile-fitting': 'പാർക്കിംഗ് ടൈൽ ഫിറ്റിംഗ്',
+      'granite-fitting': 'ഗ്രാനൈറ്റ് ഫിറ്റിംഗ്',
+      'broken-tile-fitting': 'തകർന്ന ടൈൽ ഫിറ്റിംഗ്',
+      'wall-stickering': 'മതിൽ സ്റ്റിക്കറിംഗ്',
+      'a-to-z-tiles-contract': 'കെട്ടിട ടൈലുകൾ ഫിറ്റിംഗിന്റെ എ ടു സെഡ് കോൺട്രാക്റ്റ്',
+    },
+    'contact-building': {
+      'general-contractor': 'പൊതു കരാറുകാരൻ',
+      'prime-contractor': 'പ്രധാന കരാറുകാരൻ',
+      'speciality-trade-contractor': 'പ്രത്യേക വ്യാപാര കരാറുകാരൻ',
+      'design-build-contractor': 'ഡിസൈൻ & ബിൽഡ് കരാറുകാരൻ',
+      'residential-commercial-contractor': 'വാസസ്ഥല/വാണിജ്യ കരാറുകാരൻ',
+    },
+    labor: {
+      'per-hour-charges': 'മണിക്കൂറിന് ചാർജ്',
+    },
+    'mason-mastri': {
+      'per-sqft-construction': 'ചതുരശ്ര അടിക്ക് നിർമ്മാണ ചാർജ്',
+    },
+    'interiors-building': {
+      'shop-interior': 'ഷോപ്പ് ഇന്റീരിയർ',
+      'kitchen-interior': 'അടുക്കള ഇന്റീരിയർ',
+      'room-interior': 'മുറി ഇന്റീരിയർ',
+      'top-interior': 'ടോപ്പ് ഇന്റീരിയർ',
+      'a-to-z-interior': 'എ ടു സെഡ് ഇന്റീരിയർ',
+    },
+    'stainless-steel': {
+      'ss-fitting': 'എസ്.എസ്. ഫിറ്റിംഗ്',
+      'ms-fitting': 'എം.എസ്. ഫിറ്റിംഗ്',
+      'ss-with-glass-fitting': 'ഗ്ലാസുമായി എസ്.എസ്. ഫിറ്റിംഗ്',
+    },
+    cleaning: {
+      'sump-cleaning': 'സംപ് ക്ലീനിംഗ്',
+      'tank-cleaning': 'ടാങ്ക് ക്ലീനിംഗ്',
+      'bathroom-cleaning': 'ബാത്ത്റൂം ക്ലീനിംഗ്',
+      'total-house-cleaning': 'പൂർണ്ണ വീട് ക്ലീനിംഗ്',
+    },
+    'glass-mirror': {
+      'glass-fitting': 'ഗ്ലാസ് ഫിറ്റിംഗ്',
+      'mirror-fitting': 'മിറർ ഫിറ്റിംഗ്',
+    },
+    borewell: {
+      'regular-borewell-drilling': 'സാധാരണ ബോർവെൽ ഡ്രില്ലിംഗ് (ചതുരശ്ര അടിക്ക് ചാർജ്)',
+      'premium-borewell-drilling': 'പ്രീമിയം ബോർവെൽ ഡ്രില്ലിംഗ് (ചതുരശ്ര അടിക്ക് ചാർജ്)',
+    },
+  },
 };

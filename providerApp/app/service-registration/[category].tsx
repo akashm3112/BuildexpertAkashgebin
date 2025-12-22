@@ -18,12 +18,13 @@ import { ArrowLeft, Camera, X, Upload, Plus, Trash2 } from 'lucide-react-native'
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { getServiceById, SERVICE_CATEGORIES } from '@/constants/serviceCategories';
-import { getRelatedSubServices } from '@/constants/serviceSubServices';
+import { getRelatedSubServices, getSubServiceById } from '@/constants/serviceSubServices';
 import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import StateSelector from '@/components/common/StateSelector';
 import CitySelector from '@/components/common/CitySelector';
 import ServiceSelector from '@/components/common/ServiceSelector';
+import SubServiceSelector from '@/components/common/SubServiceSelector';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -1167,14 +1168,12 @@ export default function ServiceRegistration() {
                 <View style={styles.subServicesContainer}>
                   <View style={styles.subServicesList}>
                     {formData.subServices.map((subService, index) => {
-                      const selectedService = SERVICE_CATEGORIES.find(s => s.id === subService.serviceId);
+                      // Get the selected sub-service option
+                      const selectedSubService = getSubServiceById(category as string, subService.serviceId);
                       
-                      // Get related sub-services for the main service category
-                      const relatedSubServiceIds = getRelatedSubServices(category as string);
-                      
-                      // Get all other selected service IDs to exclude them from this dropdown
-                      // This ensures once a service is selected in one sub-service, it disappears from all others
-                      const otherSelectedServiceIds = formData.subServices
+                      // Get all other selected sub-service IDs to exclude them from this dropdown
+                      // This ensures once a sub-service is selected in one row, it disappears from all others
+                      const otherSelectedSubServiceIds = formData.subServices
                         .filter(s => s.id !== subService.id && s.serviceId && s.serviceId.trim() !== '')
                         .map(s => s.serviceId)
                         .filter((id): id is string => Boolean(id));
@@ -1187,10 +1186,10 @@ export default function ServiceRegistration() {
                                 <Text style={styles.subServiceIndexText}>{index + 1}</Text>
                               </View>
                               <View style={styles.subServiceInfo}>
-                                {selectedService ? (
+                                {selectedSubService ? (
                                   <>
                                     <Text style={styles.subServiceName}>
-                                      {selectedService.icon} {selectedService.name}
+                                      {t(`subServices.${category}.${selectedSubService.id}`) || selectedSubService.name}
                                     </Text>
                                     {subService.price && (
                                       <Text style={styles.subServicePricePreview}>
@@ -1224,14 +1223,13 @@ export default function ServiceRegistration() {
                           <View style={styles.subServiceCardBody}>
                             <View style={styles.subServiceInputGroup}>
                               <Text style={styles.subServiceInputLabel}>{t('serviceRegistration.serviceType')}</Text>
-                              <ServiceSelector
+                              <SubServiceSelector
                                 value={subService.serviceId}
-                                onSelect={(serviceId) => handleSubServiceChange(subService.id, 'serviceId', serviceId)}
+                                onSelect={(subServiceId) => handleSubServiceChange(subService.id, 'serviceId', subServiceId)}
                                 placeholder={t('serviceRegistration.chooseRelatedService')}
                                 disabled={isViewMode}
-                                excludeServiceId={category as string}
-                                excludeServiceIds={otherSelectedServiceIds}
-                                allowedServiceIds={relatedSubServiceIds}
+                                mainServiceId={category as string}
+                                excludeSubServiceIds={otherSelectedSubServiceIds}
                                 error={errors.subServices && !subService.serviceId.trim() ? t('serviceRegistration.serviceTypeRequired') : undefined}
                                 style={styles.subServiceSelector}
                               />

@@ -655,4 +655,75 @@ export default {
     contactPhone: 'தொலைபேசி: +1 (555) 123-4567',
     contactAddress: 'முகவரி: 123 மெயின் தெரு, நகரம், மாநிலம் 12345',
   },
+  subServices: {
+    painting: {
+      'room-painting': 'அறை வண்ணம்',
+      'fancy-wall-painting': 'ஃபேன்சி சுவர் வண்ணம்',
+      'wall-striking': 'சுவர் ஸ்ட்ரைக்கிங்',
+      'full-house-painting': 'முழு வீடு வண்ணம்',
+      'wall-panelling': 'சுவர் பேனலிங்',
+    },
+    'engineer-interior': {
+      '2d-planning-floor': '2D திட்டமிடல் தளம்',
+      'structural-planning': 'கட்டமைப்பு திட்டமிடல்',
+      '3d-house-elevation': '3D வீடு உயர்வு',
+      'interior-design': 'உள்துறை வடிவமைப்பு',
+      'shop-interior-planning': 'கடை உள்துறை திட்டமிடல்/வணிகத் திட்டம்',
+    },
+    plumber: {
+      'sanitary-pit-construction': 'சுகாதாரம் மற்றும் குழி கட்டுமானம்',
+      'bathroom-fixing-cleaning': 'குளியலறை சரிசெய்தல் மற்றும் சுத்தம்',
+      'a-to-z-plumbing-contract': 'ஏ டு ஜெட் குழாய்வழி ஒப்பந்தம்',
+      'tap-installation': 'குழாய் நிறுவல்',
+      'shower-installation': 'மழைக்குழாய் நிறுவல்',
+    },
+    'granite-tiles': {
+      'wall-fitting': 'சுவர் பொருத்துதல்',
+      'floor-fitting': 'தளம் பொருத்துதல்',
+      'parking-tile-fitting': 'நிறுத்துமிட ஓடு பொருத்துதல்',
+      'granite-fitting': 'கிரானைட் பொருத்துதல்',
+      'broken-tile-fitting': 'உடைந்த ஓடு பொருத்துதல்',
+      'wall-stickering': 'சுவர் ஸ்டிக்கரிங்',
+      'a-to-z-tiles-contract': 'கட்டிட ஓடுகள் பொருத்துதலின் ஏ டு ஜெட் ஒப்பந்தம்',
+    },
+    'contact-building': {
+      'general-contractor': 'பொது ஒப்பந்தக்காரர்',
+      'prime-contractor': 'முதன்மை ஒப்பந்தக்காரர்',
+      'speciality-trade-contractor': 'சிறப்பு வர்த்தக ஒப்பந்தக்காரர்',
+      'design-build-contractor': 'வடிவமைப்பு மற்றும் கட்டுமான ஒப்பந்தக்காரர்',
+      'residential-commercial-contractor': 'வீட்டுவசதி/வணிக ஒப்பந்தக்காரர்',
+    },
+    labor: {
+      'per-hour-charges': 'மணிநேர கட்டணம்',
+    },
+    'mason-mastri': {
+      'per-sqft-construction': 'சதுர அடிக்கு கட்டுமான கட்டணம்',
+    },
+    'interiors-building': {
+      'shop-interior': 'கடை உள்துறை',
+      'kitchen-interior': 'சமையலறை உள்துறை',
+      'room-interior': 'அறை உள்துறை',
+      'top-interior': 'மேல் உள்துறை',
+      'a-to-z-interior': 'ஏ டு ஜெட் உள்துறை',
+    },
+    'stainless-steel': {
+      'ss-fitting': 'எஸ்.எஸ். பொருத்துதல்',
+      'ms-fitting': 'எம்.எஸ். பொருத்துதல்',
+      'ss-with-glass-fitting': 'கண்ணாடியுடன் எஸ்.எஸ். பொருத்துதல்',
+    },
+    cleaning: {
+      'sump-cleaning': 'சம்ப் சுத்தம்',
+      'tank-cleaning': 'தொட்டி சுத்தம்',
+      'bathroom-cleaning': 'குளியலறை சுத்தம்',
+      'total-house-cleaning': 'முழு வீடு சுத்தம்',
+    },
+    'glass-mirror': {
+      'glass-fitting': 'கண்ணாடி பொருத்துதல்',
+      'mirror-fitting': 'கண்ணாடி பொருத்துதல்',
+    },
+    borewell: {
+      'regular-borewell-drilling': 'வழக்கமான கிணறு துளையிடுதல் (சதுர அடிக்கு கட்டணம்)',
+      'premium-borewell-drilling': 'பிரீமியம் கிணறு துளையிடுதல் (சதுர அடிக்கு கட்டணம்)',
+    },
+  },
 };

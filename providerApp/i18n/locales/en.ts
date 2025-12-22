@@ -753,4 +753,75 @@ export default {
     contactPhone: 'Phone: +1 (555) 123-4567',
     contactAddress: 'Address: 123 Main Street, City, State 12345',
   },
+  subServices: {
+    painting: {
+      'room-painting': 'Room painting',
+      'fancy-wall-painting': 'Fancy wall painting',
+      'wall-striking': 'Wall striking',
+      'full-house-painting': 'Full house painting',
+      'wall-panelling': 'Wall panelling',
+    },
+    'engineer-interior': {
+      '2d-planning-floor': '2D planning floor',
+      'structural-planning': 'Structural planning',
+      '3d-house-elevation': '3D house elevation',
+      'interior-design': 'Interior design',
+      'shop-interior-planning': 'Shop interior planning/Business plan',
+    },
+    plumber: {
+      'sanitary-pit-construction': 'Sanitary & pit construction',
+      'bathroom-fixing-cleaning': 'Fixing & cleaning of bathroom',
+      'a-to-z-plumbing-contract': 'A to Z plumbing contract',
+      'tap-installation': 'Tap installation',
+      'shower-installation': 'Shower installation',
+    },
+    'granite-tiles': {
+      'wall-fitting': 'Wall fitting',
+      'floor-fitting': 'Floor fitting',
+      'parking-tile-fitting': 'Parking tile fitting',
+      'granite-fitting': 'Granite fitting',
+      'broken-tile-fitting': 'Broken tile fitting',
+      'wall-stickering': 'Wall stickering',
+      'a-to-z-tiles-contract': 'A to Z contract of the building tiles fitting',
+    },
+    'contact-building': {
+      'general-contractor': 'General contractor',
+      'prime-contractor': 'Prime contractor',
+      'speciality-trade-contractor': 'Speciality trade contractor',
+      'design-build-contractor': 'Design & build contractor',
+      'residential-commercial-contractor': 'Residential/commercial contractor',
+    },
+    labor: {
+      'per-hour-charges': 'Per hour charges',
+    },
+    'mason-mastri': {
+      'per-sqft-construction': 'Per sqft charges construction',
+    },
+    'interiors-building': {
+      'shop-interior': 'Shop interior',
+      'kitchen-interior': 'Kitchen interior',
+      'room-interior': 'Room interior',
+      'top-interior': 'Top interior',
+      'a-to-z-interior': 'A to Z interior',
+    },
+    'stainless-steel': {
+      'ss-fitting': 'S.S fitting',
+      'ms-fitting': 'M.S fitting',
+      'ss-with-glass-fitting': 'S.S with glass fitting',
+    },
+    cleaning: {
+      'sump-cleaning': 'Sump cleaning',
+      'tank-cleaning': 'Tank cleaning',
+      'bathroom-cleaning': 'Bathroom cleaning',
+      'total-house-cleaning': 'Total house cleaning',
+    },
+    'glass-mirror': {
+      'glass-fitting': 'Glass fitting',
+      'mirror-fitting': 'Mirror fitting',
+    },
+    borewell: {
+      'regular-borewell-drilling': 'Regular borewell drilling (per sqft charges)',
+      'premium-borewell-drilling': 'Premium borewell drilling (per sqft charges)',
+    },
+  },
 };

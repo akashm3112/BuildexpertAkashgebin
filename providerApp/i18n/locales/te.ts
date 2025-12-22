@@ -655,4 +655,75 @@ export default {
     contactPhone: 'ఫోన్: +1 (555) 123-4567',
     contactAddress: 'చిరునామా: 123 మెయిన్ స్ట్రీట్, నగరం, రాష్ట్రం 12345',
   },
+  subServices: {
+    painting: {
+      'room-painting': 'గది పెయింటింగ్',
+      'fancy-wall-painting': 'ఫ్యాన్సీ గోడ పెయింటింగ్',
+      'wall-striking': 'గోడ స్ట్రైకింగ్',
+      'full-house-painting': 'పూర్తి ఇల్లు పెయింటింగ్',
+      'wall-panelling': 'గోడ ప్యానెలింగ్',
+    },
+    'engineer-interior': {
+      '2d-planning-floor': '2D ప్లానింగ్ ఫ్లోర్',
+      'structural-planning': 'నిర్మాణాత్మక ప్రణాళిక',
+      '3d-house-elevation': '3D ఇల్లు ఎలివేషన్',
+      'interior-design': 'ఇంటీరియర్ డిజైన్',
+      'shop-interior-planning': 'షాప్ ఇంటీరియర్ ప్లానింగ్/వ్యాపార ప్రణాళిక',
+    },
+    plumber: {
+      'sanitary-pit-construction': 'సానిటరీ మరియు గుంట నిర్మాణం',
+      'bathroom-fixing-cleaning': 'బాత్రూమ్ సరిచేయడం మరియు శుభ్రం',
+      'a-to-z-plumbing-contract': 'ఎ టు జెడ్ ప్లంబింగ్ కాంట్రాక్ట్',
+      'tap-installation': 'ట్యాప్ ఇన్స్టాలేషన్',
+      'shower-installation': 'షవర్ ఇన్స్టాలేషన్',
+    },
+    'granite-tiles': {
+      'wall-fitting': 'గోడ ఫిట్టింగ్',
+      'floor-fitting': 'ఫ్లోర్ ఫిట్టింగ్',
+      'parking-tile-fitting': 'పార్కింగ్ టైల్ ఫిట్టింగ్',
+      'granite-fitting': 'గ్రానైట్ ఫిట్టింగ్',
+      'broken-tile-fitting': 'విరిగిన టైల్ ఫిట్టింగ్',
+      'wall-stickering': 'గోడ స్టికరింగ్',
+      'a-to-z-tiles-contract': 'భవన టైల్స్ ఫిట్టింగ్ యొక్క ఎ టు జెడ్ కాంట్రాక్ట్',
+    },
+    'contact-building': {
+      'general-contractor': 'సాధారణ కాంట్రాక్టర్',
+      'prime-contractor': 'ప్రధాన కాంట్రాక్టర్',
+      'speciality-trade-contractor': 'ప్రత్యేక వ్యాపార కాంట్రాక్టర్',
+      'design-build-contractor': 'డిజైన్ మరియు నిర్మాణ కాంట్రాక్టర్',
+      'residential-commercial-contractor': 'నివాస/వాణిజ్య కాంట్రాక్టర్',
+    },
+    labor: {
+      'per-hour-charges': 'గంటకు ఛార్జీలు',
+    },
+    'mason-mastri': {
+      'per-sqft-construction': 'చదరపు అడికి నిర్మాణ ఛార్జీలు',
+    },
+    'interiors-building': {
+      'shop-interior': 'షాప్ ఇంటీరియర్',
+      'kitchen-interior': 'వంటగది ఇంటీరియర్',
+      'room-interior': 'గది ఇంటీరియర్',
+      'top-interior': 'టాప్ ఇంటీరియర్',
+      'a-to-z-interior': 'ఎ టు జెడ్ ఇంటీరియర్',
+    },
+    'stainless-steel': {
+      'ss-fitting': 'ఎస్.ఎస్. ఫిట్టింగ్',
+      'ms-fitting': 'ఎం.ఎస్. ఫిట్టింగ్',
+      'ss-with-glass-fitting': 'గాజుతో ఎస్.ఎస్. ఫిట్టింగ్',
+    },
+    cleaning: {
+      'sump-cleaning': 'సంప్ శుభ్రం',
+      'tank-cleaning': 'ట్యాంక్ శుభ్రం',
+      'bathroom-cleaning': 'బాత్రూమ్ శుభ్రం',
+      'total-house-cleaning': 'పూర్తి ఇల్లు శుభ్రం',
+    },
+    'glass-mirror': {
+      'glass-fitting': 'గాజు ఫిట్టింగ్',
+      'mirror-fitting': 'అద్దం ఫిట్టింగ్',
+    },
+    borewell: {
+      'regular-borewell-drilling': 'సాధారణ బోర్వెల్ డ్రిల్లింగ్ (చదరపు అడికి ఛార్జీలు)',
+      'premium-borewell-drilling': 'ప్రీమియం బోర్వెల్ డ్రిల్లింగ్ (చదరపు అడికి ఛార్జీలు)',
+    },
+  },
 };
