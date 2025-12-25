@@ -41,18 +41,18 @@ export default {
   
   // Service Categories
   serviceCategories: {
-    engineers: 'ఇంజినీర్',
-    plumbersRegistration: 'ప్లంబర్',
-    graniteTilesLaying: 'గ్రానైట్ మరియు టైల్స్ వేయడం',
-    paintingAndCleaning: 'పెయింటింగ్',
-    contractorAndBuilding: 'కాంట్రాక్టర్ మరియు భవన నిర్మాణం',
+    engineers: 'ఇంజినీర్/ఆర్కిటెక్ట్',
+    plumbersRegistration: 'ప్లంబింగ్ టెక్నీషియన్',
+    graniteTilesLaying: 'డెన్స్/ఎక్స్పర్ట్ లేయర్స్',
+    paintingAndCleaning: 'పెయింటర్స్/వాల్ ప్యానెల్స్',
+    contractorAndBuilding: 'కాంట్రాక్టర్లు',
     labors: 'కూలీలు',
-    masonMistri: 'మేసన్/మిస్త్రి',
-    interiorsDesigners: 'ఇంటీరియర్ డిజైనర్లు',
-    stainlessSteelMS: 'స్టెయిన్లెస్ స్టీల్ ఎం.ఎస్',
-    cleaningServices: 'క్లీనింగ్',
-    glassMirror: 'గ్లాస్ మరియు మిర్రర్',
-    borewellServices: 'బోర్వెల్',
+    masonMistri: 'మేసన్/మాస్ట్రి',
+    interiorsDesigners: 'ఇంటీరియర్ డిజైనర్',
+    stainlessSteelMS: 'ఎంఎస్ మరియు ఎస్ఎస్ ఫిట్టర్స్',
+    cleaningServices: 'క్లీనింగ్ ఆపరేటివ్స్',
+    glassMirror: 'గ్లేజియర్ మరియు మిర్రర్ ఇన్స్టాలర్',
+    borewellServices: 'బోర్వెల్ డ్రిలర్స్',
   },
   
   // Bookings Screen

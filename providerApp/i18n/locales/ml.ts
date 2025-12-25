@@ -246,19 +246,19 @@ export default {
 
   // Service Categories
   serviceCategories: {
-    'engineer-interior': 'എഞ്ചിനീയർ / ഇന്റീരിയർ',
-    'plumber': 'പ്ലംബർ',
-    'granite-tiles': 'ഗ്രാനൈറ്റ് ആൻഡ് ടൈലുകൾ',
-    'painting-cleaning': 'ചിത്രകല',
-    'painting': 'ചിത്രകല',
-    'contact-building': 'കോൺടാക്റ്റ് ആൻഡ് ബിൽഡിംഗ്',
+    'engineer-interior': 'എഞ്ചിനീയർ/ആർക്കിടെക്റ്റ്',
+    'plumber': 'പ്ലംബിംഗ് ടെക്നീഷ്യൻ',
+    'granite-tiles': 'ഡെൻസ്/എക്സ്പേർട്ട് ലേയേഴ്സ്',
+    'painting-cleaning': 'പെയിന്റർമാർ/വാൾ പാനലുകൾ',
+    'painting': 'പെയിന്റർമാർ/വാൾ പാനലുകൾ',
+    'contact-building': 'കരാറുകാരൻ',
     'labor': 'ജോലിക്കാരൻ',
-    'mason-mastri': 'കല്ലുകാരൻ / മാസ്റ്റർ',
-    'interiors-building': 'കെട്ടിടത്തിന്റെ ഇന്റീരിയർ',
-    'stainless-steel': 'സ്റ്റെയിൻലെസ് സ്റ്റീൽ എം.എസ്',
-    'cleaning': 'ക്ലീനിംഗ്',
-    'glass-mirror': 'ഗ്ലാസ് ആൻഡ് മിറർ',
-    'borewell': 'ബോർവെൽ',
+    'mason-mastri': 'മേസൺ/മാസ്ട്രി',
+    'interiors-building': 'ഇന്റീരിയർ ഡിസൈനർ',
+    'stainless-steel': 'എംഎസ് & എസ്എസ് ഫിറ്ററുകൾ',
+    'cleaning': 'ക്ലീനിംഗ് ഓപ്പറേറ്റീവുകൾ',
+    'glass-mirror': 'ഗ്ലേസിയർ & മിറർ ഇൻസ്റ്റാളർ',
+    'borewell': 'ബോർവെൽ ഡ്രില്ലർമാർ',
   },
 
   // States

@@ -41,18 +41,18 @@ export default {
   
   // Service Categories
   serviceCategories: {
-    engineers: "എഞ്ചിനീയർമാരുടെ",
-    plumbersRegistration: 'പ്ലംബർ',
-    graniteTilesLaying: 'ഗ്രാനൈറ്റ് & ടൈലുകൾ ഇടുക',
-    paintingAndCleaning: 'ചിത്രീകരണം',
-    contractorAndBuilding: 'കരാറുകാരനും കെട്ടിട നിർമ്മാണവും',
+    engineers: "എഞ്ചിനീയർ/ആർക്കിടെക്റ്റ്",
+    plumbersRegistration: 'പ്ലംബിംഗ് ടെക്നീഷ്യൻ',
+    graniteTilesLaying: 'ഡെൻസ്/എക്സ്പേർട്ട് ലേയേഴ്സ്',
+    paintingAndCleaning: 'പെയിന്റർമാർ/വാൾ പാനലുകൾ',
+    contractorAndBuilding: 'കരാറുകാരൻ',
     labors: "ജോലിക്കാരുടെ",
-    masonMistri: 'ചുമത്ത്/മിസ്ത്രി',
-    interiorsDesigners: "ഇന്റീരിയർ ഡിസൈനർമാരുടെ",
-    stainlessSteelMS: 'സ്റ്റെയിൻലെസ് സ്റ്റീൽ എം.എസ്',
-    cleaningServices: 'ക്ലീനിംഗ്',
-    glassMirror: 'ഗ്ലാസ് & മിറർ',
-    borewellServices: 'ബോർവെൽ',
+    masonMistri: 'മേസൺ/മാസ്ട്രി',
+    interiorsDesigners: "ഇന്റീരിയർ ഡിസൈനർ",
+    stainlessSteelMS: 'എംഎസ് & എസ്എസ് ഫിറ്ററുകൾ',
+    cleaningServices: 'ക്ലീനിംഗ് ഓപ്പറേറ്റീവുകൾ',
+    glassMirror: 'ഗ്ലേസിയർ & മിറർ ഇൻസ്റ്റാളർ',
+    borewellServices: 'ബോർവെൽ ഡ്രില്ലർമാർ',
   },
   
   // Bookings Screen

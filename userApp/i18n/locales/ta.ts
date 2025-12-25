@@ -41,18 +41,18 @@ export default {
   
   // Service Categories
   serviceCategories: {
-    engineers: 'பொறியாளர்',
-    plumbersRegistration: 'குழாய் வேலை',
-    graniteTilesLaying: 'கிரானைட் மற்றும் ஓடு போடுதல்',
-    paintingAndCleaning: 'வண்ணம் தீட்டுதல்',
-    contractorAndBuilding: 'ஒப்பந்தக்காரர் மற்றும் கட்டிடம்',
+    engineers: 'பொறியாளர்/கட்டிடக் கலைஞர்',
+    plumbersRegistration: 'குழாய் தொழில்நுட்பவியலாளர்',
+    graniteTilesLaying: 'டென்ஸ்/நிபுணர் அடுக்குகள்',
+    paintingAndCleaning: 'வண்ணப்பூச்சாளர்கள்/சுவர் பேனல்கள்',
+    contractorAndBuilding: 'ஒப்பந்தக்காரர்கள்',
     labors: 'தொழிலாளர்கள்',
-    masonMistri: 'கட்டட வேலைக்காரர்/மிஸ்திரி',
-    interiorsDesigners: 'உள்துறை வடிவமைப்பாளர்கள்',
-    stainlessSteelMS: 'ஸ்டெயின்லெஸ் ஸ்டீல் எம்.எஸ்',
-    cleaningServices: 'சுத்தம் செய்தல்',
-    glassMirror: 'கண்ணாடி மற்றும் கண்ணாடி',
-    borewellServices: 'போர்வெல்',
+    masonMistri: 'மேசன்/மாஸ்ட்ரி',
+    interiorsDesigners: 'உள்துறை வடிவமைப்பாளர்',
+    stainlessSteelMS: 'எம்எஸ் மற்றும் எஸ்எஸ் ஃபிட்டர்கள்',
+    cleaningServices: 'சுத்தம் செய்பவர்கள்',
+    glassMirror: 'கண்ணாடி மற்றும் கண்ணாடி நிறுவுபவர்',
+    borewellServices: 'போர்வெல் துளையிடுபவர்கள்',
   },
   
   // Bookings Screen

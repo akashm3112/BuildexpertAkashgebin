@@ -41,18 +41,18 @@ export default {
   
   // Service Categories
   serviceCategories: {
-    engineers: "Engineer's",
-    plumbersRegistration: 'Plumbers',
-    graniteTilesLaying: 'Granite & Tiles Laying',
-    paintingAndCleaning: 'Painting',
-    contractorAndBuilding: 'Contractor and Building',
-    labors: "Labors",
-    masonMistri: 'Mason/Mistri',
-    interiorsDesigners: "Interiors Designer's",
-    stainlessSteelMS: 'Stainless Steel M.S',
-    cleaningServices: 'Cleaning',
-    glassMirror: 'Glass & Mirror',
-    borewellServices: 'Borewell',
+    engineers: "Engineer/Architect",
+    plumbersRegistration: 'Plumbing technician',
+    graniteTilesLaying: 'Dense/Expert layers',
+    paintingAndCleaning: "Painters/wall pannels",
+    contractorAndBuilding: 'Contractors',
+    labors: "Labour's",
+    masonMistri: 'Masion/Mastri',
+    interiorsDesigners: "Interior designer's",
+    stainlessSteelMS: 'MS & SS Fitters',
+    cleaningServices: 'Cleaning Operatives',
+    glassMirror: 'Glazier & Mirror Installer',
+    borewellServices: 'Borewell Drillers',
   },
   
   // Bookings Screen

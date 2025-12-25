@@ -1,7 +1,7 @@
 export const SERVICE_CATEGORIES = [
   {
     id: 'engineer-interior',
-    name: 'Engineer / Interior',
+    name: 'Engineer/Architect',
     icon: '🏗️',
     description: 'Engineering and Interior Design Services',
     basePrice: 99,
@@ -9,7 +9,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'plumber',
-    name: 'Plumber',
+    name: 'Plumbing technician',
     icon: '🔧',
     description: 'Plumbing and Water Related Services',
     basePrice: 99,
@@ -17,7 +17,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'granite-tiles',
-    name: 'Granite & Tiles Laying',
+    name: 'Dense/Expert layers',
     icon: '🏠',
     description: 'Floor and Wall Tiling Services',
     basePrice: 99,
@@ -25,7 +25,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'painting',
-    name: 'Painting',
+    name: "Painters/wall pannels",
     icon: '🎨',
     description: 'Painting Services',
     basePrice: 99,
@@ -33,7 +33,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'contact-building',
-    name: 'Contractor and Building',
+    name: 'Contractors',
     icon: '🏢',
     description: 'Construction and Building Services',
     basePrice: 99,
@@ -41,7 +41,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'labor',
-    name: 'labors',
+    name: "Labour's",
     icon: '👷',
     description: 'General Labor Services',
     basePrice: 0, // Free for labor category
@@ -49,7 +49,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'mason-mastri',
-    name: 'Mason / Mastri',
+    name: 'Masion/Mastri',
     icon: '🧱',
     description: 'Masonry and Construction Work',
     basePrice: 99,
@@ -57,7 +57,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'interiors-building',
-    name: 'Interiors of the Building',
+    name: "Interior designer's",
     icon: '🏠',
     description: 'Interior Building Services',
     basePrice: 99,
@@ -65,7 +65,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'stainless-steel',
-    name: 'Stainless Steel M.S',
+    name: 'MS & SS Fitters',
     icon: '⚙️',
     description: 'Metal Work and Steel Services',
     basePrice: 99,
@@ -73,7 +73,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'cleaning',
-    name: 'Cleaning',
+    name: 'Cleaning Operatives',
     icon: '🧹',
     description: 'Professional cleaning services',
     basePrice: 99,
@@ -81,7 +81,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'glass-mirror',
-    name: 'Glass & Mirror',
+    name: 'Glazier & Mirror Installer',
     icon: '🪞',
     description: 'Glass and Mirror Installation Services',
     basePrice: 99,
@@ -89,7 +89,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'borewell',
-    name: 'Borewell',
+    name: 'Borewell Drillers',
     icon: '💧',
     description: 'Borewell drilling and maintenance services',
     basePrice: 99,
