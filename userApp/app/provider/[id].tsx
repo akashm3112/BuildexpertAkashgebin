@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,10 @@ import {
   Modal,
   FlatList,
   StatusBar,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
+import * as ScreenCapture from 'expo-screen-capture';
 
 import { useLocalSearchParams, router } from 'expo-router';
 import { 
@@ -58,6 +61,94 @@ export default function ProviderDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [imageModalVisible, setImageModalVisible] = useState(false);
+  const screenCaptureIntervalRef = useRef<number | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  // Enhanced screen capture prevention with continuous enforcement
+  useEffect(() => {
+    if (imageModalVisible) {
+      // Immediately prevent screenshots and screen recording
+      const enableProtection = async () => {
+        try {
+          await ScreenCapture.preventScreenCaptureAsync();
+          // Continuously re-enforce protection every 100ms to aggressively prevent screen recording
+          // This ensures screen recording cannot start even if user tries to initiate it
+          screenCaptureIntervalRef.current = setInterval(async () => {
+            try {
+              await ScreenCapture.preventScreenCaptureAsync();
+            } catch (error) {
+              // Silently handle errors
+            }
+          }, 100);
+        } catch (error) {
+          if (Platform.OS !== 'web') {
+            console.warn('Failed to enable screen capture prevention:', error);
+          }
+        }
+      };
+      
+      enableProtection();
+
+      // Monitor app state changes (screen recording might change app state)
+      const handleAppStateChange = (nextAppState: AppStateStatus) => {
+        // If app goes to background/inactive while modal is open, close modal for security
+        // Screen recording often causes app state changes
+        if (nextAppState === 'background' || nextAppState === 'inactive') {
+          if (imageModalVisible) {
+            // Close modal immediately if app state changes (possible screen recording)
+            setImageModalVisible(false);
+          }
+        }
+        appStateRef.current = nextAppState;
+      };
+
+      const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+      // Additional protection: Check app state periodically while modal is open
+      // Screen recording can sometimes bypass initial protection, so we monitor continuously
+      // Also re-enforce protection more frequently to prevent screen recording
+      const stateCheckInterval = setInterval(() => {
+        const currentState = AppState.currentState;
+        // If app state changed unexpectedly, close modal immediately
+        if (currentState !== 'active' && imageModalVisible) {
+          setImageModalVisible(false);
+        }
+        // Aggressively re-enforce screen capture prevention on every check
+        // This prevents screen recording from starting
+        ScreenCapture.preventScreenCaptureAsync().catch(() => {
+          // Silently handle errors
+        });
+      }, 150);
+
+      // Cleanup
+      return () => {
+        if (screenCaptureIntervalRef.current) {
+          clearInterval(screenCaptureIntervalRef.current);
+          screenCaptureIntervalRef.current = null;
+        }
+        if (stateCheckInterval) {
+          clearInterval(stateCheckInterval);
+        }
+        subscription?.remove();
+        // Re-enable screen capture when modal closes
+        ScreenCapture.allowScreenCaptureAsync().catch(() => {
+          // Silently handle cleanup errors
+        });
+      };
+    } else {
+      // Re-enable screen capture when modal is closed
+      if (screenCaptureIntervalRef.current) {
+        clearInterval(screenCaptureIntervalRef.current);
+        screenCaptureIntervalRef.current = null;
+      }
+      ScreenCapture.allowScreenCaptureAsync().catch((error) => {
+        // Silently handle errors
+        if (Platform.OS !== 'web') {
+          console.warn('Failed to disable screen capture prevention:', error);
+        }
+      });
+    }
+  }, [imageModalVisible]);
 
   useEffect(() => {
     const fetchProvider = async () => {
@@ -150,10 +241,11 @@ export default function ProviderDetailScreen() {
   }
 
   const renderModalImage = ({ item }: { item: string }) => (
-    <View style={{ width, height: width, justifyContent: 'center', alignItems: 'center' }}>
+    <View style={styles.modalImageContainer}>
       <Image
         source={{ uri: item }}
-        style={{ width: width * 0.9, height: width * 0.9, borderRadius: 16, resizeMode: 'contain' }}
+        style={styles.modalImage}
+        resizeMode="contain"
       />
     </View>
   );
@@ -168,13 +260,26 @@ export default function ProviderDetailScreen() {
         animationType="fade"
         onRequestClose={() => setImageModalVisible(false)}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' }}>
+        <View style={styles.modalOverlay}>
+          {/* Close Button */}
           <TouchableOpacity
-            style={{ position: 'absolute', top: 40, right: 20, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 8 }}
+            style={styles.modalCloseButton}
             onPress={() => setImageModalVisible(false)}
+            activeOpacity={0.7}
           >
-            <Text style={{ color: '#FFF', fontSize: 18 }}>Close</Text>
+            <Text style={styles.modalCloseText}>✕</Text>
           </TouchableOpacity>
+          
+          {/* Image Counter */}
+          {portfolio.length > 1 && (
+            <View style={styles.imageCounter}>
+              <Text style={styles.imageCounterText}>
+                {selectedImageIndex + 1} / {portfolio.length}
+              </Text>
+            </View>
+          )}
+          
+          {/* Image FlatList */}
           {portfolio.length > 0 && (
             <FlatList
               data={portfolio}
@@ -184,8 +289,18 @@ export default function ProviderDetailScreen() {
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               initialScrollIndex={selectedImageIndex}
-              getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
-              style={{ width, height: width }}
+              onScrollToIndexFailed={() => {}}
+              getItemLayout={(_, index) => ({ 
+                length: width, 
+                offset: width * index, 
+                index 
+              })}
+              onMomentumScrollEnd={(event) => {
+                const index = Math.round(event.nativeEvent.contentOffset.x / width);
+                setSelectedImageIndex(index);
+              }}
+              style={styles.modalFlatList}
+              contentContainerStyle={styles.modalFlatListContent}
             />
           )}
         </View>
@@ -660,6 +775,78 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontWeight: '600',
     marginLeft: 6,
+  },
+  // Image Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 40,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  modalCloseText: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '300',
+    lineHeight: 24,
+  },
+  imageCounter: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 40,
+    left: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  imageCounterText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalFlatList: {
+    width: '100%',
+    height: '100%',
+  },
+  modalFlatListContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalImageContainer: {
+    width: width,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  modalImage: {
+    width: '100%',
+    height: '100%',
+    maxWidth: width * 0.95,
+    maxHeight: Dimensions.get('window').height * 0.85,
   },
   bookButton: {
     flex: 1,

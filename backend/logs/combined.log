@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {"interval":50000,"level":"info","message":"Database connection health check started","service":"buildxpert-api","timestamp":"2025-12-14 18:29:17"}
 {"level":"info","message":"Timer registered: otpStore-cleanup (interval)","service":"buildxpert-api","timestamp":"2025-12-14 18:29:18"}
 {"level":"info","message":"Map registered for monitoring: otpStore (max size: 10000)","service":"buildxpert-api","timestamp":"2025-12-14 18:29:18"}
@@ -1104,3 +1105,5 @@
 {"duration":"124s","level":"info","message":"Socket connection unregistered","remainingConnections":1,"service":"buildxpert-api","socketId":"_kIX4Zt7FMph43VPAAAr","timestamp":"2025-12-22 10:26:56","userId":"c2f12a6e-c762-4b93-9f69-d420df1f0c42"}
 {"duration":"125s","level":"info","message":"Socket connection unregistered","remainingConnections":0,"service":"buildxpert-api","socketId":"QmQarLpS-vjj_30YAAAp","timestamp":"2025-12-22 10:26:57","userId":"c2f12a6e-c762-4b93-9f69-d420df1f0c42"}
 {"level":"info","message":"Database connection health check stopped","service":"buildxpert-api","timestamp":"2025-12-22 10:27:14"}
+=======
+>>>>>>> ec8c7296bd6b7074736f16465d316509663e4341

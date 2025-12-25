@@ -46,7 +46,7 @@ export default {
     graniteTilesLaying: 'Granite & Tiles Laying',
     paintingAndCleaning: 'Painting',
     contractorAndBuilding: 'Contractor and Building',
-    labors: "Labor's",
+    labors: "Labors",
     masonMistri: 'Mason/Mistri',
     interiorsDesigners: "Interiors Designer's",
     stainlessSteelMS: 'Stainless Steel M.S',

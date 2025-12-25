@@ -33,7 +33,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'contact-building',
-    name: 'Contact & Building',
+    name: 'Contractor and Building',
     icon: '🏢',
     description: 'Construction and Building Services',
     basePrice: 99,
@@ -41,7 +41,7 @@ export const SERVICE_CATEGORIES = [
   },
   {
     id: 'labor',
-    name: 'Labor',
+    name: 'labors',
     icon: '👷',
     description: 'General Labor Services',
     basePrice: 0, // Free for labor category
