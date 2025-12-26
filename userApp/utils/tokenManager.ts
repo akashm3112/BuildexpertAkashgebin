@@ -137,11 +137,7 @@ export class TokenManager {
 
       return await this.processTokenData(tokenData);
     } catch (error) {
-      // Silently fail during signup/login flows - don't log as error
-      const isTimeout = error instanceof Error && error.message.includes('timeout');
-      if (!isTimeout) {
-        console.error('Error getting valid token:', error);
-      }
+      // Silently fail during signup/login flows
       this.invalidateCache();
       return null;
     }
@@ -202,15 +198,6 @@ export class TokenManager {
         storage.getItem('refreshTokenExpiresAt', { maxRetries: 2 }),
       ]);
 
-      // Log missing tokens for debugging
-      if (!accessToken || !refreshToken || !accessTokenExpiresAtStr || !refreshTokenExpiresAtStr) {
-        console.warn('📱 TokenManager: Missing tokens in storage:', {
-          hasAccessToken: !!accessToken,
-          hasRefreshToken: !!refreshToken,
-          hasAccessTokenExpiresAt: !!accessTokenExpiresAtStr,
-          hasRefreshTokenExpiresAt: !!refreshTokenExpiresAtStr,
-        });
-      }
 
       if (accessToken && refreshToken && accessTokenExpiresAtStr && refreshTokenExpiresAtStr) {
         const accessTokenExpiresAt = parseInt(accessTokenExpiresAtStr, 10);
@@ -262,7 +249,6 @@ export class TokenManager {
       this.invalidateCache();
       return null;
     } catch (error) {
-      console.error('Error parsing stored token:', error);
       this.invalidateCache();
       return null;
     }
@@ -274,9 +260,6 @@ export class TokenManager {
     const retryOptions = {
       maxRetries: 3,
       priority: 'critical' as const,
-      onRetry: (attempt: number, error: Error) => {
-        console.log(`Storage retry attempt ${attempt}/3 for storing tokens:`, error.message);
-      },
     };
 
     // Store all tokens with critical priority to prevent cleanup
@@ -355,9 +338,6 @@ export class TokenManager {
             retryDelay: 1000,
             exponentialBackoff: true,
             timeout: 10000, // Reduce timeout from 15s to 10s
-            onRetry: (attempt) => {
-              console.log(`Token refresh retry attempt ${attempt}/1`);
-            },
           }
         );
       } catch (error: any) {
@@ -369,17 +349,9 @@ export class TokenManager {
           error.message.includes('Network request failed after retries')
         );
         
-        if (networkError) {
-          // Mark error as handled to prevent unhandled rejection warnings
-          (error as any)._handled = true;
-          (error as any)._suppressUnhandled = true;
-          console.warn('Token refresh failed: Network error (will retry on next API call):', error.message);
-        } else {
-          // Mark other errors as handled too
-          (error as any)._handled = true;
-          (error as any)._suppressUnhandled = true;
-          console.warn('Token refresh failed (will retry on next API call):', error.message || error);
-        }
+        // Mark error as handled to prevent unhandled rejection warnings
+        (error as any)._handled = true;
+        (error as any)._suppressUnhandled = true;
         
         // Return null to indicate refresh failed (will retry on next API call)
         this.invalidateCache();
@@ -400,14 +372,12 @@ export class TokenManager {
           // Service temporarily unavailable (database error, backend restart, etc.)
           // Don't clear tokens - this is a temporary issue, not a token problem
           // Token refresh will be retried on next API call when service is back
-          console.warn('Token refresh failed: Service temporarily unavailable (will retry on next API call)');
           this.invalidateCache();
           return null;
         }
         
         // Other server errors (500, etc.) - don't clear tokens, just return null
         // Token refresh will be retried on next API call
-        console.warn('Token refresh failed with status:', response.status, '(will retry on next API call)');
         this.invalidateCache();
         return null;
       }
@@ -417,7 +387,6 @@ export class TokenManager {
       
       // Validate response structure
       if (!data || !data.data || !data.data.accessToken || !data.data.refreshToken) {
-        console.error('Invalid refresh token response structure:', data);
         // Invalid response - clear tokens but keep user data
         await this.clearTokensOnly();
         this.invalidateCache();
@@ -445,13 +414,9 @@ export class TokenManager {
           userData.token = newTokenData.accessToken; // Keep for backward compatibility
           await storage.setJSON('user', userData, {
             maxRetries: 2,
-            onRetry: (attempt, error) => {
-              console.log(`Storage retry attempt ${attempt}/2 for updating user token:`, error.message);
-            },
           });
         }
       } catch (error) {
-        console.warn('Failed to update user context:', error);
         // Non-critical error, continue
       }
 
@@ -476,8 +441,7 @@ export class TokenManager {
         return null;
       }
       
-      // For other errors, log but don't show to user
-      console.warn('Error refreshing token:', error instanceof Error ? error.message : error);
+      // For other errors, silently handle
       await this.clearStoredData();
       this.invalidateCache();
       return null;
@@ -501,13 +465,9 @@ export class TokenManager {
         // User will be logged out on next API call if tokens can't be refreshed
       ], {
         maxRetries: 3,
-        onRetry: (attempt, error) => {
-          console.log(`Storage retry attempt ${attempt}/3 for clearing tokens:`, error.message);
-        },
       });
       this.invalidateCache();
     } catch (error) {
-      console.error('Error clearing tokens:', error);
       this.invalidateCache();
     }
   }
@@ -527,13 +487,9 @@ export class TokenManager {
         'user' // Only clear user data when refresh token is expired
       ], {
         maxRetries: 3,
-        onRetry: (attempt, error) => {
-          console.log(`Storage retry attempt ${attempt}/3 for clearing all data:`, error.message);
-        },
       });
       this.invalidateCache();
     } catch (error) {
-      console.error('Error clearing stored data:', error);
       this.invalidateCache();
     }
   }
@@ -557,13 +513,6 @@ export class TokenManager {
         throw new Error('Invalid token data: expiration times are required');
       }
       
-      console.log('📱 TokenManager: Storing token pair', {
-        hasAccessToken: !!accessToken,
-        hasRefreshToken: !!refreshToken,
-        accessTokenExpiresAt: new Date(tokenData.accessTokenExpiresAt).toISOString(),
-        refreshTokenExpiresAt: new Date(tokenData.refreshTokenExpiresAt).toISOString()
-      });
-      
       await this.storeTokens(tokenData);
       this.memoryCache = tokenData;
       this.cacheTimestamp = Date.now();
@@ -573,10 +522,7 @@ export class TokenManager {
       if (!storedTokenData || !storedTokenData.refreshToken) {
         throw new Error('Failed to verify token storage: tokens were not properly saved');
       }
-      
-      console.log('✅ TokenManager: Token pair stored and verified successfully');
     } catch (error) {
-      console.error('❌ TokenManager: Failed to store token pair:', error);
       throw error;
     }
   }
@@ -593,8 +539,7 @@ export class TokenManager {
         // Session expired is expected behavior after 30 days - return false
         return false;
       }
-      // For other errors, log and return false
-      console.warn('Error checking token validity:', error?.message || error);
+      // For other errors, return false
       return false;
     }
   }

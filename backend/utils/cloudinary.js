@@ -1,5 +1,6 @@
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config({ path: './config.env' });
+const logger = require('./logger');
 
 // Configure Cloudinary
 cloudinary.config({
@@ -16,21 +17,16 @@ const isCloudinaryConfigured = () => {
          process.env.CLOUDINARY_API_SECRET &&
          process.env.CLOUDINARY_CLOUD_NAME !== 'dxqjqjqjq'; // Check if it's not the placeholder
   
-  console.log('Cloudinary Configuration Check:', {
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    apiKey: process.env.CLOUDINARY_API_KEY ? 'Set' : 'Not set',
-    apiSecret: process.env.CLOUDINARY_API_SECRET ? 'Set' : 'Not set',
-    isConfigured: isConfigured
-  });
+  // Log configuration status only if not configured (for troubleshooting)
+  if (!isConfigured) {
+    logger.warn('Cloudinary not configured', {
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME ? 'Set' : 'Not set',
+      apiKey: process.env.CLOUDINARY_API_KEY ? 'Set' : 'Not set',
+      apiSecret: process.env.CLOUDINARY_API_SECRET ? 'Set' : 'Not set'
+    });
+  }
   
   return isConfigured;
-};
-
-// Generate mock Cloudinary URL for development
-const generateMockUrl = (folder = 'buildxpert') => {
-  const timestamp = Date.now();
-  const randomId = Math.random().toString(36).substring(2, 15);
-  return `https://res.cloudinary.com/mock-cloud/image/upload/v${timestamp}/${folder}/mock-image-${randomId}.jpg`;
 };
 
 // Upload image to Cloudinary with circuit breaker and retry logic
@@ -40,43 +36,39 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
   const { CloudinaryError, FileUploadError } = require('./errorTypes');
   
   try {
-    // Check if Cloudinary is properly configured
+    // PRODUCTION: Cloudinary configuration is required
     const configured = isCloudinaryConfigured();
-    console.log('🔍 Cloudinary configuration status:', configured);
     
     if (!configured) {
-      const mockUrl = generateMockUrl(folder);
-      
-      return {
-        success: true,
-        url: mockUrl,
-        public_id: `mock-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
-        width: 800,
-        height: 600,
-        format: 'jpg',
-        size: 102400,
-        isMock: true
-      };
+      logger.error('Cloudinary not configured - upload cannot proceed', {
+        folder,
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME ? 'Set' : 'Not set',
+        apiKey: process.env.CLOUDINARY_API_KEY ? 'Set' : 'Not set',
+        apiSecret: process.env.CLOUDINARY_API_SECRET ? 'Set' : 'Not set'
+      });
+      throw new Error('Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET environment variables.');
     }
     
-    // PRODUCTION FIX: Only accept base64 data URLs or Cloudinary URLs
+    // PRODUCTION: Only accept base64 data URLs or Cloudinary URLs
     // Reject file:// URIs as they cannot be uploaded to Cloudinary from the server
     let uploadData;
     
     if (imageFile.startsWith('data:image')) {
       uploadData = imageFile;
-      console.log('Processing base64 image...');
     } else if (imageFile.startsWith('file://')) {
       // PRODUCTION FIX: Reject file:// URIs - they should have been converted to base64 by the frontend
-      console.error('❌ File URI received - should have been converted to base64 by frontend:', imageFile.substring(0, 100));
+      logger.error('File URI received - should have been converted to base64 by frontend', {
+        imagePreview: imageFile.substring(0, 100)
+      });
       throw new Error('File URIs cannot be uploaded directly. Images must be converted to base64 before sending to backend.');
     } else if (imageFile.startsWith('http://') || imageFile.startsWith('https://')) {
       // Already a Cloudinary URL - return as is (for edit mode)
       uploadData = imageFile;
-      console.log('Processing Cloudinary URL (already uploaded)...');
     } else {
       // Unknown format - try to use as-is but log warning
-      console.warn('⚠️ Unknown image format, attempting upload:', imageFile.substring(0, 100));
+      logger.warn('Unknown image format, attempting upload', {
+        imagePreview: imageFile.substring(0, 100)
+      });
       uploadData = imageFile;
     }
 
@@ -116,8 +108,6 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
             eager_async: false
           });
           
-          console.log('Upload successful:', result.secure_url);
-          
           return {
             success: true,
             url: result.secure_url,
@@ -125,25 +115,15 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
             width: result.width,
             height: result.height,
             format: result.format,
-            size: result.bytes,
-            isMock: false
+            size: result.bytes
           };
         },
-        // Fallback: return mock URL
+        // PRODUCTION: No fallback - throw error if circuit breaker is open
         async () => {
-          console.log('⚠️ Using fallback mock URL (circuit breaker open)');
-          const mockUrl = generateMockUrl(folder);
-          return {
-            success: true,
-            url: mockUrl,
-            public_id: `mock-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
-            width: 800,
-            height: 600,
-            format: 'jpg',
-            size: 102400,
-            isMock: true,
-            fallback: true
-          };
+          logger.error('Cloudinary circuit breaker is open - upload cannot proceed', {
+            folder
+          });
+          throw new Error('Cloudinary service is temporarily unavailable. Please try again later.');
         }
       );
     };
@@ -152,45 +132,26 @@ const uploadImage = async (imageFile, folder = 'buildxpert') => {
     return await withUploadRetry(uploadWithProtection, `upload to Cloudinary (${folder})`);
     
   } catch (error) {
-    console.error('❌ Cloudinary upload error:', {
+    logger.error('Cloudinary upload error', {
       message: error.message,
       http_code: error.http_code,
       name: error.name,
-      stack: error.stack
+      stack: error.stack,
+      folder
     });
     
-    // PRODUCTION FIX: If Cloudinary is configured, don't fall back to mock URLs - throw error instead
-    const configured = isCloudinaryConfigured();
-    if (configured) {
-      // Cloudinary is configured but upload failed - throw error instead of returning mock URL
-      throw new Error(`Failed to upload image to Cloudinary: ${error.message || 'Unknown error'}`);
-    }
-    
-    // Only use mock URL if Cloudinary is not configured (development/fallback)
-    console.warn('⚠️ Cloudinary not configured, using mock URL (development mode only)');
-    const mockUrl = generateMockUrl(folder);
-    
-    return {
-      success: true, // Return success with mock URL (graceful degradation for development)
-      url: mockUrl,
-      public_id: `mock-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
-      width: 800,
-      height: 600,
-      format: 'jpg',
-      size: 102400,
-      isMock: true,
-      originalError: error.message
-    };
+    // PRODUCTION: Always throw error - no mock URL fallback
+    throw new CloudinaryError(`Failed to upload image to Cloudinary: ${error.message || 'Unknown error'}`, {
+      originalError: error,
+      folder
+    });
   }
 };
 
 // Upload multiple images to Cloudinary
 const uploadMultipleImages = async (imageFiles, folder = 'buildxpert') => {
   try {
-    console.log('Attempting to upload', imageFiles.length, 'images to Cloudinary...');
-    
-    const uploadPromises = imageFiles.map((imageFile, index) => {
-      console.log(`Uploading image ${index + 1}/${imageFiles.length}...`);
+    const uploadPromises = imageFiles.map((imageFile) => {
       return uploadImage(imageFile, folder);
     });
     
@@ -199,98 +160,65 @@ const uploadMultipleImages = async (imageFiles, folder = 'buildxpert') => {
     const successfulUploads = results.filter(result => result.success);
     const failedUploads = results.filter(result => !result.success);
     
-    console.log('Upload results:', {
-      successful: successfulUploads.length,
-      failed: failedUploads.length
-    });
+    if (failedUploads.length > 0) {
+      logger.warn('Some images failed to upload', {
+        folder,
+        total: imageFiles.length,
+        successful: successfulUploads.length,
+        failed: failedUploads.length
+      });
+    }
     
     return {
       success: true, // Always return success since we have fallback
       urls: successfulUploads.map(result => result.url),
       public_ids: successfulUploads.map(result => result.public_id),
       failed: failedUploads.length,
-      errors: failedUploads.map(result => result.error),
-      mockCount: successfulUploads.filter(result => result.isMock).length
+      errors: failedUploads.map(result => result.error)
     };
   } catch (error) {
-    console.error('❌ Multiple images upload error:', {
+    logger.error('Multiple images upload error', {
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
+      folder,
+      imageCount: imageFiles.length
     });
     
-    // PRODUCTION FIX: If Cloudinary is configured, don't fall back to mock URLs - throw error instead
-    const configured = isCloudinaryConfigured();
-    if (configured) {
-      // Cloudinary is configured but upload failed - throw error instead of returning mock URLs
-      throw new Error(`Failed to upload images to Cloudinary: ${error.message || 'Unknown error'}`);
-    }
-    
-    // Only use mock URLs if Cloudinary is not configured (development/fallback)
-    console.warn('⚠️ Cloudinary not configured, using mock URLs (development mode only)');
-    const mockUrls = imageFiles.map(() => generateMockUrl(folder));
-    const mockPublicIds = imageFiles.map(() => `mock-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`);
-    
-    return {
-      success: true, // Return success with mock URLs (graceful degradation for development)
-      urls: mockUrls,
-      public_ids: mockPublicIds,
-      failed: 0,
-      errors: [],
-      mockCount: imageFiles.length,
-      originalError: error.message
-    };
+    // PRODUCTION: Always throw error - no mock URL fallback
+    throw new CloudinaryError(`Failed to upload images to Cloudinary: ${error.message || 'Unknown error'}`, {
+      originalError: error,
+      folder,
+      imageCount: imageFiles.length
+    });
   }
 };
 
 // Delete image from Cloudinary
 const deleteImage = async (publicId) => {
-  const isDevelopment = process.env.NODE_ENV !== 'production';
-  
   try {
-    // PRODUCTION FIX: Input validation
+    // PRODUCTION: Input validation
     if (!publicId || typeof publicId !== 'string' || publicId.trim().length === 0) {
       return {
         success: false,
-        error: 'Invalid public ID: must be a non-empty string',
-        isMock: false
+        error: 'Invalid public ID: must be a non-empty string'
       };
     }
     
-    // If it's a mock image, just return success
-    if (publicId.startsWith('mock-') || publicId.includes('mock-image-')) {
-      if (isDevelopment) {
-        console.log('Mock image deletion (no-op):', publicId);
-      }
-      return {
-        success: true,
-        message: 'Mock image deleted',
-        isMock: true
-      };
-    }
-    
-    // Check if Cloudinary is configured before attempting deletion
+    // PRODUCTION: Cloudinary configuration is required
     if (!isCloudinaryConfigured()) {
-      if (isDevelopment) {
-        console.log('Cloudinary not configured, skipping deletion:', publicId);
-      }
-      return {
-        success: true,
-        message: 'Cloudinary not configured (skipped)',
-        isMock: true
-      };
+      logger.error('Cloudinary not configured - deletion cannot proceed', {
+        publicId: publicId.substring(0, 50)
+      });
+      throw new Error('Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET environment variables.');
     }
     
     const result = await cloudinary.uploader.destroy(publicId);
-    if (isDevelopment) {
-      console.log('Delete result:', result);
-    }
     
-    // PRODUCTION FIX: Handle unexpected response format
+    // PRODUCTION: Handle unexpected response format
     if (!result || typeof result !== 'object') {
       return {
         success: false,
-        error: 'Unexpected response format from Cloudinary',
-        isMock: false
+        error: 'Unexpected response format from Cloudinary'
       };
     }
     
@@ -303,27 +231,27 @@ const deleteImage = async (publicId) => {
     return {
       success: isSuccess,
       message: resultStatus,
-      isMock: false,
       alreadyDeleted: resultStatus === 'not found' // Flag for logging purposes
     };
   } catch (error) {
     // Only log actual errors, not "not found" cases
     const errorMessage = error?.message || 'Unknown error';
     if (!errorMessage.includes('not found')) {
-      console.error('Cloudinary delete error:', errorMessage);
+      logger.error('Cloudinary delete error', {
+        publicId,
+        error: errorMessage,
+        stack: error.stack
+      });
     }
     return {
       success: false,
-      error: errorMessage,
-      isMock: false
+      error: errorMessage
     };
   }
 };
 
 // Delete multiple images from Cloudinary
 const deleteMultipleImages = async (publicIds) => {
-  const isDevelopment = process.env.NODE_ENV !== 'production';
-  
   try {
     // PRODUCTION FIX: Input validation
     if (!Array.isArray(publicIds)) {
@@ -332,7 +260,6 @@ const deleteMultipleImages = async (publicIds) => {
         error: 'Invalid input: publicIds must be an array',
         deleted: 0,
         failed: 0,
-        mock: 0,
         errors: ['Invalid input: publicIds must be an array']
       };
     }
@@ -344,13 +271,8 @@ const deleteMultipleImages = async (publicIds) => {
         deleted: 0,
         alreadyDeleted: 0,
         failed: 0,
-        mock: 0,
         errors: []
       };
-    }
-    
-    if (isDevelopment) {
-      console.log('Attempting to delete', publicIds.length, 'images from Cloudinary...');
     }
     
     // PRODUCTION FIX: Use Promise.allSettled instead of Promise.all to handle individual failures gracefully
@@ -365,29 +287,26 @@ const deleteMultipleImages = async (publicIds) => {
         // Handle promise rejection (shouldn't happen with our error handling, but be safe)
         return {
           success: false,
-          error: settled.reason?.message || 'Unknown error during deletion',
-          isMock: false
+          error: settled.reason?.message || 'Unknown error during deletion'
         };
       }
     });
     
     const successfulDeletes = results.filter(result => result && result.success);
     const failedDeletes = results.filter(result => result && !result.success);
-    const mockDeletes = results.filter(result => result && result.isMock);
     const alreadyDeleted = results.filter(result => result && result.alreadyDeleted);
     
-    if (isDevelopment) {
-      console.log('Delete results:', {
+    if (failedDeletes.length > 0) {
+      logger.warn('Some images failed to delete', {
+        total: publicIds.length,
         successful: successfulDeletes.length,
         alreadyDeleted: alreadyDeleted.length,
-        failed: failedDeletes.length,
-        mock: mockDeletes.length
+        failed: failedDeletes.length
       });
     }
     
-    // PRODUCTION FIX: Consider deletion successful if:
+    // PRODUCTION: Consider deletion successful if:
     // 1. All deletions succeeded (including "not found" = already deleted)
-    // 2. Or only mock images were processed
     // Only fail if there were actual errors (not "not found" cases)
     const actualFailures = failedDeletes.filter(result => 
       result && result.error && !result.error.includes('not found')
@@ -398,18 +317,20 @@ const deleteMultipleImages = async (publicIds) => {
       deleted: successfulDeletes.length,
       alreadyDeleted: alreadyDeleted.length,
       failed: actualFailures.length,
-      mock: mockDeletes.length,
       errors: actualFailures.map(result => result.error).filter(Boolean)
     };
   } catch (error) {
     const errorMessage = error?.message || 'Unknown error';
-    console.error('Multiple images delete error:', errorMessage);
+    logger.error('Multiple images delete error', {
+      error: errorMessage,
+      stack: error.stack,
+      publicIdsCount: Array.isArray(publicIds) ? publicIds.length : 0
+    });
     return {
       success: false,
       error: errorMessage,
       deleted: 0,
       failed: Array.isArray(publicIds) ? publicIds.length : 0,
-      mock: 0,
       errors: [errorMessage]
     };
   }

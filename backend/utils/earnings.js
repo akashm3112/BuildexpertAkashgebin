@@ -1,5 +1,6 @@
 const { getRows } = require('../database/connection');
 const getIO = () => require('../server').io;
+const logger = require('./logger');
 
 /**
  * Calculate earnings for a specific provider
@@ -67,7 +68,11 @@ const calculateEarnings = async (providerUserId) => {
       pending: formatAmount(pendingEarnings[0]?.total_earnings || 0)
     };
   } catch (error) {
-    console.error('Error calculating earnings:', error);
+    logger.error('Error calculating earnings', {
+      providerUserId,
+      error: error.message,
+      stack: error.stack
+    });
     return null;
   }
 };
@@ -85,10 +90,13 @@ const emitEarningsUpdate = async (providerUserId) => {
         status: 'success',
         data: { earnings }
       });
-      console.log(`📊 Earnings update emitted to provider ${providerUserId}`);
     }
   } catch (error) {
-    console.error('Error emitting earnings update:', error);
+    logger.error('Error emitting earnings update', {
+      providerUserId,
+      error: error.message,
+      stack: error.stack
+    });
   }
 };
 
@@ -102,7 +110,11 @@ const emitEarningsUpdateToMultiple = async (providerUserIds) => {
       await emitEarningsUpdate(providerUserId);
     }
   } catch (error) {
-    console.error('Error emitting earnings updates to multiple providers:', error);
+    logger.error('Error emitting earnings updates to multiple providers', {
+      providerUserIdsCount: providerUserIds?.length || 0,
+      error: error.message,
+      stack: error.stack
+    });
   }
 };
 

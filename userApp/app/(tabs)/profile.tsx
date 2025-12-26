@@ -107,7 +107,6 @@ export default function ProfileScreen() {
       
       return Array.isArray(value) ? value : [];
     } catch (error) {
-      console.error('Error getting array translation:', error);
       return [];
     }
   };
@@ -309,18 +308,12 @@ export default function ProfileScreen() {
     return null;
   };
 
-  // Debug: Log userProfile changes
   useEffect(() => {
-    
     // Cache the image URL when it changes
     if (userProfile.image && userProfile.image.trim() !== '') {
       cacheProfileImage(userProfile.image);
     }
   }, [userProfile]);
-
-  // Debug: Log user context data
-  useEffect(() => {
-  }, [user]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -379,7 +372,6 @@ export default function ProfileScreen() {
         await uploadProfilePicture(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Error taking photo:', error);
       showAlert('Error', 'Failed to take photo. Please try again.', 'error');
     }
   };
@@ -403,7 +395,6 @@ export default function ProfileScreen() {
         await uploadProfilePicture(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Error choosing from gallery:', error);
       showAlert('Error', 'Failed to select photo. Please try again.', 'error');
     }
   };
@@ -472,16 +463,13 @@ export default function ProfileScreen() {
 
           showAlert('Success', 'Profile picture updated successfully!', 'success');
         } else {
-          console.error('❌ No image URL in response:', data);
           showAlert('Error', 'Failed to get image URL from response.', 'error');
         }
       } else {
         const errorData = await uploadResponse.json();
-        console.error('❌ Upload failed:', errorData);
         showAlert('Error', errorData.message || 'Failed to update profile picture.', 'error');
       }
     } catch (error) {
-      console.error('Error uploading profile picture:', error);
       showAlert('Error', 'Failed to upload profile picture. Please try again.', 'error');
     }
   };
@@ -520,11 +508,9 @@ export default function ProfileScreen() {
         showAlert('Success', 'Profile picture removed successfully!', 'success');
       } else {
         const errorData = await response.json();
-        console.error('❌ Delete failed:', errorData);
         showAlert('Error', errorData.message || 'Failed to remove profile picture.', 'error');
       }
     } catch (error) {
-      console.error('Error deleting profile picture:', error);
       showAlert('Error', 'Failed to remove profile picture. Please try again.', 'error');
     }
   };
@@ -596,7 +582,6 @@ export default function ProfileScreen() {
         setUserProfile((prev) => ({ ...prev, location: addr.full_address }));
       }
     } catch (err) {
-      console.error('Error fetching user profile:', err);
       // Fallback: use user data from context
       if (user) {
         setUserProfile((prev) => ({
@@ -654,7 +639,6 @@ export default function ProfileScreen() {
         setAverageRating(0);
       }
     } catch (err) {
-      console.error('❌ Error fetching bookings stats:', err);
       // Set default values on error
       setBookingsCount(0);
       setTotalReviews(0);
@@ -674,7 +658,7 @@ export default function ProfileScreen() {
         fetchBookingsStats(),
       ]);
     } catch (error) {
-      console.error('Error refreshing profile data:', error);
+      // Error refreshing profile data
     } finally {
       setRefreshing(false);
     }

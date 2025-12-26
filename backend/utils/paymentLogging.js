@@ -1,4 +1,5 @@
 const { query } = require('../database/connection');
+const logger = require('./logger');
 
 
 class PaymentLogger {
@@ -41,24 +42,28 @@ class PaymentLogger {
         `, [transactionId, eventType, JSON.stringify(eventData || {}), userId, ipAddress, userAgent]);
       }
 
-      console.log(`💰 Payment Event: ${eventType}`, {
+      logger.payment(`Payment Event: ${eventType}`, {
         transactionId,
         eventType,
         eventData,
         userId,
-        isLabourPayment: isLabour,
-        timestamp: new Date().toISOString()
+        isLabourPayment: isLabour
       });
     } catch (error) {
-      // For testing/development, log error but don't fail the payment flow
       // Foreign key constraint errors are expected when tables don't match
       if (error.code === '23503') {
-        console.warn(`⚠️ Payment event logging skipped (foreign key constraint): ${eventType}`, {
+        logger.warn('Payment event logging skipped (foreign key constraint)', {
           transactionId,
+          eventType,
           error: error.message
         });
       } else {
-        console.error('❌ Error logging payment event:', error);
+        logger.error('Error logging payment event', {
+          transactionId,
+          eventType,
+          error: error.message,
+          stack: error.stack
+        });
       }
     }
   }
@@ -72,17 +77,15 @@ class PaymentLogger {
       const isLabour = await this.isLabourPayment(transactionId);
       
       // For labour payments, skip API logging to payment_api_logs (it references payment_transactions)
-      // We can log to labour_payment_events instead if needed, but for now just skip
-      // This prevents foreign key constraint errors during testing
+      // This prevents foreign key constraint errors
       if (isLabour) {
-        // For labour payments, just log to console (no separate API logs table for labour)
-        console.log(`💰 API Interaction (Labour Payment): ${method} ${endpoint}`, {
+        // For labour payments, log using payment logger (no separate API logs table for labour)
+        logger.payment(`API Interaction (Labour Payment): ${method} ${endpoint}`, {
           transactionId,
           endpoint,
           method,
           responseTime: `${responseTime}ms`,
-          status: responseData?.status || (error ? 500 : 200),
-          timestamp: new Date().toISOString()
+          status: responseData?.status || (error ? 500 : 200)
         });
         return; // Skip database logging for labour payments
       }
@@ -104,24 +107,30 @@ class PaymentLogger {
         error?.message || null
       ]);
 
-      console.log(`💰 API Interaction: ${method} ${endpoint}`, {
+      logger.payment(`API Interaction: ${method} ${endpoint}`, {
         transactionId,
         endpoint,
         method,
         responseTime: `${responseTime}ms`,
-        status: responseData?.status || (error ? 500 : 200),
-        timestamp: new Date().toISOString()
+        status: responseData?.status || (error ? 500 : 200)
       });
     } catch (error) {
-      // For testing/development, log error but don't fail the payment flow
       // Foreign key constraint errors are expected when tables don't match
       if (error.code === '23503') {
-        console.warn(`⚠️ API interaction logging skipped (foreign key constraint): ${method} ${endpoint}`, {
+        logger.warn('API interaction logging skipped (foreign key constraint)', {
           transactionId,
+          endpoint,
+          method,
           error: error.message
         });
       } else {
-        console.error('❌ Error logging API interaction:', error);
+        logger.error('Error logging API interaction', {
+          transactionId,
+          endpoint,
+          method,
+          error: error.message,
+          stack: error.stack
+        });
       }
     }
   }
@@ -144,16 +153,20 @@ class PaymentLogger {
         JSON.stringify(details || {})
       ]);
 
-      console.log(`🔒 Security Event: ${eventType}`, {
+      logger.payment(`Security Event: ${eventType}`, {
         transactionId,
         eventType,
         riskScore,
         riskFactors,
-        actionTaken,
-        timestamp: new Date().toISOString()
+        actionTaken
       });
     } catch (error) {
-      console.error('❌ Error logging security event:', error);
+      logger.error('Error logging security event', {
+        transactionId,
+        eventType,
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -184,14 +197,17 @@ class PaymentLogger {
           WHERE id = $${paramCount}
         `, values);
 
-        console.log(`💰 Payment Transaction Updated: ${transactionId}`, {
+        logger.payment(`Payment Transaction Updated: ${transactionId}`, {
           transactionId,
-          updates: updateData,
-          timestamp: new Date().toISOString()
+          updates: updateData
         });
       }
     } catch (error) {
-      console.error('❌ Error updating payment transaction:', error);
+      logger.error('Error updating payment transaction', {
+        transactionId,
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -252,13 +268,16 @@ class PaymentLogger {
         performance_metrics: metrics
       });
 
-      console.log(`💰 Performance Metrics: ${transactionId}`, {
+      logger.payment(`Performance Metrics: ${transactionId}`, {
         transactionId,
-        metrics,
-        timestamp: new Date().toISOString()
+        metrics
       });
     } catch (error) {
-      console.error('❌ Error logging performance metrics:', error);
+      logger.error('Error logging performance metrics', {
+        transactionId,
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 }

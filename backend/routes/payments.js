@@ -89,52 +89,6 @@ const paytmBreaker = registry.getBreaker('paytm-api', {
 async function verifyPaytmPayment(orderId, transactionId = null) {
   const startTime = Date.now();
 
-  // Check if this is a labour payment and we're in development/test mode
-  // For testing, bypass actual Paytm verification for labour payments
-  const isLabourPayment = transactionId ? await (async () => {
-    try {
-      const { getRow } = require('../database/connection');
-      const result = await getRow(`
-        SELECT id FROM labour_payment_transactions WHERE id = $1
-      `, [transactionId]);
-      return !!result;
-    } catch {
-      return false;
-    }
-  })() : false;
-
-  // In development, bypass Paytm verification for labour payments (testing mode)
-  if (isLabourPayment && process.env.NODE_ENV !== 'production') {
-    logger.payment('Bypassing Paytm verification for labour payment (test mode)', { orderId });
-    
-    // Simulate successful payment for testing
-    const responseTime = Date.now() - startTime;
-    
-    if (transactionId) {
-      await PaymentLogger.logPaymentEvent(transactionId, 'paytm_verification_bypassed_test_mode', {
-        orderId,
-        testMode: true,
-        responseTime
-      });
-    }
-
-    return {
-      success: true,
-      transactionId: `TEST_TXN_${Date.now()}`,
-      amount: '99.00',
-      responseCode: '01',
-      responseMessage: 'Txn Success',
-      paytmResponse: {
-        STATUS: 'TXN_SUCCESS',
-        TXNID: `TEST_TXN_${Date.now()}`,
-        TXNAMOUNT: '99.00',
-        RESPCODE: '01',
-        RESPMSG: 'Txn Success'
-      },
-      responseTime
-    };
-  }
-
   logger.payment('Starting Paytm verification', { orderId });
 
   const verificationParams = {

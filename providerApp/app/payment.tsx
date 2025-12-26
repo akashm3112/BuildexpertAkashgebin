@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal as RNModal, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal as RNModal, ActivityIndicator, Alert, Platform, ScrollView, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, CreditCard, Smartphone, CheckCircle, X } from 'lucide-react-native';
+import { ArrowLeft, CreditCard, Smartphone, CheckCircle, X, Shield, Clock, Users } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -9,6 +9,24 @@ import { SafeView } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import { API_BASE_URL } from '@/constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Responsive design utilities
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 375;
+const isMediumScreen = screenWidth >= 375 && screenWidth < 414;
+const isLargeScreen = screenWidth >= 414;
+
+const getResponsiveSpacing = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
+
+const getResponsiveFontSize = (small: number, medium: number, large: number) => {
+  if (isSmallScreen) return small;
+  if (isMediumScreen) return medium;
+  return large;
+};
 
 export default function PaymentScreen() {
   const router = useRouter();
@@ -37,7 +55,7 @@ export default function PaymentScreen() {
 
   const handlePaymentMethodSelect = (method: 'paytm') => {
     setSelectedMethod(method);
-    setShowPaymentModal(true);
+    // Payment method selected - user can now click "Pay Now" button
   };
 
   const initiatePaytmPayment = async () => {
@@ -143,11 +161,13 @@ export default function PaymentScreen() {
 
   const handlePayment = async () => {
     if (!selectedMethod) {
-      showAlert(t('alerts.error'), 'Please select a payment method', 'error');
+      showAlert('Payment Method Required', 'Please select a payment method first', 'warning', [
+        { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+      ]);
       return;
     }
 
-    await initiatePaytmPayment();
+    setShowPaymentModal(true);
   };
 
   const handleWebViewNavigationStateChange = async (navState: any) => {
@@ -177,119 +197,231 @@ export default function PaymentScreen() {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Paytm Payment</Text>
+            <View style={styles.modalHeaderLeft}>
+              <View style={styles.modalIconContainer}>
+                <CreditCard size={getResponsiveFontSize(20, 24, 28)} color="#3B82F6" />
+              </View>
+              <Text style={styles.modalTitle}>Confirm Payment</Text>
+            </View>
             {!isProcessing && (
               <TouchableOpacity 
                 onPress={() => setShowPaymentModal(false)}
-                style={styles.closeButton}
+                style={styles.modalCloseButton}
               >
-                <X size={24} color="#6B7280" />
+                <X size={getResponsiveFontSize(20, 24, 28)} color="#64748B" />
               </TouchableOpacity>
             )}
           </View>
 
-          <View style={styles.paymentDetails}>
-            <Text style={styles.paymentAmount}>₹{amount}</Text>
-            <Text style={styles.paymentDescription}>
-              {isProcessing 
-                ? 'Processing payment with Paytm...' 
-                : 'Confirm to proceed with Paytm payment gateway'}
-            </Text>
-            <Text style={styles.validityText}>
-              Valid for 30 days from activation
-            </Text>
+          <View style={styles.modalBody}>
+            {isProcessing ? (
+              <View style={styles.processingContainer}>
+                <ActivityIndicator size="large" color="#3B82F6" />
+                <Text style={styles.processingText}>Processing your payment...</Text>
+                <Text style={styles.processingSubtext}>Please wait, this may take a few seconds</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.modalAmountContainer}>
+                  <Text style={styles.modalAmountLabel}>Amount to Pay</Text>
+                  <Text style={styles.modalAmountValue}>₹{amount}</Text>
+                </View>
+                
+                <View style={styles.modalInfoContainer}>
+                  <View style={styles.modalInfoRow}>
+                    <Clock size={getResponsiveFontSize(16, 18, 20)} color="#6B7280" />
+                    <Text style={styles.modalInfoText}>Valid for 30 days from activation</Text>
+                  </View>
+                  <View style={styles.modalInfoRow}>
+                    <Shield size={getResponsiveFontSize(16, 18, 20)} color="#6B7280" />
+                    <Text style={styles.modalInfoText}>Secure payment via Paytm</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.modalConfirmButton}
+                  onPress={async () => {
+                    setShowPaymentModal(false);
+                    await initiatePaytmPayment();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalConfirmButtonText}>Confirm & Pay ₹{amount}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.modalCancelButton}
+                  onPress={() => setShowPaymentModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
-
-          {isProcessing ? (
-            <View style={styles.processingContainer}>
-              <ActivityIndicator size="large" color="#3B82F6" />
-              <Text style={styles.processingText}>Please wait...</Text>
-            </View>
-          ) : (
-            <>
-              <TouchableOpacity 
-                style={styles.confirmButton}
-                onPress={handlePayment}
-              >
-                <Text style={styles.confirmButtonText}>
-                  Confirm Payment
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.cancelButton}
-                onPress={() => setShowPaymentModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </>
-          )}
         </View>
       </View>
     </RNModal>
   );
 
   return (
-    <SafeView backgroundColor="#FFFFFF">
+    <SafeView backgroundColor="#F9FAFB">
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color="#374151" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.serviceInfo}>
-          <Text style={styles.serviceTitle}>{serviceName}</Text>
-          <Text style={styles.servicePrice}>₹{amount}/month</Text>
-          <Text style={styles.serviceDescription}>
-            30-day subscription to receive service requests and manage your profile
-          </Text>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <View style={styles.heroIconContainer}>
+            <CreditCard size={getResponsiveFontSize(36, 40, 44)} color="#FFFFFF" />
+          </View>
+          <Text style={styles.heroTitle}>{serviceName || 'Service Registration'}</Text>
+          <Text style={styles.heroSubtitle}>30-day subscription to receive bookings</Text>
+          <View style={styles.priceBadge}>
+            <Text style={styles.priceBadgeText}>₹{amount}</Text>
+          </View>
         </View>
 
-        <View style={styles.paymentMethods}>
-          <Text style={styles.sectionTitle}>Select Payment Method</Text>
+        {/* Features Section */}
+        <View style={styles.featuresCard}>
+          <Text style={styles.featuresTitle}>What's Included</Text>
+          <View style={styles.featuresGrid}>
+            <View style={styles.featureCard}>
+              <View style={styles.featureIconContainer}>
+                <Users size={getResponsiveFontSize(20, 22, 24)} color="#3B82F6" />
+              </View>
+              <Text style={styles.featureCardTitle}>Receive Bookings</Text>
+              <Text style={styles.featureCardText} numberOfLines={2}>Get service requests from customers</Text>
+            </View>
+            <View style={styles.featureCard}>
+              <View style={styles.featureIconContainer}>
+                <Clock size={getResponsiveFontSize(20, 22, 24)} color="#10B981" />
+              </View>
+              <Text style={styles.featureCardTitle}>30 Days Access</Text>
+              <Text style={styles.featureCardText} numberOfLines={2}>Full access for a month</Text>
+            </View>
+            <View style={styles.featureCard}>
+              <View style={styles.featureIconContainer}>
+                <Shield size={getResponsiveFontSize(20, 22, 24)} color="#F59E0B" />
+              </View>
+              <Text style={styles.featureCardTitle}>Secure Payment</Text>
+              <Text style={styles.featureCardText} numberOfLines={2}>100% safe & encrypted</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Payment Method Section */}
+        <View style={styles.paymentSection}>
+          <Text style={styles.sectionTitle}>Payment Method</Text>
           
           <TouchableOpacity 
             style={[
-              styles.paymentMethod,
-              selectedMethod === 'paytm' && styles.selectedMethod
+              styles.paymentMethodCard,
+              selectedMethod === 'paytm' && styles.paymentMethodCardSelected
             ]}
             onPress={() => handlePaymentMethodSelect('paytm')}
+            activeOpacity={0.7}
           >
-            <Smartphone size={24} color="#00BAF2" />
-            <Text style={styles.methodText}>Paytm Payment</Text>
-            {selectedMethod === 'paytm' && <CheckCircle size={20} color="#3B82F6" />}
+            <View style={styles.paymentMethodLeft}>
+              <View style={[
+                styles.paymentMethodIconContainer,
+                selectedMethod === 'paytm' && styles.paymentMethodIconContainerSelected
+              ]}>
+                <Smartphone size={getResponsiveFontSize(20, 24, 28)} color={selectedMethod === 'paytm' ? '#FFFFFF' : '#00BAF2'} />
+              </View>
+              <View style={styles.paymentMethodInfo}>
+                <Text style={[
+                  styles.paymentMethodName,
+                  selectedMethod === 'paytm' && styles.paymentMethodNameSelected
+                ]}>
+                  Paytm
+                </Text>
+                <Text style={[
+                  styles.paymentMethodDesc,
+                  selectedMethod === 'paytm' && styles.paymentMethodDescSelected
+                ]}>
+                  Secure & Fast Payment
+                </Text>
+              </View>
+            </View>
+            {selectedMethod === 'paytm' && (
+              <View style={styles.checkBadge}>
+                <CheckCircle size={24} color="#FFFFFF" />
+              </View>
+            )}
           </TouchableOpacity>
+        </View>
 
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>📋 Payment Information</Text>
-            <Text style={styles.infoText}>• Service valid for 30 days</Text>
-            <Text style={styles.infoText}>• Reminder notification 2 days before expiry</Text>
-            <Text style={styles.infoText}>• Service auto-deactivates after expiry</Text>
-            <Text style={styles.infoText}>• Renewal extends from current expiry date</Text>
+        {/* Summary Section */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Order Summary</Text>
+          <View style={styles.summaryContent}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Service Registration (30 days)</Text>
+              <Text style={styles.summaryValue}>₹{amount}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Processing Fee</Text>
+              <Text style={styles.summaryValue}>Free</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryRow}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalValue}>₹{amount}</Text>
+            </View>
           </View>
         </View>
 
-        <View style={styles.summary}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Service Registration (30 days)</Text>
-            <Text style={styles.summaryValue}>₹{amount}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Processing Fee</Text>
-            <Text style={styles.summaryValue}>₹0</Text>
-          </View>
-          <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total Amount</Text>
-            <Text style={styles.totalValue}>₹{amount}</Text>
-          </View>
+        {/* Security Note */}
+        <View style={styles.securityCard}>
+          <Shield size={getResponsiveFontSize(18, 20, 22)} color="#10B981" style={styles.securityIcon} />
+          <Text style={styles.securityText}>
+            Your payment is secured with 256-bit SSL encryption
+          </Text>
         </View>
 
-        <Text style={styles.securityNote}>
-          🔒 Your payment information is secure and encrypted via Paytm
-        </Text>
-      </View>
+        {/* Pay Button */}
+        {selectedMethod ? (
+          <TouchableOpacity 
+            style={[
+              styles.payButton,
+              isProcessing && styles.payButtonDisabled
+            ]}
+            onPress={() => {
+              if (!isProcessing) {
+                setShowPaymentModal(true);
+              }
+            }}
+            disabled={isProcessing}
+            activeOpacity={0.8}
+          >
+            {isProcessing ? (
+              <>
+                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 12 }} />
+                <Text style={styles.payButtonText}>Processing Payment...</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.payButtonText}>Pay ₹{amount}</Text>
+                <ArrowLeft size={getResponsiveFontSize(18, 20, 22)} color="#FFFFFF" style={{ transform: [{ rotate: '180deg' }], marginLeft: getResponsiveSpacing(6, 8, 10) }} />
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.selectMethodPrompt}>
+            <Text style={styles.selectMethodText}>Please select a payment method to continue</Text>
+          </View>
+        )}
+      </ScrollView>
 
       <PaymentModal />
       
@@ -346,234 +478,545 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  backButton: {
+    padding: 4,
+    minWidth: 40,
+    alignItems: 'flex-start',
   },
   headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1F2937',
-    marginLeft: 16,
-  },
-  content: {
+    fontSize: getResponsiveFontSize(18, 20, 22),
+    fontWeight: '700',
+    color: '#111827',
     flex: 1,
-    padding: 24,
+    textAlign: 'center',
   },
-  serviceInfo: {
-    backgroundColor: '#F0F9FF',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 32,
+  scrollView: {
+    flex: 1,
   },
-  serviceTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1F2937',
-    marginBottom: 8,
+  scrollContent: {
+    paddingBottom: getResponsiveSpacing(24, 32, 40),
   },
-  servicePrice: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
+  // Hero Section
+  heroSection: {
+    backgroundColor: '#3B82F6',
+    paddingTop: getResponsiveSpacing(24, 32, 40),
+    paddingBottom: getResponsiveSpacing(32, 40, 48),
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    alignItems: 'center',
+    borderBottomLeftRadius: getResponsiveSpacing(24, 32, 40),
+    borderBottomRightRadius: getResponsiveSpacing(24, 32, 40),
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+  },
+  heroIconContainer: {
+    width: getResponsiveSpacing(70, 80, 90),
+    height: getResponsiveSpacing(70, 80, 90),
+    borderRadius: getResponsiveSpacing(35, 40, 45),
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: getResponsiveSpacing(16, 20, 24),
+  },
+  heroTitle: {
+    fontSize: getResponsiveFontSize(24, 28, 32),
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: getResponsiveSpacing(6, 8, 10),
+    textAlign: 'center',
+    paddingHorizontal: getResponsiveSpacing(8, 12, 16),
+  },
+  heroSubtitle: {
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: getResponsiveSpacing(16, 20, 24),
+    textAlign: 'center',
+    paddingHorizontal: getResponsiveSpacing(8, 12, 16),
+  },
+  priceBadge: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: getResponsiveSpacing(24, 32, 40),
+    paddingVertical: getResponsiveSpacing(10, 12, 14),
+    borderRadius: 30,
+    minWidth: 100,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  priceBadgeText: {
+    fontSize: getResponsiveFontSize(28, 32, 36),
+    fontWeight: '800',
     color: '#3B82F6',
-    marginBottom: 8,
   },
-  serviceDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
+  // Features Section
+  featuresCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: getResponsiveSpacing(16, 20, 24),
+    marginBottom: getResponsiveSpacing(16, 20, 24),
+    borderRadius: getResponsiveSpacing(16, 20, 24),
+    padding: getResponsiveSpacing(16, 20, 24),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  featuresTitle: {
+    fontSize: getResponsiveFontSize(18, 20, 22),
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: getResponsiveSpacing(16, 20, 24),
+    textAlign: 'center',
+  },
+  featuresGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: getResponsiveSpacing(8, 12, 16),
+  },
+  featureCard: {
+    flex: 1,
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  featureIconContainer: {
+    width: getResponsiveSpacing(50, 56, 64),
+    height: getResponsiveSpacing(50, 56, 64),
+    borderRadius: getResponsiveSpacing(25, 28, 32),
+    backgroundColor: '#F0F9FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: getResponsiveSpacing(10, 12, 14),
+  },
+  featureCardTitle: {
+    fontSize: getResponsiveFontSize(12, 13, 14),
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: getResponsiveSpacing(4, 6, 8),
+  },
+  featureCardText: {
+    fontSize: getResponsiveFontSize(10, 11, 12),
     color: '#6B7280',
-    lineHeight: 20,
+    textAlign: 'center',
+    lineHeight: getResponsiveFontSize(14, 16, 18),
   },
-  paymentMethods: {
-    marginBottom: 32,
+  // Payment Section
+  paymentSection: {
+    marginHorizontal: getResponsiveSpacing(16, 20, 24),
+    marginBottom: getResponsiveSpacing(16, 20, 24),
   },
   sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1F2937',
-    marginBottom: 16,
+    fontSize: getResponsiveFontSize(18, 20, 22),
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: getResponsiveSpacing(12, 16, 20),
   },
-  paymentMethod: {
+  paymentMethodCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: getResponsiveSpacing(14, 16, 18),
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    padding: getResponsiveSpacing(16, 20, 24),
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
-  selectedMethod: {
+  paymentMethodCardSelected: {
     borderColor: '#3B82F6',
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#3B82F6',
   },
-  methodText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: '#374151',
-    marginLeft: 12,
+  paymentMethodLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
+    minWidth: 0,
   },
-  infoBox: {
-    backgroundColor: '#FEF3C7',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+  paymentMethodIconContainer: {
+    width: getResponsiveSpacing(50, 56, 64),
+    height: getResponsiveSpacing(50, 56, 64),
+    borderRadius: getResponsiveSpacing(25, 28, 32),
+    backgroundColor: '#F0F9FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: getResponsiveSpacing(12, 16, 20),
+    flexShrink: 0,
   },
-  infoTitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#92400E',
-    marginBottom: 8,
+  paymentMethodIconContainerSelected: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
-  infoText: {
-    fontSize: 13,
-    fontFamily: 'Inter-Regular',
-    color: '#78350F',
-    marginBottom: 4,
+  paymentMethodInfo: {
+    flex: 1,
+    minWidth: 0,
   },
-  summary: {
-    backgroundColor: '#F9FAFB',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 24,
+  paymentMethodName: {
+    fontSize: getResponsiveFontSize(16, 18, 20),
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: getResponsiveSpacing(2, 4, 6),
+  },
+  paymentMethodNameSelected: {
+    color: '#FFFFFF',
+  },
+  paymentMethodDesc: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    color: '#6B7280',
+  },
+  paymentMethodDescSelected: {
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  checkBadge: {
+    width: getResponsiveSpacing(36, 40, 44),
+    height: getResponsiveSpacing(36, 40, 44),
+    borderRadius: getResponsiveSpacing(18, 20, 22),
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginLeft: getResponsiveSpacing(8, 12, 16),
+  },
+  // Summary Section
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: getResponsiveSpacing(16, 20, 24),
+    marginBottom: getResponsiveSpacing(16, 20, 24),
+    borderRadius: getResponsiveSpacing(16, 20, 24),
+    padding: getResponsiveSpacing(16, 20, 24),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  summaryTitle: {
+    fontSize: getResponsiveFontSize(18, 20, 22),
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: getResponsiveSpacing(12, 16, 20),
+  },
+  summaryContent: {
+    gap: getResponsiveSpacing(10, 12, 14),
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    flexWrap: 'wrap',
   },
   summaryLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontSize: getResponsiveFontSize(14, 16, 18),
     color: '#6B7280',
+    fontWeight: '500',
+    flex: 1,
+    minWidth: 0,
   },
   summaryValue: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#374151',
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'right',
   },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingTop: 12,
-    marginTop: 8,
-    marginBottom: 0,
+  summaryDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: getResponsiveSpacing(6, 8, 10),
   },
   totalLabel: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1F2937',
+    fontSize: getResponsiveFontSize(18, 20, 22),
+    fontWeight: '700',
+    color: '#111827',
+    flex: 1,
   },
   totalValue: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#3B82F6',
+    fontSize: getResponsiveFontSize(22, 24, 28),
+    fontWeight: '800',
+    color: '#059669',
+    textAlign: 'right',
   },
-  securityNote: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#6B7280',
+  // Security Card
+  securityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    marginHorizontal: getResponsiveSpacing(16, 20, 24),
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+    padding: getResponsiveSpacing(14, 16, 18),
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  securityIcon: {
+    flexShrink: 0,
+  },
+  securityText: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    color: '#047857',
+    marginLeft: getResponsiveSpacing(10, 12, 14),
+    flex: 1,
+    fontWeight: '500',
+    lineHeight: getResponsiveFontSize(18, 20, 22),
+    flexShrink: 1,
+  },
+  // Pay Button
+  payButton: {
+    backgroundColor: '#3B82F6',
+    marginHorizontal: getResponsiveSpacing(16, 20, 24),
+    paddingVertical: getResponsiveSpacing(16, 18, 20),
+    borderRadius: getResponsiveSpacing(14, 16, 18),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: getResponsiveSpacing(52, 56, 60),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  payButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.7,
+  },
+  payButtonText: {
+    color: '#FFFFFF',
+    fontSize: getResponsiveFontSize(16, 18, 20),
+    fontWeight: '700',
+  },
+  selectMethodPrompt: {
+    marginHorizontal: getResponsiveSpacing(16, 20, 24),
+    padding: getResponsiveSpacing(14, 16, 18),
+    backgroundColor: '#FFFBEB',
+    borderRadius: getResponsiveSpacing(10, 12, 14),
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  selectMethodText: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    color: '#92400E',
     textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: getResponsiveFontSize(18, 20, 22),
   },
+  // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    margin: 20,
-    width: '90%',
-    maxWidth: 400,
+    borderTopLeftRadius: getResponsiveSpacing(20, 24, 28),
+    borderTopRightRadius: getResponsiveSpacing(20, 24, 28),
+    maxHeight: screenHeight * 0.8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    paddingHorizontal: getResponsiveSpacing(20, 24, 28),
+    paddingVertical: getResponsiveSpacing(16, 20, 24),
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+  },
+  modalIconContainer: {
+    width: getResponsiveSpacing(36, 40, 44),
+    height: getResponsiveSpacing(36, 40, 44),
+    borderRadius: getResponsiveSpacing(18, 20, 22),
+    backgroundColor: '#F0F9FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: getResponsiveSpacing(10, 12, 14),
+    flexShrink: 0,
   },
   modalTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1F2937',
+    fontSize: getResponsiveFontSize(18, 20, 22),
+    fontWeight: '700',
+    color: '#111827',
+    flex: 1,
   },
-  closeButton: {
+  modalCloseButton: {
     padding: 4,
+    minWidth: 40,
+    alignItems: 'flex-end',
   },
-  paymentDetails: {
+  modalBody: {
+    padding: getResponsiveSpacing(20, 24, 28),
+  },
+  modalAmountContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+    paddingVertical: getResponsiveSpacing(18, 20, 24),
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    backgroundColor: '#F9FAFB',
+    borderRadius: getResponsiveSpacing(14, 16, 18),
   },
-  paymentAmount: {
-    fontSize: 32,
-    fontFamily: 'Inter-Bold',
-    color: '#3B82F6',
-    marginBottom: 8,
-  },
-  paymentDescription: {
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
+  modalAmountLabel: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
     color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 8,
+    marginBottom: getResponsiveSpacing(6, 8, 10),
+    fontWeight: '500',
   },
-  validityText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#059669',
-    textAlign: 'center',
+  modalAmountValue: {
+    fontSize: getResponsiveFontSize(32, 36, 40),
+    fontWeight: '800',
+    color: '#3B82F6',
+  },
+  modalInfoContainer: {
+    marginBottom: getResponsiveSpacing(20, 24, 28),
+    gap: getResponsiveSpacing(10, 12, 14),
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: getResponsiveSpacing(6, 8, 10),
+  },
+  modalInfoText: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    color: '#6B7280',
+    marginLeft: getResponsiveSpacing(10, 12, 14),
+    fontWeight: '500',
+    flex: 1,
   },
   processingContainer: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: getResponsiveSpacing(32, 40, 48),
   },
   processingText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: '#6B7280',
-    marginTop: 12,
+    fontSize: getResponsiveFontSize(16, 18, 20),
+    color: '#111827',
+    marginTop: getResponsiveSpacing(12, 16, 20),
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  confirmButton: {
+  processingSubtext: {
+    fontSize: getResponsiveFontSize(12, 14, 16),
+    color: '#6B7280',
+    marginTop: getResponsiveSpacing(6, 8, 10),
+    textAlign: 'center',
+  },
+  modalConfirmButton: {
     backgroundColor: '#3B82F6',
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    borderRadius: getResponsiveSpacing(10, 12, 14),
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: getResponsiveSpacing(10, 12, 14),
+    minHeight: getResponsiveSpacing(48, 52, 56),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
-  confirmButtonText: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+  modalConfirmButtonText: {
     color: '#FFFFFF',
+    fontSize: getResponsiveFontSize(16, 18, 20),
+    fontWeight: '700',
   },
-  cancelButton: {
-    paddingVertical: 12,
+  modalCancelButton: {
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
+    borderRadius: getResponsiveSpacing(10, 12, 14),
     alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    minHeight: getResponsiveSpacing(48, 52, 56),
   },
-  cancelButtonText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: '#6B7280',
+  modalCancelButtonText: {
+    color: '#374151',
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '600',
   },
   webViewHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    paddingVertical: getResponsiveSpacing(12, 14, 16),
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
   },
   webViewTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1F2937',
+    fontSize: getResponsiveFontSize(16, 18, 20),
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+    textAlign: 'center',
   },
   webViewLoading: {
     flex: 1,
@@ -582,9 +1025,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   webViewLoadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontFamily: 'Inter-Medium',
+    marginTop: getResponsiveSpacing(12, 16, 20),
+    fontSize: getResponsiveFontSize(14, 16, 18),
+    fontWeight: '500',
     color: '#6B7280',
   },
 });

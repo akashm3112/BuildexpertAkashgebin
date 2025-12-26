@@ -1,6 +1,7 @@
-const { query, getRows } = require('../database/connection');
+const { query, getRows, getRow } = require('../database/connection');
 const { pushNotificationService, NotificationTemplates } = require('../utils/pushNotifications');
 const cron = require('node-cron');
+const logger = require('../utils/logger');
 
 /**
  * Booking reminder service
@@ -82,7 +83,10 @@ class BookingReminderService {
       }
 
     } catch (error) {
-      console.error('❌ Error sending daily reminders:', error);
+      logger.error('Error sending daily reminders', {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -145,7 +149,10 @@ class BookingReminderService {
       }
 
     } catch (error) {
-      console.error('❌ Error sending hourly reminders:', error);
+      logger.error('Error sending hourly reminders', {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -189,7 +196,10 @@ class BookingReminderService {
       }
 
     } catch (error) {
-      console.error('❌ Error sending morning reminders:', error);
+      logger.error('Error sending morning reminders', {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -208,7 +218,12 @@ class BookingReminderService {
         VALUES ($1, $2, $3, $4, $5)
       `, [userId, type, notification.title, notification.body, JSON.stringify(data)]);
     } catch (error) {
-      console.error('❌ Error logging notification:', error);
+      logger.error('Error logging notification', {
+        userId,
+        notificationType: type,
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -250,7 +265,11 @@ class BookingReminderService {
       
       return { success: true };
     } catch (error) {
-      console.error('❌ Error scheduling custom reminder:', error);
+      logger.error('Error scheduling custom reminder', {
+        bookingId,
+        error: error.message,
+        stack: error.stack
+      });
       return { success: false, error: error.message };
     }
   }

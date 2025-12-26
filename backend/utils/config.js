@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const logger = require('./logger');
 
 
 class Config {
@@ -16,7 +17,11 @@ class Config {
     if (fs.existsSync(configPath)) {
       require('dotenv').config({ path: configPath });
     } else {
-      console.warn('⚠️  config.env file not found. Using system environment variables only.');
+      if (typeof logger.warn === 'function') {
+        logger.warn('config.env file not found. Using system environment variables only.');
+      } else if (typeof logger.log === 'function') {
+        logger.log('warn', 'config.env file not found. Using system environment variables only.');
+      }
     }
 
     // Load configuration with defaults
@@ -159,21 +164,38 @@ class Config {
 
     // Log warnings
     if (warnings.length > 0) {
-      console.log('\n🔔 Configuration Warnings:');
-      warnings.forEach(warning => console.log(warning));
+      warnings.forEach(warning => {
+        if (typeof logger.warn === 'function') {
+          logger.warn(warning);
+        } else if (typeof logger.log === 'function') {
+          logger.log('warn', warning);
+        }
+      });
     }
 
     // Throw errors for missing required configs
     if (errors.length > 0) {
-      console.error('\n❌ Configuration Errors:');
-      errors.forEach(error => console.error(error));
+      errors.forEach(error => {
+        if (typeof logger.error === 'function') {
+          logger.error(error);
+        } else if (typeof logger.log === 'function') {
+          logger.log('error', error);
+        }
+      });
       throw new Error('Missing required configuration. Please check your config.env file.');
     }
 
     // Log successful configuration
-    console.log('✅ Configuration loaded successfully');
-    if (this.config.nodeEnv === 'development') {
-      console.log('🔧 Development mode enabled');
+    if (typeof logger.info === 'function') {
+      logger.info('Configuration loaded successfully', {
+        nodeEnv: this.config.nodeEnv,
+        port: this.config.port
+      });
+    } else if (typeof logger.log === 'function') {
+      logger.log('info', 'Configuration loaded successfully', {
+        nodeEnv: this.config.nodeEnv,
+        port: this.config.port
+      });
     }
   }
 

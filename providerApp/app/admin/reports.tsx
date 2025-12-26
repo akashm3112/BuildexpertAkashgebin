@@ -165,7 +165,6 @@ export default function ReportsScreen() {
       const { tokenManager } = await import('@/utils/tokenManager');
       const token = await tokenManager.getValidToken();
       if (!token) {
-        console.error('No authentication token found for reports');
         Alert.alert('Authentication Error', 'Please log in again to view reports.');
         setIsLoading(false);
         setIsRefreshing(false);
@@ -185,21 +184,15 @@ export default function ReportsScreen() {
         const data = await response.json();
         if (data.status === 'success') {
           const reportsData = data.data?.reports || [];
-          if (__DEV__) {
-            console.log(`📋 Loaded ${reportsData.length} reports (all statuses)`);
-          }
           setReports(reportsData);
         } else {
-          console.error('API returned error status:', data.message || 'Unknown error');
           setReports([]);
         }
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Failed to fetch reports:', response.status, errorData.message || '');
+        await response.json().catch(() => ({}));
         setReports([]);
       }
     } catch (error) {
-      console.error('Error fetching reports:', error);
       setReports([]);
     } finally {
       setIsLoading(false);
@@ -233,7 +226,7 @@ export default function ReportsScreen() {
         }
       }
     } catch (error) {
-      console.error('Error loading stats:', error);
+      // Silently fail - stats loading errors are not critical
     }
   };
 
@@ -285,11 +278,9 @@ export default function ReportsScreen() {
       if (response.ok) {
         // Reload reports
         loadReports();
-      } else {
-        console.error('Failed to update report status');
       }
     } catch (error) {
-      console.error('Error updating report status:', error);
+      // Silently fail - status update errors are handled by UI state
     }
   };
 
@@ -322,7 +313,6 @@ export default function ReportsScreen() {
                 Alert.alert('Error', 'Failed to remove user');
               }
             } catch (error) {
-              console.error('Error removing user:', error);
               Alert.alert('Error', 'Failed to remove user');
             }
           },
@@ -396,7 +386,6 @@ export default function ReportsScreen() {
                 Alert.alert('Error', 'Failed to remove provider');
               }
             } catch (error) {
-              console.error('Error removing provider:', error);
               Alert.alert('Error', 'Failed to remove provider');
             }
           },

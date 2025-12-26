@@ -75,7 +75,6 @@ export default function ProfileScreen() {
       
       return Array.isArray(value) ? value : [];
     } catch (error) {
-      console.error('Error getting array translation:', error);
       return [];
     }
   };
@@ -136,7 +135,6 @@ export default function ProfileScreen() {
         const year = new Date(userProfile.createdAt).getFullYear();
         return year.toString();
       } catch (error) {
-        console.error('Error parsing creation date:', error);
         return '2024';
       }
     }
@@ -152,13 +150,6 @@ export default function ProfileScreen() {
         // Initialize userProfile with user context data (but don't set name if it's empty)
         if (user) {
           const initialImage = user.profile_pic_url || '';
-          console.log('👤 User context data:', {
-            fullName: user.fullName,
-            full_name: user.full_name,
-            email: user.email,
-            phone: user.phone,
-            createdAt: user.createdAt || user.created_at
-          });
           
           setUserProfile((prev) => ({
             ...prev,
@@ -186,17 +177,6 @@ export default function ProfileScreen() {
         const hasValidName = userProfile.name && userProfile.name.trim() !== '' && userProfile.name !== t('profile.serviceProvider');
         const shouldFetchProfile = !hasInitialized || !isProfileLoaded || (now - lastProfileFetch) > PROFILE_CACHE_DURATION || !hasValidName;
         const shouldFetchStats = !hasInitialized || !isStatsLoaded || (now - lastStatsFetch) > STATS_CACHE_DURATION;
-        
-        console.log('🔄 Cache check:', {
-          shouldFetchProfile,
-          shouldFetchStats,
-          profileCacheAge: now - lastProfileFetch,
-          statsCacheAge: now - lastStatsFetch,
-          isProfileLoaded,
-          isStatsLoaded,
-          hasValidName,
-          currentName: userProfile.name
-        });
         
         if (shouldFetchProfile) {
           fetchUserProfile();
@@ -282,7 +262,6 @@ export default function ProfileScreen() {
       setJobsDone(0);
       setAverageRating(0);
       setTotalRatings(0);
-      console.error('Error fetching stats:', e);
     }
   };
 
@@ -305,13 +284,6 @@ export default function ProfileScreen() {
   // Update userProfile when user context changes
   useEffect(() => {
     if (user) {
-      console.log('👤 Updating userProfile from user context:', {
-        profile_pic_url: user.profile_pic_url,
-        profilePicUrl: user.profilePicUrl,
-        fullName: user.fullName,
-        full_name: user.full_name,
-      });
-      
       // Update profile with user context data
       const updatedProfile = {
         name: user.fullName || user.full_name || '',
@@ -328,8 +300,8 @@ export default function ProfileScreen() {
       // Cache the profile image if it exists and is valid
       const profileImageUrl = user.profile_pic_url || user.profilePicUrl;
       if (profileImageUrl && profileImageUrl.trim() !== '' && !profileImageUrl.includes('data:image')) {
-        cacheProfileImage(profileImageUrl).catch(error => {
-          console.error('❌ Failed to cache profile image from user context:', error);
+        cacheProfileImage(profileImageUrl).catch(() => {
+          // Silently fail - caching is not critical
         });
       }
     }
@@ -344,18 +316,16 @@ export default function ProfileScreen() {
     };
   }, [imageLoadTimeout]);
 
-  // Debug: Log userProfile changes
+  // Cache the image URL when it changes
   useEffect(() => {
-    
     // Cache the image URL when it changes
     if (userProfile.image && userProfile.image.trim() !== '') {
       cacheProfileImage(userProfile.image);
     }
   }, [userProfile]);
 
-  // Debug: Log user context data and update profile if needed
+  // Update profile from user context if needed
   useEffect(() => {
-    
     // If user context has a valid name and current profile doesn't, update it
     const userName = user?.fullName || user?.full_name;
     if (user && userName && userName.trim() !== '' && 
@@ -401,14 +371,12 @@ export default function ProfileScreen() {
                   // Navigate to root index which will handle auth redirect and prevent back navigation
                   router.replace('/');
                 } catch (navError) {
-                  console.error('Navigation error during logout:', navError);
                   // Fallback: try to navigate to root
                   router.push('/');
                 }
               }, 100);
               
             } catch (error) {
-              console.error('Logout error:', error);
               showAlert(t('alerts.error'), t('alerts.failedToLogout'), 'error');
             }
           },
@@ -526,7 +494,7 @@ export default function ProfileScreen() {
         }
       }
     } catch (error) {
-      console.error('❌ Error checking pending upload:', error);
+      // Silently fail - pending upload check is not critical
     }
   };
 
@@ -549,15 +517,6 @@ export default function ProfileScreen() {
         const profileData = data.data?.profile || {};
         
         setUserProfile({
-          name: profileData.full_name || '',
-          email: profileData.email || '',
-          phone: profileData.phone || '',
-          location: profileData.location || '',
-          image: profileData.profile_pic_url || '',
-          createdAt: profileData.created_at || '',
-        });
-
-        console.log('👤 Updated userProfile from provider endpoint:', {
           name: profileData.full_name || '',
           email: profileData.email || '',
           phone: profileData.phone || '',
@@ -599,15 +558,6 @@ export default function ProfileScreen() {
             createdAt: profileData.createdAt || profileData.created_at || '',
           });
 
-          console.log('👤 Updated userProfile from user endpoint:', {
-            name: profileData.fullName || profileData.full_name || '',
-            email: profileData.email || '',
-            phone: profileData.phone || '',
-            location: profileData.location || '',
-            image: profileData.profilePicUrl || profileData.profile_pic_url || '',
-            createdAt: profileData.createdAt || profileData.created_at || '',
-          });
-
           // Cache the profile image if it exists
           if (profileData.profilePicUrl || profileData.profile_pic_url) {
             await cacheProfileImage(profileData.profilePicUrl || profileData.profile_pic_url);
@@ -624,7 +574,7 @@ export default function ProfileScreen() {
         }
       }
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      // Silently fail - profile fetch errors are handled by UI state
     }
   };
 
@@ -683,7 +633,6 @@ export default function ProfileScreen() {
         await uploadProfilePicture(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Error taking photo:', error);
       showAlert('Error', 'Failed to take photo. Please try again.', 'error');
     }
   };
@@ -707,7 +656,6 @@ export default function ProfileScreen() {
         await uploadProfilePicture(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Error choosing from gallery:', error);
       showAlert('Error', 'Failed to select photo. Please try again.', 'error');
     }
   };
@@ -782,17 +730,13 @@ export default function ProfileScreen() {
             showAlert('Success', 'Profile picture updated successfully!', 'success');
           }, 100);
         } else {
-          console.error('❌ No image URL in response:', data);
           showAlert('Error', 'Failed to get image URL from response.', 'error');
         }
       } else {
         const errorData = await uploadResponse.json();
-        console.error('❌ Upload failed:', errorData);
         showAlert('Error', errorData.message || 'Failed to upload profile picture.', 'error');
       }
     } catch (error) {
-      console.error('❌ Error uploading profile picture:', error);
-      
       // Check if it's a network connectivity issue
       const errorMessage = (error as Error)?.message || '';
       if (errorMessage.includes('Network request failed') || errorMessage.includes('Unable to resolve host')) {
@@ -808,7 +752,6 @@ export default function ProfileScreen() {
           
           showAlert('Network Issue', 'Your profile picture has been saved locally and will be uploaded when network connection is restored.', 'warning');
         } catch (storageError) {
-          console.error('❌ Failed to store image locally:', storageError);
           showAlert('Error', 'Failed to upload profile picture due to network issues. Please try again when connected.', 'error');
         }
       } else {
@@ -860,11 +803,9 @@ export default function ProfileScreen() {
         }, 100);
       } else {
         const errorData = await response.json();
-        console.error('❌ Delete failed:', errorData);
         showAlert('Error', errorData.message || 'Failed to remove profile picture.', 'error');
       }
     } catch (error) {
-      console.error('❌ Error removing profile picture:', error);
       showAlert('Error', 'Failed to remove profile picture. Please try again.', 'error');
     }
   };
@@ -1212,7 +1153,9 @@ export default function ProfileScreen() {
                     // For other errors (invalid URL, etc.), clear the image
                     setUserProfile(prev => ({ ...prev, image: '' }));
                     // Also clear from cache if it's invalid
-                    AsyncStorage.removeItem('cached_profile_image').catch(console.error);
+                    AsyncStorage.removeItem('cached_profile_image').catch(() => {
+                      // Silently fail - cache cleanup is not critical
+                    });
                     setCachedImageUrl('');
                   }
                   

@@ -142,49 +142,23 @@ export default function ServiceRegistration() {
       if (response.ok) {
         const data = await response.json();
         
-        // PRODUCTION FIX: Debug logging to understand data structure
-        if (__DEV__) {
-          console.log('📦 Full API response:', JSON.stringify(data, null, 2));
-        }
-        
         const serviceData = data.data.registeredServices.find(
           (s: any) => s.provider_service_id === serviceId
         );
 
-        // PRODUCTION FIX: Debug logging for found service data
-        if (__DEV__) {
-          console.log('📦 Found service data:', serviceData ? 'YES' : 'NO');
-          if (serviceData) {
-            console.log('📦 Service data working_proof_urls:', serviceData.working_proof_urls);
-            console.log('📦 Service data working_proof_urls type:', typeof serviceData.working_proof_urls);
-            console.log('📦 Service data working_proof_urls isArray:', Array.isArray(serviceData.working_proof_urls));
-            if (serviceData.working_proof_urls) {
-              console.log('📦 Service data working_proof_urls length:', Array.isArray(serviceData.working_proof_urls) ? serviceData.working_proof_urls.length : 'N/A');
-            }
-          }
-        }
-
         if (serviceData) {
-          // PRODUCTION FIX: Parse working_proof_urls - handle all possible formats
-          // Also filter out mock URLs that don't exist
+          // PRODUCTION: Parse working_proof_urls - handle all possible formats
           let workingProofUrls: string[] = [];
           
           if (serviceData.working_proof_urls) {
             try {
               // Handle PostgreSQL array format - pg library should return arrays, but handle all cases
               if (Array.isArray(serviceData.working_proof_urls)) {
-                // Already an array - filter valid URLs and exclude mock URLs
+                // Already an array - filter valid URLs
                 workingProofUrls = serviceData.working_proof_urls
                   .filter((url: any) => {
                     if (!url || typeof url !== 'string') return false;
                     const trimmed = url.trim();
-                    // PRODUCTION FIX: Filter out mock URLs that don't exist
-                    if (trimmed.includes('mock-cloud') || trimmed.includes('/mock-image-')) {
-                      if (__DEV__) {
-                        console.warn('⚠️ Filtering out mock URL:', trimmed);
-                      }
-                      return false; // Skip mock URLs
-                    }
                     return trimmed !== '' && 
                            (trimmed.startsWith('http://') || 
                             trimmed.startsWith('https://') || 
@@ -196,47 +170,31 @@ export default function ServiceRegistration() {
                 // PostgreSQL array might be returned as string - try to parse
                 const strValue = serviceData.working_proof_urls.trim();
                 
-                // PRODUCTION FIX: Filter out mock URLs
-                if (strValue.includes('mock-cloud') || strValue.includes('/mock-image-')) {
-                  if (__DEV__) {
-                    console.warn('⚠️ Skipping mock URL string:', strValue);
-                  }
-                  workingProofUrls = [];
-                } else {
-                  // Try JSON parse first
-                  try {
-                    const parsed = JSON.parse(strValue);
-                    if (Array.isArray(parsed)) {
-                      workingProofUrls = parsed
-                        .filter((url: any) => {
-                          if (!url || typeof url !== 'string') return false;
-                          const trimmed = url.trim();
-                          // PRODUCTION FIX: Filter out mock URLs
-                          if (trimmed.includes('mock-cloud') || trimmed.includes('/mock-image-')) {
-                            if (__DEV__) {
-                              console.warn('⚠️ Filtering out mock URL from array:', trimmed);
-                            }
-                            return false;
-                          }
-                          return trimmed !== '' && 
-                                 (trimmed.startsWith('http://') || 
-                                  trimmed.startsWith('https://') || 
-                                  trimmed.startsWith('data:image/') || 
-                                  trimmed.startsWith('file://'));
-                        })
+                // Try JSON parse first
+                try {
+                  const parsed = JSON.parse(strValue);
+                  if (Array.isArray(parsed)) {
+                    workingProofUrls = parsed
+                      .filter((url: any) => {
+                        if (!url || typeof url !== 'string') return false;
+                        const trimmed = url.trim();
+                        return trimmed !== '' && 
+                               (trimmed.startsWith('http://') || 
+                                trimmed.startsWith('https://') || 
+                                trimmed.startsWith('data:image/') || 
+                                trimmed.startsWith('file://'));
+                      })
                         .map((url: any) => url.trim());
                     } else if (typeof parsed === 'string' && parsed.trim() !== '') {
                       // Single URL string in JSON
                       const trimmed = parsed.trim();
-                      if (!trimmed.includes('mock-cloud') && !trimmed.includes('/mock-image-') &&
-                          (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/') || trimmed.startsWith('file://'))) {
+                      if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/') || trimmed.startsWith('file://')) {
                         workingProofUrls = [trimmed];
                       }
                     }
                   } catch (parseError) {
                     // JSON parse failed - check if it's a single URL string
                     if (strValue !== '' && 
-                        !strValue.includes('mock-cloud') && !strValue.includes('/mock-image-') &&
                         (strValue.startsWith('http://') || 
                          strValue.startsWith('https://') ||
                          strValue.startsWith('data:image/') ||
@@ -247,21 +205,8 @@ export default function ServiceRegistration() {
                 }
               }
             } catch (error) {
-              console.warn('Error parsing working_proof_urls:', error, 'Raw data:', serviceData.working_proof_urls);
               workingProofUrls = [];
             }
-          }
-          
-          // DEBUG: Log the parsed URLs in development
-          if (__DEV__) {
-            console.log('📸 Raw working_proof_urls:', serviceData.working_proof_urls);
-            console.log('📸 Raw type:', typeof serviceData.working_proof_urls);
-            console.log('📸 Is array:', Array.isArray(serviceData.working_proof_urls));
-            console.log('📸 Parsed working proof URLs (after filtering mock URLs):', workingProofUrls);
-            console.log('📸 Parsed URLs count:', workingProofUrls.length);
-            workingProofUrls.forEach((url, idx) => {
-              console.log(`📸 URL ${idx}:`, url);
-            });
           }
           
           // PRODUCTION FIX: Ensure engineering certificate URL is valid
@@ -307,8 +252,7 @@ export default function ServiceRegistration() {
         router.back();
       }
     } catch (error) {
-      console.error('Error loading service data:', error);
-              showAlert(t('alerts.error'), t('alerts.failedToLoadServiceData'), 'error');
+      showAlert(t('alerts.error'), t('alerts.failedToLoadServiceData'), 'error');
       router.back();
     } finally {
       setIsLoadingData(false);
@@ -323,8 +267,7 @@ export default function ServiceRegistration() {
         setFormData(JSON.parse(savedData));
       }
     } catch (error) {
-      console.error('Error loading data:', error);
-              showAlert(t('alerts.error'), t('alerts.failedToLoadPreviousData'), 'error');
+      showAlert(t('alerts.error'), t('alerts.failedToLoadPreviousData'), 'error');
     }
   };
 
@@ -557,33 +500,20 @@ export default function ServiceRegistration() {
     try {
       // PRODUCTION FIX: Validate input
       if (!uri || typeof uri !== 'string' || uri.trim() === '') {
-        if (__DEV__) {
-          console.warn('⚠️ Invalid URI provided to convertToBase64:', uri);
-        }
         throw new Error('Invalid URI provided');
       }
       
       // If it's already a base64 URL, return as is
       if (uri.startsWith('data:image/')) {
-        if (__DEV__) {
-          console.log('✅ Already base64, returning as-is');
-        }
         return uri;
       }
       
       // If it's a file URI, convert to base64
       if (uri.startsWith('file://')) {
-        if (__DEV__) {
-          console.log('🔄 Converting file URI to base64:', uri.substring(0, 80) + '...');
-        }
-        
         try {
           // PRODUCTION FIX: Check if file exists before reading
           const fileInfo = await FileSystem.getInfoAsync(uri);
           if (!fileInfo.exists) {
-            if (__DEV__) {
-              console.error('❌ File does not exist:', uri);
-            }
             throw new Error(`File does not exist: ${uri}`);
           }
           
@@ -592,9 +522,6 @@ export default function ServiceRegistration() {
           });
           
           if (!base64 || base64.length === 0) {
-            if (__DEV__) {
-              console.error('❌ Failed to read file content (empty result):', uri);
-            }
             throw new Error('Failed to read file content');
           }
           
@@ -611,36 +538,20 @@ export default function ServiceRegistration() {
           
           const base64DataUrl = `data:${mimeType};base64,${base64}`;
           
-          if (__DEV__) {
-            console.log('✅ Successfully converted to base64, length:', base64DataUrl.length);
-          }
-          
           return base64DataUrl;
         } catch (fileError: any) {
-          if (__DEV__) {
-            console.error('❌ Error converting file URI to base64:', fileError?.message || fileError, uri.substring(0, 80));
-          }
           throw new Error(`Failed to convert file to base64: ${fileError?.message || fileError}`);
         }
       }
       
       // If it's already a remote URL (Cloudinary), return as is
       if (uri.startsWith('http://') || uri.startsWith('https://')) {
-        if (__DEV__) {
-          console.log('✅ Already a remote URL, returning as-is');
-        }
         return uri;
       }
       
       // Unknown format
-      if (__DEV__) {
-        console.warn('⚠️ Unknown URI format:', uri.substring(0, 80));
-      }
       throw new Error(`Unknown URI format: ${uri.substring(0, 50)}`);
     } catch (error: any) {
-      if (__DEV__) {
-        console.error('❌ Error converting to base64:', error?.message || error, 'URI:', uri?.substring(0, 80));
-      }
       throw error; // Re-throw to be caught by caller
     }
   };
@@ -649,28 +560,15 @@ export default function ServiceRegistration() {
   const convertMultipleToBase64 = async (uris: string[]): Promise<string[]> => {
     try {
       if (!uris || uris.length === 0) {
-        if (__DEV__) {
-          console.warn('⚠️ No URIs provided to convertMultipleToBase64');
-        }
         return [];
-      }
-      
-      if (__DEV__) {
-        console.log(`🔄 Converting ${uris.length} images to base64...`);
       }
       
       // PRODUCTION FIX: Use Promise.allSettled to handle individual failures gracefully
       const base64Promises = uris.map(async (uri, index) => {
         try {
           const result = await convertToBase64(uri);
-          if (__DEV__) {
-            console.log(`✅ Image ${index + 1}/${uris.length} converted successfully`);
-          }
           return { success: true, result };
         } catch (error: any) {
-          if (__DEV__) {
-            console.error(`❌ Image ${index + 1}/${uris.length} conversion failed:`, error?.message || error);
-          }
           return { success: false, error: error?.message || 'Unknown error', uri };
         }
       });
@@ -693,27 +591,14 @@ export default function ServiceRegistration() {
         }
       });
       
-      if (__DEV__) {
-        console.log(`📊 Conversion results: ${successful.length} successful, ${failed.length} failed`);
-        if (failed.length > 0) {
-          console.warn('⚠️ Failed conversions:', failed);
-        }
-      }
-      
       // PRODUCTION FIX: If all conversions failed, throw an error
       if (successful.length === 0 && uris.length > 0) {
         const errorMessage = `Failed to convert all ${uris.length} image(s) to base64. ${failed.map(f => f.error).join('; ')}`;
-        if (__DEV__) {
-          console.error('❌ All image conversions failed:', errorMessage);
-        }
         throw new Error(errorMessage);
       }
       
       return successful;
     } catch (error: any) {
-      if (__DEV__) {
-        console.error('❌ Error converting multiple images to base64:', error?.message || error);
-      }
       throw error; // Re-throw to be caught by handleSubmit
     }
   };
@@ -776,13 +661,8 @@ export default function ServiceRegistration() {
             );
             return;
           }
-          
-          if (__DEV__) {
-            console.log(`✅ Successfully converted ${workingProofUrls.length} image(s) to base64`);
-          }
         } catch (conversionError: any) {
           setIsLoading(false);
-          console.error('❌ Image conversion error:', conversionError);
           showAlert(
             t('alerts.error'), 
             `Failed to process images: ${conversionError?.message || 'Unknown error'}. Please try again.`, 
@@ -808,12 +688,8 @@ export default function ServiceRegistration() {
               );
               return;
             }
-            if (__DEV__) {
-              console.log('✅ Successfully converted engineering certificate to base64');
-            }
           } catch (certError: any) {
             setIsLoading(false);
-            console.error('❌ Certificate conversion error:', certError);
             showAlert(
               t('alerts.error'), 
               `Failed to process engineering certificate: ${certError?.message || 'Unknown error'}. Please try again.`, 
@@ -854,16 +730,6 @@ export default function ServiceRegistration() {
           })),
       };
       
-      
-      // PRODUCTION FIX: Log payload in development for debugging
-      if (__DEV__) {
-        console.log('📤 Sending registration payload:', {
-          ...payload,
-          workingProofUrls: payload.workingProofUrls?.map((url: string) => url.substring(0, 50) + '...') || [],
-          engineeringCertificateUrl: payload.engineeringCertificateUrl?.substring(0, 50) + '...' || 'none'
-        });
-      }
-      
       const method = isEditMode ? 'PUT' : 'POST';
       const response = await fetch(`${API_BASE_URL}/api/services/${category}/providers`, {
         method,
@@ -881,7 +747,6 @@ export default function ServiceRegistration() {
         // If response is not JSON, get text
         const text = await response.text();
         setIsLoading(false);
-        console.error('❌ Non-JSON response from server:', text);
         showAlert(
           t('alerts.registrationError'), 
           `Server error: ${text || 'Unknown error'}`, 
@@ -897,15 +762,6 @@ export default function ServiceRegistration() {
         // PRODUCTION FIX: Better error handling with detailed messages
         const errorMessage = data.message || data.error || t('alerts.failedToRegisterService');
         const errorDetails = data.errors ? `\n\nDetails: ${JSON.stringify(data.errors)}` : '';
-        
-        if (__DEV__) {
-          console.error('❌ Registration failed:', {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorMessage,
-            data: data
-          });
-        }
         
         if (data.message && data.message.includes('Already registered')) {
           showAlert(
@@ -990,14 +846,6 @@ export default function ServiceRegistration() {
       setIsLoading(false);
       // PRODUCTION FIX: Better error logging and user feedback
       const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
-      
-      if (__DEV__) {
-        console.error('❌ Submit error:', {
-          message: errorMessage,
-          error: error,
-          stack: error?.stack
-        });
-      }
       
       // Check if it's a network error
       if (errorMessage.includes('Network') || errorMessage.includes('fetch') || errorMessage.includes('Failed to fetch')) {
@@ -1340,19 +1188,12 @@ export default function ServiceRegistration() {
                       source={{ uri: formData.engineeringCertificate }}
                       style={styles.certificateImage}
                       resizeMode="cover"
-                      onError={(error) => {
+                      onError={() => {
                         // PRODUCTION FIX: Handle image loading errors gracefully
-                        // Don't log as error - image loading failures are expected (network issues, invalid URLs, etc.)
-                        // Only log in development for debugging
-                        if (__DEV__) {
-                          console.warn('Engineering certificate failed to load:', formData.engineeringCertificate, error?.nativeEvent?.error || error);
-                        }
+                        // Image loading failures are expected (network issues, invalid URLs, etc.)
                       }}
                       onLoad={() => {
-                        // Only log in development
-                        if (__DEV__) {
-                          console.log('Successfully loaded engineering certificate:', formData.engineeringCertificate);
-                        }
+                        // Image loaded successfully
                       }}
                     />
                     {!isViewMode && (
@@ -1388,16 +1229,8 @@ export default function ServiceRegistration() {
                   {formData.photos && formData.photos.length > 0 ? (
                     formData.photos
                       .filter(photo => {
-                        // PRODUCTION FIX: Filter out invalid and mock URLs
+                        // PRODUCTION: Filter out invalid URLs
                         if (!photo || typeof photo !== 'string' || photo.trim() === '') {
-                          return false;
-                        }
-                        const trimmed = photo.trim();
-                        // PRODUCTION FIX: Filter out mock URLs that don't exist
-                        if (trimmed.includes('mock-cloud') || trimmed.includes('/mock-image-')) {
-                          if (__DEV__) {
-                            console.warn('⚠️ Skipping mock URL in render:', trimmed.substring(0, 80));
-                          }
                           return false;
                         }
                         return true;
@@ -1408,43 +1241,27 @@ export default function ServiceRegistration() {
                           return null;
                         }
                         
-                        // PRODUCTION FIX: Debug log in development
-                        if (__DEV__) {
-                          console.log(`📸 Rendering image ${index}:`, photo.substring(0, 80) + '...');
-                        }
-                        
                         return (
                           <View key={`photo-${index}-${photo.substring(0, 20)}`} style={styles.photoWrapper}>
                             <Image 
                               source={{ uri: photo }} 
                               style={styles.photo} 
                               resizeMode="cover"
-                              onError={(error) => {
+                              onError={() => {
                                 // PRODUCTION FIX: Handle image loading errors gracefully
-                                // Don't log as error - image loading failures are expected (network issues, invalid URLs, etc.)
-                                // Only log in development for debugging
-                                if (__DEV__) {
-                                  console.warn(`❌ Image ${index} failed to load:`, photo.substring(0, 80), error?.nativeEvent?.error || error);
-                                }
+                                // Image loading failures are expected (network issues, invalid URLs, etc.)
                                 // Optionally remove the broken image from the list
                                 // Uncomment the line below if you want to auto-remove broken images
                                 // handleRemovePhoto(index);
                               }}
                               onLoadStart={() => {
-                                if (__DEV__) {
-                                  console.log(`🔄 Image ${index} loading started:`, photo.substring(0, 80) + '...');
-                                }
+                                // Image loading started
                               }}
                               onLoad={() => {
-                                // Only log in development
-                                if (__DEV__) {
-                                  console.log(`✅ Successfully loaded image ${index}:`, photo.substring(0, 80) + '...');
-                                }
+                                // Image loaded successfully
                               }}
                               onLoadEnd={() => {
-                                if (__DEV__) {
-                                  console.log(`🏁 Image ${index} load ended:`, photo.substring(0, 80) + '...');
-                                }
+                                // Image load ended
                               }}
                             />
                             {!isViewMode && (

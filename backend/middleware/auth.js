@@ -3,38 +3,34 @@ const { getRow } = require('../database/connection');
 const config = require('../utils/config');
 const { isTokenBlacklisted } = require('../utils/tokenBlacklist');
 const { updateSessionActivity, getSession } = require('../utils/sessionManager');
+const logger = require('../utils/logger');
 
 const auth = async (req, res, next) => {
   try {
-    // Only log in development mode to avoid security issues
-    if (config.isDevelopment() && config.get('security.enableDebugLogging')) {
-      console.log('=== AUTH MIDDLEWARE ===');
-      console.log('Request URL:', req.url);
-      console.log('Request method:', req.method);
-    }
-    
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
-      // Error logged - no token provided (error response sent to client)
+      logger.warn('Authentication failed: No token provided', {
+        ip: req.ip,
+        url: req.url,
+        method: req.method
+      });
       return res.status(401).json({
         status: 'error',
         message: 'Access denied. No token provided.'
       });
     }
-
-    if (config.isDevelopment() && config.get('security.enableDebugLogging')) {
-      console.log('Token found, length:', token.length);
-    }
     
     let decoded;
     try {
       decoded = jwt.verify(token, config.get('jwt.secret'));
-      if (config.isDevelopment() && config.get('security.enableDebugLogging')) {
-        console.log('Token decoded successfully for user:', decoded.userId);
-      }
     } catch (err) {
-      // Error logged - invalid token (error response sent to client)
+      logger.warn('Authentication failed: Invalid or expired token', {
+        ip: req.ip,
+        url: req.url,
+        method: req.method,
+        error: err.name
+      });
       return res.status(401).json({
         status: 'error',
         message: 'Invalid token. Token has expired or is malformed.'
@@ -43,6 +39,11 @@ const auth = async (req, res, next) => {
     
     // Check if token has JTI (JWT ID) - required for session tracking
     if (!decoded.jti) {
+      logger.warn('Authentication failed: Missing token identifier', {
+        ip: req.ip,
+        url: req.url,
+        method: req.method
+      });
       return res.status(401).json({
         status: 'error',
         message: 'Invalid token. Missing token identifier.'
@@ -51,6 +52,12 @@ const auth = async (req, res, next) => {
     
     // Check if token is an access token (not a refresh token)
     if (decoded.type && decoded.type !== 'access') {
+      logger.warn('Authentication failed: Invalid token type', {
+        ip: req.ip,
+        url: req.url,
+        method: req.method,
+        tokenType: decoded.type
+      });
       return res.status(401).json({
         status: 'error',
         message: 'Invalid token type. Access token required.'
@@ -60,6 +67,12 @@ const auth = async (req, res, next) => {
     // Check if token is blacklisted
     const isBlacklisted = await isTokenBlacklisted(decoded.jti);
     if (isBlacklisted) {
+      logger.warn('Authentication failed: Token blacklisted', {
+        ip: req.ip,
+        url: req.url,
+        method: req.method,
+        jti: decoded.jti
+      });
       return res.status(401).json({
         status: 'error',
         message: 'Token has been revoked. Please login again.'
@@ -69,36 +82,39 @@ const auth = async (req, res, next) => {
     // Verify session exists and is active
     const session = await getSession(decoded.jti);
     if (!session || !session.is_active) {
+      logger.warn('Authentication failed: Session expired or invalid', {
+        ip: req.ip,
+        url: req.url,
+        method: req.method,
+        jti: decoded.jti
+      });
       return res.status(401).json({
         status: 'error',
         message: 'Session expired or invalid. Please login again.'
       });
     }
     
-    if (config.isDevelopment() && config.get('security.enableDebugLogging')) {
-      console.log('Looking up user with ID:', decoded.userId);
-    }
-    
     const user = await getRow('SELECT * FROM users WHERE id = $1', [decoded.userId]);
     
     if (!user) {
-      // Error logged - user not found (error response sent to client)
+      logger.warn('Authentication failed: User not found', {
+        ip: req.ip,
+        url: req.url,
+        method: req.method,
+        userId: decoded.userId
+      });
       return res.status(401).json({
         status: 'error',
         message: 'Invalid token. User not found.'
       });
     }
-
-    if (config.isDevelopment() && config.get('security.enableDebugLogging')) {
-      console.log('User authenticated successfully, role:', user.role);
-    }
     
     // Update session activity (fire and forget - don't wait for it)
-    updateSessionActivity(decoded.jti).catch(err => {
-      // Log error but don't fail the request
-      if (config.isDevelopment()) {
-        console.error('Failed to update session activity:', err);
-      }
+    updateSessionActivity(decoded.jti).catch((err) => {
+      logger.error('Failed to update session activity', {
+        jti: decoded.jti,
+        error: err.message
+      });
     });
     
     req.user = user;
@@ -106,10 +122,13 @@ const auth = async (req, res, next) => {
     req.session = session; // Store session data for reference
     next();
   } catch (error) {
-    // Error logged - authentication failed (error response sent to client)
-    if (config.isDevelopment() && config.get('security.enableDebugLogging')) {
-      console.error('Error stack:', error.stack);
-    }
+    logger.error('Authentication error', {
+      ip: req.ip,
+      url: req.url,
+      method: req.method,
+      error: error.message,
+      stack: error.stack
+    });
     res.status(401).json({
       status: 'error',
       message: 'Authentication failed. Please login again.'
@@ -120,15 +139,12 @@ const auth = async (req, res, next) => {
 const requireRole = (roles) => {
   return (req, res, next) => {
     try {
-      // Only log in development mode to avoid security issues
-      if (config.isDevelopment() && config.get('security.enableDebugLogging')) {
-        console.log('=== REQUIRE ROLE MIDDLEWARE ===');
-        console.log('Required roles:', roles);
-        console.log('User:', req.user ? { id: req.user.id, role: req.user.role } : 'No user');
-      }
-      
       if (!req.user) {
-        // Error - user missing in requireRole
+        logger.warn('Authorization failed: No user in request', {
+          ip: req.ip,
+          url: req.url,
+          method: req.method
+        });
         return res.status(401).json({
           status: 'error',
           message: 'Authentication required.'
@@ -136,19 +152,29 @@ const requireRole = (roles) => {
       }
 
       if (!roles.includes(req.user.role)) {
-        // Error - user role mismatch (access denied)
+        logger.warn('Authorization failed: Insufficient permissions', {
+          ip: req.ip,
+          url: req.url,
+          method: req.method,
+          userId: req.user.id,
+          userRole: req.user.role,
+          requiredRoles: roles
+        });
         return res.status(403).json({
           status: 'error',
           message: 'Access denied. Insufficient permissions.'
         });
       }
 
-      if (config.isDevelopment() && config.get('security.enableDebugLogging')) {
-        console.log('Role check passed, proceeding to route');
-      }
       next();
     } catch (error) {
-      // Error in requireRole middleware
+      logger.error('Authorization error', {
+        ip: req.ip,
+        url: req.url,
+        method: req.method,
+        error: error.message,
+        stack: error.stack
+      });
       return res.status(500).json({
         status: 'error',
         message: 'Internal server error.'

@@ -39,6 +39,7 @@ const addServiceChargeToBookings = require('./025-add-service-charge-to-bookings
 const fixBookingsCascadeDelete = require('./026-fix-bookings-cascade-delete');
 const addSubServicesRemoveServiceCharge = require('./027-add-sub-services-remove-service-charge');
 const addComprehensiveIndexes = require('./028-comprehensive-database-indexes');
+const addMissingProductionIndexes = require('./029-add-missing-production-indexes');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -236,6 +237,13 @@ const migrations = [
     name: 'Comprehensive Database Indexes',
     description: 'Adds critical indexes on service_id, state, city, and all frequently queried columns for production optimization. Includes composite indexes for common query patterns.',
     function: addComprehensiveIndexes,
+    required: true // Required for optimal database performance
+  },
+  {
+    id: '029',
+    name: 'Add Missing Production Indexes',
+    description: 'Adds missing indexes identified during production code analysis: bookings (provider_id, updated_at), payment tables (user_id, order_id, status), labour payment tables, reports tables, and users (labour_access_status).',
+    function: addMissingProductionIndexes,
     required: true // Required for optimal database performance
   }
 ];

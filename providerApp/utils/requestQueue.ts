@@ -112,19 +112,17 @@ class RequestQueueManager {
         
         // If network just came back online, check speed and process queue
         if (wasOffline && this.isOnline) {
-          console.log('🌐 Network restored, checking speed and processing queued requests...');
           await this.checkNetworkSpeed();
           // Trigger connection recovery to validate/refresh tokens
           try {
             const { connectionRecovery } = await import('./connectionRecovery');
             await connectionRecovery.triggerRecovery();
           } catch (error) {
-            console.warn('Failed to trigger connection recovery:', error);
+            // Connection recovery failed, continue processing queue
           }
           // Process queued requests after recovery
           this.processQueue();
         } else if (!this.isOnline) {
-          console.log('📴 Network offline, requests will be queued');
           this.networkSpeed = NetworkSpeed.UNKNOWN;
         } else if (this.isOnline) {
           // Network status changed, recheck speed
@@ -133,7 +131,6 @@ class RequestQueueManager {
       });
     } catch (error) {
       // NetInfo not available, use periodic checks
-      console.warn('NetInfo not available, using periodic network checks');
       setInterval(() => this.checkNetworkStatus(), 5000);
     }
   }
@@ -211,7 +208,6 @@ class RequestQueueManager {
         this.networkSpeed = NetworkSpeed.SLOW;
       }
 
-      console.log(`📊 Network speed: ${speedKbps.toFixed(2)} Kbps (${this.networkSpeed})`);
       return this.networkSpeed;
     } catch (error) {
       // If speed check fails, assume slow connection
@@ -398,8 +394,7 @@ class RequestQueueManager {
 
     if (isLarge && (this.networkSpeed === NetworkSpeed.SLOW || this.networkSpeed === NetworkSpeed.MODERATE)) {
       // For slow connections, we could compress here
-      // For now, we'll just log a warning
-      console.warn(`⚠️ Large request body (${(bodySize / 1024).toFixed(2)}KB) on ${this.networkSpeed} connection`);
+      // Large request body detected on slow connection
     }
 
     return body;
@@ -528,7 +523,7 @@ class RequestQueueManager {
         setTimeout(() => this.processQueue(), adaptiveDelay);
       }
     } catch (error) {
-      console.error('Error processing request queue:', error);
+      // Error processing queue, reset processing flag
     } finally {
       this.isProcessing = false;
     }
@@ -592,7 +587,6 @@ class RequestQueueManager {
 
       if (request.retryCount >= request.maxRetries) {
         // Max retries reached, remove from queue
-        console.warn(`Request ${request.id} exceeded max retries, removing from queue`);
         return true; // Mark as "processed" so it gets removed
       }
 
@@ -604,7 +598,6 @@ class RequestQueueManager {
       request.lastAttemptAt = Date.now();
 
       if (request.retryCount >= request.maxRetries) {
-        console.warn(`Request ${request.id} exceeded max retries after error:`, error);
         return true; // Mark as "processed" so it gets removed
       }
 
@@ -641,11 +634,8 @@ class RequestQueueManager {
         
         // Sort by priority
         this.queue.sort((a, b) => a.priority - b.priority);
-        
-        console.log(`📦 Loaded ${this.queue.length} queued requests from storage`);
       }
     } catch (error) {
-      console.error('Error loading request queue:', error);
       this.queue = [];
     }
   }
@@ -677,7 +667,7 @@ class RequestQueueManager {
         expiresAt: Date.now() + (24 * 60 * 60 * 1000), // Expire after 24 hours
       });
     } catch (error) {
-      console.error('Error saving request queue:', error);
+      // Error saving queue, continue silently
     }
   }
 

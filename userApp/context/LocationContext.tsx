@@ -36,7 +36,6 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   const [error, setError] = useState<string | null>(null);
 
   const fetchLocation = useCallback(async (forceRefresh: boolean = false) => {
-    console.log('🔵 LocationContext: fetchLocation called, forceRefresh:', forceRefresh);
     setIsLoading(true);
     setError(null);
 
@@ -45,16 +44,13 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     const MIN_LOADING_DURATION = 800; // Minimum 800ms to show loading indicator
 
     try {
-      console.log('🔵 LocationContext: Calling getCurrentLocation...');
       const locationData = await getCurrentLocation(forceRefresh);
-      console.log('✅ LocationContext: Location data received:', locationData);
       
       // Calculate elapsed time and wait if needed to show loading indicator
       const elapsedTime = Date.now() - startTime;
       const remainingTime = MIN_LOADING_DURATION - elapsedTime;
       
       if (remainingTime > 0) {
-        console.log(`🔵 LocationContext: Waiting ${remainingTime}ms to show loading indicator...`);
         await new Promise(resolve => setTimeout(resolve, remainingTime));
       }
       
@@ -62,18 +58,15 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       setError(null);
     } catch (err) {
       // Handle different error types with user-friendly messages
-      // All errors are handled gracefully - using console.warn to avoid triggering global error handler
+      // All errors are handled gracefully
       let errorMessage: string;
       
       if (err instanceof LocationPermissionError) {
         errorMessage = 'Location permission is required. You can still use the app without location services.';
-        console.warn('⚠️ LocationContext: Permission error (handled gracefully):', err.message);
       } else if (err instanceof LocationNetworkError) {
         errorMessage = 'Network error while fetching location. Please check your internet connection.';
-        console.warn('⚠️ LocationContext: Network error (handled gracefully):', err.message);
       } else if (err instanceof LocationServiceError) {
         errorMessage = 'Unable to fetch location. You can still use the app without location services.';
-        console.warn('⚠️ LocationContext: Service error (handled gracefully):', err.message);
       } else {
         // Handle expo-location specific errors
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -82,7 +75,6 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
         } else {
           errorMessage = 'Failed to fetch location. You can still use the app.';
         }
-        console.warn('⚠️ LocationContext: Unknown error (handled gracefully):', errorMsg);
       }
       
       // Calculate elapsed time and wait if needed
@@ -101,7 +93,6 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       // This is production-level error handling - graceful degradation
     } finally {
       setIsLoading(false);
-      console.log('🔵 LocationContext: fetchLocation completed, isLoading set to false');
     }
   }, []);
 

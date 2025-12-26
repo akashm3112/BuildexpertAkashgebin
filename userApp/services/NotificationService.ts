@@ -56,7 +56,6 @@ class NotificationService {
 
       return false;
     } catch (error) {
-      console.error('❌ Error initializing notification service:', error);
       return false;
     }
   }
@@ -128,7 +127,6 @@ class NotificationService {
 
       return true;
     } catch (error) {
-      console.error('❌ Error requesting permissions:', error);
       return false;
     }
   }
@@ -154,7 +152,6 @@ class NotificationService {
 
       return token;
     } catch (error) {
-      console.error('❌ Error getting push token:', error);
       return null;
     }
   }
@@ -193,12 +190,9 @@ class NotificationService {
       if (response.ok) {
         return true;
       } else {
-        const data = await response.json();
-        console.error('❌ Failed to register token with backend:', data.message);
         return false;
       }
     } catch (error) {
-      console.error('❌ Error registering token with backend:', error);
       return false;
     }
   }
@@ -245,7 +239,7 @@ class NotificationService {
         }
       }
     } catch (error) {
-      console.error('❌ Error handling notification tap:', error);
+      // Error handling notification tap
     }
   }
 
@@ -274,7 +268,6 @@ class NotificationService {
 
       return token;
     } catch (error) {
-      console.error('❌ Error getting push token:', error);
       return null;
     }
   }
@@ -300,7 +293,6 @@ class NotificationService {
 
       return response.ok;
     } catch (error) {
-      console.error('❌ Error updating notification settings:', error);
       return false;
     }
   }
@@ -330,7 +322,6 @@ class NotificationService {
 
       return response.ok;
     } catch (error) {
-      console.error('❌ Error sending test notification:', error);
       return false;
     }
   }
@@ -362,7 +353,7 @@ class NotificationService {
       this.isInitialized = false;
 
     } catch (error) {
-      console.error('❌ Error during notification cleanup:', error);
+      // Error during notification cleanup
     }
   }
 }

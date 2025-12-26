@@ -79,11 +79,6 @@ class RequestQueueManager {
       // Check initial network speed
       await this.checkNetworkSpeed().catch((error) => {
         // Handle errors from checkNetworkSpeed silently
-        const isSessionExpired = error?.message === 'Session expired' || 
-                                 error?.status === 401 && error?.message?.includes('Session expired');
-        if (!isSessionExpired) {
-          console.warn('Network speed check error during initialization (handled):', error?.message || error);
-        }
       });
 
       // Start processing interval
@@ -96,11 +91,6 @@ class RequestQueueManager {
       this.setupNetworkListener();
     } catch (error) {
       // Handle initialization errors gracefully
-      const isSessionExpired = (error as any)?.message === 'Session expired' || 
-                               (error as any)?.status === 401 && (error as any)?.message?.includes('Session expired');
-      if (!isSessionExpired) {
-        console.error('RequestQueue initialization error (handled):', error);
-      }
       // Continue with partial initialization - network listener and intervals can still work
       this.startProcessingInterval();
       this.startSpeedCheckInterval();
@@ -123,7 +113,6 @@ class RequestQueueManager {
         
         // If network just came back online, check speed and process queue
         if (wasOffline && this.isOnline) {
-          console.log('🌐 Network restored, checking speed and processing queued requests...');
           this.checkNetworkSpeed().then(async () => {
             // Trigger connection recovery to validate/refresh tokens
             try {
@@ -131,42 +120,25 @@ class RequestQueueManager {
               await connectionRecovery.triggerRecovery();
             } catch (error) {
               // Errors are already handled in triggerRecovery, but catch here to prevent unhandled rejections
-              const isSessionExpired = (error as any)?.message === 'Session expired' || 
-                                       (error as any)?.status === 401 && (error as any)?.message?.includes('Session expired');
-              if (!isSessionExpired) {
-                console.warn('Failed to trigger connection recovery:', error);
-              }
             }
             // Process queued requests after recovery
             this.processQueue();
           }).catch((error) => {
-            // Handle errors from checkNetworkSpeed
-            const isSessionExpired = error?.message === 'Session expired' || 
-                                     error?.status === 401 && error?.message?.includes('Session expired');
-            if (!isSessionExpired) {
-              console.warn('Network speed check error (handled):', error?.message || error);
-            }
+            // Handle errors from checkNetworkSpeed silently
             // Still try to process queue even if speed check fails
             this.processQueue();
           });
         } else if (!this.isOnline) {
-          console.log('📴 Network offline, requests will be queued');
           this.networkSpeed = NetworkSpeed.UNKNOWN;
         } else if (this.isOnline) {
           // Network status changed, recheck speed
           this.checkNetworkSpeed().catch((error) => {
             // Handle errors from checkNetworkSpeed silently
-            const isSessionExpired = error?.message === 'Session expired' || 
-                                     error?.status === 401 && error?.message?.includes('Session expired');
-            if (!isSessionExpired) {
-              console.warn('Network speed check error (handled):', error?.message || error);
-            }
           });
         }
       });
     } catch (error) {
       // NetInfo not available, use periodic checks
-      console.warn('NetInfo not available, using periodic network checks');
       setInterval(() => this.checkNetworkStatus(), 5000);
     }
   }
@@ -244,7 +216,6 @@ class RequestQueueManager {
         this.networkSpeed = NetworkSpeed.SLOW;
       }
 
-      console.log(`📊 Network speed: ${speedKbps.toFixed(2)} Kbps (${this.networkSpeed})`);
       return this.networkSpeed;
     } catch (error) {
       // If speed check fails, assume slow connection
@@ -474,8 +445,7 @@ class RequestQueueManager {
 
     if (isLarge && (this.networkSpeed === NetworkSpeed.SLOW || this.networkSpeed === NetworkSpeed.MODERATE)) {
       // For slow connections, we could compress here
-      // For now, we'll just log a warning
-      console.warn(`⚠️ Large request body (${(bodySize / 1024).toFixed(2)}KB) on ${this.networkSpeed} connection`);
+      // Body is large but will be sent as-is
     }
 
     return body;
@@ -561,7 +531,7 @@ class RequestQueueManager {
         setTimeout(() => this.processQueue(), adaptiveDelay);
       }
     } catch (error) {
-      console.error('Error processing request queue:', error);
+      // Error processing request queue
     } finally {
       this.isProcessing = false;
     }
@@ -625,7 +595,6 @@ class RequestQueueManager {
 
       if (request.retryCount >= request.maxRetries) {
         // Max retries reached, remove from queue
-        console.warn(`Request ${request.id} exceeded max retries, removing from queue`);
         return true; // Mark as "processed" so it gets removed
       }
 
@@ -637,7 +606,6 @@ class RequestQueueManager {
       request.lastAttemptAt = Date.now();
 
       if (request.retryCount >= request.maxRetries) {
-        console.warn(`Request ${request.id} exceeded max retries after error:`, error);
         return true; // Mark as "processed" so it gets removed
       }
 
@@ -674,11 +642,8 @@ class RequestQueueManager {
         
         // Sort by priority
         this.queue.sort((a, b) => a.priority - b.priority);
-        
-        console.log(`📦 Loaded ${this.queue.length} queued requests from storage`);
       }
     } catch (error) {
-      console.error('Error loading request queue:', error);
       this.queue = [];
     }
   }
@@ -710,7 +675,7 @@ class RequestQueueManager {
         expiresAt: Date.now() + (24 * 60 * 60 * 1000), // Expire after 24 hours
       });
     } catch (error) {
-      console.error('Error saving request queue:', error);
+      // Error saving request queue
     }
   }
 

@@ -394,15 +394,11 @@ router.delete('/services/:id', asyncHandler(async (req, res) => {
         count: existingService.working_proof_urls.length
       });
       
-      // Extract public IDs from Cloudinary URLs, filtering out mock URLs
+      // Extract public IDs from Cloudinary URLs
       const publicIds = existingService.working_proof_urls
         .filter(url => {
-          // Filter out mock URLs (mock-cloud domain) and invalid URLs
+          // Filter out invalid URLs
           if (!url || typeof url !== 'string') return false;
-          if (url.includes('mock-cloud') || url.includes('/mock-image-')) {
-            logger.info('Skipping mock URL (no deletion needed)', { url: url.substring(0, 100) });
-            return false;
-          }
           return true;
         })
         .map(url => {
@@ -429,11 +425,10 @@ router.delete('/services/:id', asyncHandler(async (req, res) => {
         const deleteResult = await deleteMultipleImages(publicIds);
         // Treat deletion as successful even if some images were already deleted (not found)
         // Only log errors for actual failures, not for "already deleted" cases
-        if (deleteResult.deleted > 0 || deleteResult.alreadyDeleted > 0 || deleteResult.mock > 0) {
+        if (deleteResult.deleted > 0 || deleteResult.alreadyDeleted > 0) {
           logger.info('Successfully processed image deletions', {
             deleted: deleteResult.deleted,
             alreadyDeleted: deleteResult.alreadyDeleted || 0,
-            mock: deleteResult.mock,
             failed: deleteResult.failed
           });
         }
@@ -448,7 +443,7 @@ router.delete('/services/:id', asyncHandler(async (req, res) => {
           }
         }
       } else {
-        logger.info('No valid Cloudinary URLs to delete (all were mock URLs or invalid)');
+        logger.info('No valid Cloudinary URLs to delete');
       }
     }
 

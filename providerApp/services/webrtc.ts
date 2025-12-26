@@ -17,7 +17,7 @@ if (Platform.OS !== 'web') {
     RTCIceCandidate = webrtc.RTCIceCandidate;
     mediaDevices = webrtc.mediaDevices;
   } catch (error) {
-    console.warn('WebRTC not available:', error);
+    // WebRTC not available - silently fail
   }
 }
 
@@ -80,8 +80,6 @@ class WebRTCService {
   constructor() {
     this.isWebRTCAvailable = Platform.OS !== 'web' && !!RTCPeerConnection;
     if (this.isWebRTCAvailable) {
-    } else {
-      console.warn('⚠️ WebRTC not available on this platform (web browser). Calling features disabled.');
     }
   }
 
@@ -182,21 +180,19 @@ class WebRTCService {
         try {
           await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (error) {
-          console.error('❌ Error adding ICE candidate:', error);
+          // Silently fail - ICE candidate errors are handled by recovery mechanisms
         }
       }
     });
 
     // Call ended
     this.socket.on('call:ended', ({ duration, endedBy }) => {
-      console.log('📞 Call ended by:', endedBy, 'Duration:', duration);
       this.events.onCallEnded?.(duration || 0, endedBy);
       this.cleanup();
     });
 
     // Call error from server
     this.socket.on('call:error', ({ bookingId, message, errorCode }) => {
-      console.error('📞 Call error from server:', { bookingId, message, errorCode });
       const error = new Error(message || 'Call error occurred');
       (error as any).code = errorCode;
       this.handleError(error, 'server_error');
@@ -232,7 +228,6 @@ class WebRTCService {
           video: false,
         });
       } catch (mediaError: any) {
-        console.error('❌ Failed to get audio stream:', mediaError);
         if (mediaError.name === 'NotAllowedError') {
           throw new Error('Microphone access denied. Please allow microphone access to make calls.');
         } else if (mediaError.name === 'NotFoundError') {
@@ -267,7 +262,6 @@ class WebRTCService {
         if (!this.peerConnection) return;
         
         const state = this.peerConnection.connectionState;
-        console.log('📞 Connection state changed:', state);
         
         switch (state) {
           case 'connected':
@@ -301,7 +295,6 @@ class WebRTCService {
         if (!this.peerConnection) return;
         
         const iceState = this.peerConnection.iceConnectionState;
-        console.log('📞 ICE connection state changed:', iceState);
         
         switch (iceState) {
           case 'failed':
@@ -310,7 +303,6 @@ class WebRTCService {
             
           case 'disconnected':
             // ICE disconnected but may recover
-            console.warn('📞 ICE disconnected, monitoring for recovery...');
             break;
             
           case 'connected':
@@ -323,13 +315,10 @@ class WebRTCService {
 
       // Handle ICE gathering state
       this.peerConnection!.onicegatheringstatechange = () => {
-        if (this.peerConnection) {
-          console.log('📞 ICE gathering state:', this.peerConnection.iceGatheringState);
-        }
+        // ICE gathering state changed
       };
 
     } catch (error: any) {
-      console.error('❌ Error starting call:', error);
       this.handleError(error, 'start_call', { serverCallInitiated });
     }
   }
@@ -371,7 +360,6 @@ class WebRTCService {
       });
 
     } catch (error) {
-      console.error('❌ Error accepting call:', error);
       this.handleError(error, 'accept_call');
     }
   }
@@ -406,7 +394,6 @@ class WebRTCService {
         to: this.currentCall?.receiverId,
       });
     } catch (error) {
-      console.error('❌ Error creating offer:', error);
       this.handleError(error, 'create_offer');
     }
   }
@@ -427,7 +414,6 @@ class WebRTCService {
         to: from,
       });
     } catch (error) {
-      console.error('❌ Error handling offer:', error);
       this.handleError(error, 'handle_offer');
     }
   }
@@ -439,7 +425,6 @@ class WebRTCService {
 
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
     } catch (error) {
-      console.error('❌ Error handling answer:', error);
       this.handleError(error, 'handle_answer');
     }
   }
@@ -474,7 +459,6 @@ class WebRTCService {
       
       // Check connection state
       if (this.peerConnection.connectionState === 'failed') {
-        console.warn('📞 Call quality: Connection failed');
         this.handleConnectionFailure();
         if (this.qualityMonitorInterval) {
           clearInterval(this.qualityMonitorInterval);
@@ -485,7 +469,6 @@ class WebRTCService {
       
       // Check ICE connection state
       if (this.peerConnection.iceConnectionState === 'failed') {
-        console.warn('📞 Call quality: ICE connection failed');
         this.handleICEFailure();
         if (this.qualityMonitorInterval) {
           clearInterval(this.qualityMonitorInterval);
@@ -499,16 +482,8 @@ class WebRTCService {
         const stats = await this.peerConnection.getStats();
         const qualityMetrics = this.analyzeConnectionQuality(stats);
         
-        // Log quality metrics
-        console.log('📞 Call quality metrics:', {
-          connectionState: this.peerConnection.connectionState,
-          iceConnectionState: this.peerConnection.iceConnectionState,
-          ...qualityMetrics
-        });
-        
         // If quality is poor, attempt recovery
         if (qualityMetrics.isPoor) {
-          console.warn('📞 Call quality is poor, attempting recovery...');
           if (this.peerConnection.iceConnectionState === 'connected' || 
               this.peerConnection.iceConnectionState === 'completed') {
             // Try ICE restart to improve connection
@@ -516,7 +491,7 @@ class WebRTCService {
           }
         }
       } catch (error) {
-        console.error('❌ Error getting connection stats:', error);
+        // Silently fail - stats errors are not critical
       }
       
     }, 10000); // Check every 10 seconds
@@ -555,12 +530,6 @@ class WebRTCService {
     const recoveryAction = webrtcErrorHandler.getRecoveryAction(errorType, errorContext);
     const userMessage = webrtcErrorHandler.getUserFriendlyMessage(errorType, error);
 
-    console.error(`📞 WebRTC Error [${context}]:`, {
-      errorType,
-      recoveryAction: recoveryAction.action,
-      error: error.message || error
-    });
-
     // Execute recovery action
     this.executeRecoveryAction(recoveryAction, context, errorContext, options);
   }
@@ -578,7 +547,6 @@ class WebRTCService {
       case 'RETRY':
         if (recoveryAction.backoffMs && recoveryAction.retryCount !== undefined) {
           webrtcErrorHandler.incrementRetryCount(context);
-          console.log(`📞 Retrying ${context} in ${recoveryAction.backoffMs}ms (attempt ${recoveryAction.retryCount}/${recoveryAction.maxRetries})`);
           
           setTimeout(() => {
             if (context === 'start_call' && this.currentCall) {
@@ -603,7 +571,6 @@ class WebRTCService {
       case 'ICE_RESTART':
         if (recoveryAction.backoffMs && recoveryAction.retryCount !== undefined) {
           webrtcErrorHandler.incrementRetryCount('ice');
-          console.log(`📞 Restarting ICE in ${recoveryAction.backoffMs}ms (attempt ${recoveryAction.retryCount}/${recoveryAction.maxRetries})`);
           
           this.iceRestartTimeout = setTimeout(() => {
             this.restartICE();
@@ -614,7 +581,6 @@ class WebRTCService {
       case 'RECONNECT':
         if (recoveryAction.backoffMs && recoveryAction.retryCount !== undefined) {
           webrtcErrorHandler.incrementRetryCount('connection');
-          console.log(`📞 Reconnecting in ${recoveryAction.backoffMs}ms (attempt ${recoveryAction.retryCount}/${recoveryAction.maxRetries})`);
           
           this.reconnectTimeout = setTimeout(() => {
             this.reconnectCall();
@@ -623,7 +589,6 @@ class WebRTCService {
         break;
 
       case 'FALLBACK_TURN':
-        console.log('📞 Switching to TURN server configuration');
         this.useTurnServer = true;
         if (this.currentCall) {
           // Recreate peer connection with TURN
@@ -673,20 +638,16 @@ class WebRTCService {
    * Handle disconnection with recovery
    */
   private handleDisconnection() {
-    console.warn('📞 Connection lost, attempting to reconnect...');
-    
     if (this.connectionRetryCount < this.MAX_CONNECTION_RETRIES) {
       this.connectionRetryCount++;
       const backoff = Math.min(1000 * Math.pow(2, this.connectionRetryCount - 1), 5000);
       
       this.reconnectTimeout = setTimeout(() => {
         if (this.peerConnection?.connectionState === 'disconnected' && this.currentCall) {
-          console.log(`📞 Reconnection attempt ${this.connectionRetryCount}/${this.MAX_CONNECTION_RETRIES}`);
           this.createOffer();
         }
       }, backoff);
     } else {
-      console.error('📞 Max reconnection attempts reached');
       this.events.onError?.('Connection lost. Please try calling again.');
       this.cleanup();
     }
@@ -696,8 +657,6 @@ class WebRTCService {
    * Handle connection failure with recovery
    */
   private handleConnectionFailure() {
-    console.error('📞 Connection failed');
-    
     const error = new Error('Connection failed');
     (error as any).code = 'CONNECTION_FAILED';
     this.handleError(error, 'connection_failure');
@@ -707,8 +666,6 @@ class WebRTCService {
    * Handle ICE failure with recovery
    */
   private handleICEFailure() {
-    console.error('📞 ICE connection failed');
-    
     const error = new Error('ICE connection failed');
     (error as any).code = 'ICE_FAILED';
     this.handleError(error, 'ice_failure');
@@ -721,8 +678,6 @@ class WebRTCService {
     if (!this.peerConnection || !this.currentCall) return;
 
     try {
-      console.log('📞 Restarting ICE connection...');
-      
       // Create new offer with iceRestart flag
       const offer = await this.peerConnection.createOffer({ iceRestart: true });
       await this.peerConnection.setLocalDescription(offer);
@@ -733,7 +688,6 @@ class WebRTCService {
         to: this.currentCall.receiverId,
       });
     } catch (error) {
-      console.error('❌ Error restarting ICE:', error);
       this.handleError(error, 'ice_restart');
     }
   }
@@ -745,8 +699,6 @@ class WebRTCService {
     if (!this.currentCall) return;
 
     try {
-      console.log('📞 Reconnecting call...');
-      
       // Cleanup existing connection
       if (this.peerConnection) {
         this.peerConnection.close();
@@ -770,7 +722,6 @@ class WebRTCService {
       // Create new offer
       await this.createOffer();
     } catch (error) {
-      console.error('❌ Error reconnecting call:', error);
       this.handleError(error, 'reconnect');
     }
   }
@@ -797,7 +748,6 @@ class WebRTCService {
       if (!this.peerConnection) return;
       
       const state = this.peerConnection.connectionState;
-      console.log('📞 Connection state changed:', state);
       
       switch (state) {
         case 'connected':
@@ -827,7 +777,6 @@ class WebRTCService {
       if (!this.peerConnection) return;
       
       const iceState = this.peerConnection.iceConnectionState;
-      console.log('📞 ICE connection state changed:', iceState);
       
       switch (iceState) {
         case 'failed':
@@ -846,14 +795,11 @@ class WebRTCService {
    * Handle socket disconnect
    */
   private handleSocketDisconnect() {
-    console.warn('📞 Socket disconnected');
-    
     // If call is active, attempt to reconnect socket
     if (this.currentCall && this.userId) {
       // Socket.io will auto-reconnect, but we can handle it explicitly
       setTimeout(() => {
         if (!this.socket?.connected && this.userId) {
-          console.log('📞 Attempting to reconnect socket...');
           // Socket will auto-reconnect, just wait
         }
       }, 2000);

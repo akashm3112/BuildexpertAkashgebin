@@ -128,7 +128,6 @@ export default function ProviderReportsScreen() {
       const { tokenManager } = await import('@/utils/tokenManager');
       const token = await tokenManager.getValidToken();
       if (!token) {
-        console.error('No authentication token found');
         setIsLoading(false);
         setRefreshing(false);
         return;
@@ -145,12 +144,10 @@ export default function ProviderReportsScreen() {
         if (data.status === 'success') {
           setProviders(data.data.providers || []);
         } else {
-          console.error('API returned error status:', data.message || 'Unknown error');
           setProviders([]);
         }
       } else if (response.status === 429) {
         // Rate limit exceeded - wait and retry once
-        console.warn('Rate limit exceeded, retrying after delay...');
         await new Promise(resolve => setTimeout(resolve, 2000));
         const retryResponse = await fetch(`${API_BASE_URL}/api/admin/all-providers`, {
           headers: {
@@ -161,18 +158,17 @@ export default function ProviderReportsScreen() {
           const retryData = await retryResponse.json();
           if (retryData.status === 'success') {
             setProviders(retryData.data.providers || []);
+          } else {
+            setProviders([]);
           }
         } else {
-          console.error('Failed to fetch providers after retry:', retryResponse.status);
           setProviders([]);
         }
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Failed to fetch providers:', response.status, errorData.message || '');
+        await response.json().catch(() => ({}));
         setProviders([]);
       }
     } catch (error) {
-      console.error('Error fetching providers:', error);
       setProviders([]);
     } finally {
       setIsLoading(false);
@@ -204,7 +200,6 @@ export default function ProviderReportsScreen() {
                 Alert.alert('Error', 'Failed to remove provider');
               }
             } catch (error) {
-              console.error('Error removing provider:', error);
               Alert.alert('Error', 'Failed to remove provider');
     } finally {
       setShowRemoveModal(false);

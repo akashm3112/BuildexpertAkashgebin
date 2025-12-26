@@ -74,10 +74,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         (error as any)._suppressUnhandled = true;
       }
       
-      if (!isNetworkError) {
-        // Only log non-network errors
-        console.error('❌ Error fetching unread count:', error);
-      }
       // Network errors are expected when backend is down or network is unavailable
       // Silently handle them (will retry on next fetch)
     }
@@ -122,10 +118,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         (error as any)._suppressUnhandled = true;
       }
       
-      if (!isNetworkError) {
-        // Only log non-network errors
-        console.error('❌ Error fetching notifications:', error);
-      }
       // Network errors are expected when backend is down or network is unavailable
       // Silently handle them (will retry on next fetch)
     }
@@ -153,7 +145,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         headers: { 'Authorization': `Bearer ${token}` },
       });
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      // Silently fail - notification marking errors are not critical
     }
   };
 
@@ -173,14 +165,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         headers: { 'Authorization': `Bearer ${token}` },
       });
     } catch (error) {
-      console.error('Error marking all notifications as read:', error);
+      // Silently fail - notification marking errors are not critical
     }
   };
 
   // Refresh notifications (for pull-to-refresh)
   const refreshNotifications = () => {
-    fetchNotifications().catch((error) => {
-      console.error('Error refreshing notifications:', error);
+    fetchNotifications().catch(() => {
+      // Silently fail - notification refresh errors are not critical
     });
   };
 
@@ -241,7 +233,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           break;
       }
     } catch (error) {
-      console.error('Error handling booking notification:', error);
+      // Silently fail - booking notification handling errors are not critical
     }
   };
 
@@ -255,22 +247,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
         }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching unread count on app state change:', error);
-        }
       });
       fetchNotifications().catch((error: any) => {
         // Mark as handled to prevent unhandled rejection warnings
         if (!error?._handled) {
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
-        }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching notifications on app state change:', error);
         }
       });
     }
@@ -299,21 +281,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
         }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching notifications after creation:', error);
-        }
       });
       fetchUnreadCount().catch((error: any) => {
         if (!error?._handled) {
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
-        }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching unread count after creation:', error);
         }
       });
     });
@@ -324,21 +296,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
         }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching notifications after update:', error);
-        }
       });
       fetchUnreadCount().catch((error: any) => {
         if (!error?._handled) {
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
-        }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching unread count after update:', error);
         }
       });
     });
@@ -349,21 +311,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
         }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching notifications after deletion:', error);
-        }
       });
       fetchUnreadCount().catch((error: any) => {
         if (!error?._handled) {
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
-        }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching unread count after deletion:', error);
         }
       });
     });
@@ -401,21 +353,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
         }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching unread count on user change:', error);
-        }
       });
       fetchNotifications().catch((error: any) => {
         if (!error?._handled) {
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
-        }
-        const isNetworkError = error?.message?.includes('Network request failed') ||
-                              error?.message?.includes('timeout');
-        if (!isNetworkError) {
-          console.error('Error fetching notifications on user change:', error);
         }
       });
     } else if (!authLoading && !user?.id) {

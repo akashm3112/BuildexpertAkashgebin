@@ -48,9 +48,7 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
         (error as any)._suppressUnhandled = true;
       }
       
-      if (!isSessionExpired && !isNetworkError) {
-        console.warn('Error fetching unread booking count:', error?.message || error);
-      }
+      // Errors are handled silently (network and session errors are expected)
     }
   };
 
@@ -65,9 +63,7 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
                            error?.message?.includes('Database operation failed') ||
                            error?.message?.includes('Service temporarily unavailable');
       
-      if (!isSessionExpired && !isServerError) {
-        console.warn('refreshBookings error (handled):', error?.message || error);
-      }
+      // Errors are handled silently
     });
   };
 
@@ -94,9 +90,7 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
                                error?.message?.includes('Database operation failed') ||
                                error?.message?.includes('Service temporarily unavailable');
           
-          if (!isSessionExpired && !isServerError) {
-            console.warn('fetchUnreadCount error on app state change (handled):', error?.message || error);
-          }
+          // Errors are handled silently
         });
       }
       appState.current = nextAppState;
@@ -143,9 +137,7 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
                              error?.message?.includes('Database operation failed') ||
                              error?.message?.includes('Service temporarily unavailable');
         
-        if (!isSessionExpired && !isServerError) {
-          console.warn('fetchUnreadCount error on booking_updated (handled):', error?.message || error);
-        }
+        // Errors are handled silently
       });
     });
 
@@ -160,9 +152,7 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
                              error?.message?.includes('Database operation failed') ||
                              error?.message?.includes('Service temporarily unavailable');
         
-        if (!isSessionExpired && !isServerError) {
-          console.warn('fetchUnreadCount error on booking_unread_count_update (handled):', error?.message || error);
-        }
+        // Errors are handled silently
       });
     });
 
@@ -177,9 +167,7 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
                              error?.message?.includes('Database operation failed') ||
                              error?.message?.includes('Service temporarily unavailable');
         
-        if (!isSessionExpired && !isServerError) {
-          console.warn('fetchUnreadCount error on booking_viewed (handled):', error?.message || error);
-        }
+        // Errors are handled silently
       });
     });
 
@@ -202,9 +190,7 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
                            error?.message?.includes('Database operation failed') ||
                            error?.message?.includes('Service temporarily unavailable');
       
-      if (!isSessionExpired && !isServerError) {
-        console.warn('fetchUnreadCount error on initial fetch (handled):', error?.message || error);
-      }
+      // Errors are handled silently
     });
 
     return () => {

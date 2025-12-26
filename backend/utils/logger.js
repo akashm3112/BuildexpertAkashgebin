@@ -483,11 +483,10 @@ logger.logic = (action, data = {}) => {
   logger.info(`🧠 Logic: ${action}`, { ...maskSensitiveData(data), category: 'logic' });
 };
 
-// OTP logging (keep visible in console for development, but mask in logs)
+// OTP logging (masked for security)
 logger.otp = (phone, otp) => {
   const maskedPhone = phone ? `***${phone.substring(phone.length - 4)}` : '****';
-  const message = `📱 OTP for ${maskedPhone}: ${maskValue(String(otp))}`;
-  console.log(`\n${'='.repeat(50)}\n📱 OTP for ${phone}: ${otp}\n${'='.repeat(50)}\n`);
+  const message = `OTP sent to ${maskedPhone}`;
   logger.info(message, { phone: maskedPhone, category: 'otp' });
 };
 

@@ -20,7 +20,6 @@ class GlobalErrorHandler {
    */
   initialize() {
     if (this.isInitialized) {
-      console.warn('GlobalErrorHandler already initialized');
       return;
     }
 
@@ -34,7 +33,6 @@ class GlobalErrorHandler {
     this.setupConsoleErrorHandler();
 
     this.isInitialized = true;
-    console.log('✅ GlobalErrorHandler initialized');
   }
 
   /**
@@ -98,7 +96,6 @@ class GlobalErrorHandler {
   private setupJavaScriptErrorHandler() {
     // Check if ErrorUtils is available (may not be in all environments)
     if (!ErrorUtils || typeof ErrorUtils.getGlobalHandler !== 'function') {
-      console.warn('ErrorUtils not available, skipping JavaScript error handler setup');
       return;
     }
 
@@ -240,52 +237,9 @@ class GlobalErrorHandler {
       this.errorQueue.shift();
     }
 
-    // CRITICAL: Use originalConsoleError to prevent circular calls
-    // If we used console.error here, it would call our overridden version,
-    // which would call handleError again, creating an infinite loop
-    const logError = this.originalConsoleError;
-    
-    if (!logError) {
-      // Fallback: If originalConsoleError is not set (shouldn't happen), 
-      // use a try-catch to prevent infinite loops
-      try {
-        // Use native console.error directly (bypass our override)
-        const nativeError = (console as any).__originalError || console.error;
-        nativeError(`[${context || 'Error'}]`, {
-          message: error.message,
-          stack: error.stack,
-          isFatal,
-          timestamp: new Date(errorInfo.timestamp).toISOString(),
-        });
-      } catch {
-        // If even that fails, silently ignore to prevent crash
-      }
-      return;
-    }
-    
-    // Use original console.error (bypasses our override, prevents circular calls)
-    try {
-      logError.call(console, `[${context || 'Error'}]`, {
-        message: error.message,
-        stack: error.stack,
-        isFatal,
-        timestamp: new Date(errorInfo.timestamp).toISOString(),
-      });
-
-      // In production, you might want to:
-      // 1. Send to error reporting service (Sentry, Bugsnag, etc.)
-      // 2. Show user-friendly error message
-      // 3. Attempt recovery
-
-      // For fatal errors, we might want to show a critical error screen
-      if (isFatal) {
-        // This will be handled by ErrorBoundary or a global error screen
-        logError.call(console, 'Fatal error occurred - app may crash');
-      }
-    } catch (logErr) {
-      // If logging itself fails, silently ignore to prevent infinite loops
-      // This should never happen, but is a safety measure
-    }
+    // Errors are queued for debugging via getErrorQueue()
+    // In production, errors can be sent to error reporting service (Sentry, Bugsnag, etc.)
+    // For now, errors are silently queued without console output
   }
 
   /**

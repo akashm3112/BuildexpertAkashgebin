@@ -3,6 +3,7 @@ const { query, getRows } = require('../database/connection');
 const { sendNotification } = require('../utils/notifications');
 const { pushNotificationService } = require('../utils/pushNotifications');
 const { registry } = require('../utils/memoryLeakPrevention');
+const logger = require('../utils/logger');
 
 class ServiceExpiryManager {
   constructor() {
@@ -100,14 +101,22 @@ class ServiceExpiryManager {
             sound: 'default'
           });
         } catch (pushError) {
-          console.error('Failed to send push notification:', pushError);
+          logger.error('Failed to send push notification for expiry warning', {
+            userId: service.user_id,
+            providerServiceId: service.provider_service_id,
+            error: pushError.message,
+            stack: pushError.stack
+          });
         }
 
       }
 
 
     } catch (error) {
-      console.error('❌ Error sending expiry warnings:', error);
+      logger.error('Error sending expiry warnings', {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -165,14 +174,22 @@ class ServiceExpiryManager {
             sound: 'default'
           });
         } catch (pushError) {
-          console.error('Failed to send push notification:', pushError);
+          logger.error('Failed to send push notification for service expiry', {
+            userId: service.user_id,
+            providerServiceId: service.provider_service_id,
+            error: pushError.message,
+            stack: pushError.stack
+          });
         }
 
       }
 
 
     } catch (error) {
-      console.error('❌ Error deactivating expired services:', error);
+      logger.error('Error deactivating expired services', {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 

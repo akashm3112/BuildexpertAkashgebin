@@ -1,11 +1,3 @@
-/**
- * ============================================================================
- * CENTRALIZED ERROR HANDLER MIDDLEWARE
- * Purpose: Handle all errors consistently with proper logging and responses
- * Features: Error classification, user-friendly messages, retry logic
- * ============================================================================
- */
-
 const logger = require('../utils/logger');
 const config = require('../utils/config');
 const {
@@ -125,15 +117,13 @@ const determineErrorCategory = (error) => {
  *   details?: object|array,    // Additional error details
  *   retryable?: boolean,       // Whether error is retryable
  *   retryAfter?: number,       // Milliseconds to wait before retry
- *   resource?: string,         // Resource name (for 404 errors)
- *   stack?: string,            // Stack trace (development only)
- *   originalError?: string,    // Original error message (development only)
- *   requestId?: string         // Request ID (development only)
+ *   resource?: string          // Resource name (for 404 errors)
  * }
+ * 
+ * NOTE: Stack traces, original errors, and request IDs are NEVER exposed to clients
+ * in production. All sensitive information is logged server-side only.
  */
 const formatErrorResponse = (error, req) => {
-  const isDevelopment = config.isDevelopment();
-  
   // Base response structure - ALWAYS follows this format
   const response = {
     status: 'error',
@@ -169,12 +159,8 @@ const formatErrorResponse = (error, req) => {
     response.resource = error.resource;
   }
   
-  // Development mode: include stack trace and more details
-  if (isDevelopment) {
-    response.stack = error.stack;
-    response.originalError = error.originalError?.message;
-    response.requestId = req.id;
-  }
+  // NEVER expose stack traces, original errors, or request IDs to clients
+  // All sensitive information is logged server-side via logger
   
   return response;
 };
@@ -212,8 +198,9 @@ const errorHandler = (err, req, res, next) => {
     } else if (error.code && error.code.match(/^E[A-Z]+$/)) {
       error = classifyNetworkError(error);
     } else {
+      // Always use safe error message in production
       error = new ApplicationError(
-        config.isProduction() ? 'An unexpected error occurred' : err.message,
+        'An unexpected error occurred',
         error.statusCode || 500,
         error.errorCode || 'INTERNAL_ERROR',
         false

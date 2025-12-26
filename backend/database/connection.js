@@ -66,12 +66,14 @@ let connectionTested = false;
   try {
     const result = await pool.query('SELECT NOW()');
     if (!connectionTested) {
-      console.log('✅ Database connection pool initialized successfully');
+      logger.info('Database connection pool initialized successfully');
       connectionTested = true;
     }
   } catch (error) {
-    console.error('❌ Failed to connect to PostgreSQL database:', error.message);
-    console.error('   Please check your DATABASE_URL in config.env');
+    logger.error('Failed to connect to PostgreSQL database', {
+      message: error.message,
+      code: error.code
+    });
     // In production, we might want to retry or exit gracefully
     if (config.isDevelopment()) {
       process.exit(1);
@@ -151,15 +153,6 @@ const query = async (text, params) => {
       if (metricsCollector) {
         const isSlow = duration > 1000; // Queries > 1 second are slow
         metricsCollector.recordDatabaseQuery(duration, isSlow, null);
-      }
-      
-      if (config.isDevelopment() && config.get('security.enableQueryLogging')) {
-        console.log('Executed query', {
-          text: typeof text === 'string' ? text.substring(0, 100) + (text.length > 100 ? '...' : '') : 'dynamic query',
-          duration: `${duration}ms`,
-          rows: res.rowCount,
-          attempt: attempt > 0 ? attempt + 1 : undefined
-        });
       }
       
       if (attempt > 0) {
@@ -355,21 +348,12 @@ const startConnectionHealthCheck = () => {
       });
     }
   }, HEALTH_CHECK_INTERVAL_MS);
-  
-  if (config.isDevelopment()) {
-    logger.info('Database connection health check started', {
-      interval: HEALTH_CHECK_INTERVAL_MS
-    });
-  }
 };
 
 const stopConnectionHealthCheck = () => {
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
     healthCheckInterval = null;
-    if (config.isDevelopment()) {
-      logger.info('Database connection health check stopped');
-    }
   }
 };
 

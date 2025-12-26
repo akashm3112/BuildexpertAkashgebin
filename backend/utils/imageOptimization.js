@@ -7,6 +7,7 @@
  */
 
 const sharp = require('sharp');
+const logger = require('./logger');
 
 /**
  * Image optimization profiles for different use cases
@@ -133,7 +134,11 @@ const optimizeImageBuffer = async (imageBuffer, profile = 'general') => {
       height: needsResize ? Math.min(metadata.height, config.maxHeight) : metadata.height
     };
   } catch (error) {
-    console.error('Image optimization error:', error);
+    logger.error('Image optimization error', {
+      profile,
+      error: error.message,
+      stack: error.stack
+    });
     // Return original buffer if optimization fails
     return {
       buffer: imageBuffer,
@@ -171,7 +176,11 @@ const optimizeBase64Image = async (base64Image, profile = 'general') => {
       mimeType
     };
   } catch (error) {
-    console.error('Base64 image optimization error:', error);
+    logger.error('Base64 image optimization error', {
+      profile,
+      error: error.message,
+      stack: error.stack
+    });
     throw error;
   }
 };

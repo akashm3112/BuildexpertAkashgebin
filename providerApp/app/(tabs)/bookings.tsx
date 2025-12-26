@@ -175,38 +175,22 @@ export default function BookingsScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (!user?.id || authLoading) {
-        if (__DEV__) {
-          console.log('📱 Bookings tab focused but skipping (no user or auth loading)');
-        }
         return;
       }
       
       // Skip if already in progress or called recently (throttle)
       const now = Date.now();
       if (markAllViewedInProgressRef.current) {
-        if (__DEV__) {
-          console.log('📱 Bookings tab focused but skipping (already in progress)');
-        }
         return;
       }
       
       if ((now - lastMarkAllViewedTimeRef.current) < MARK_ALL_VIEWED_THROTTLE_MS) {
-        if (__DEV__) {
-          console.log('📱 Bookings tab focused but skipping (throttled)');
-        }
         return;
       }
 
       // Skip if there are no unread bookings (optimization)
       if (bookingUnreadCount === 0) {
-        if (__DEV__) {
-          console.log('📱 Bookings tab focused but skipping (no unread bookings)');
-        }
         return;
-      }
-
-      if (__DEV__) {
-        console.log('📱 Bookings tab focused, marking all as viewed. Unread count:', bookingUnreadCount);
       }
 
       // Mark all bookings as viewed when tab is focused
@@ -219,18 +203,11 @@ export default function BookingsScreen() {
           const { apiPut } = await import('@/utils/apiClient');
           const response = await apiPut('/api/providers/bookings/mark-all-viewed');
           
-          if (__DEV__) {
-            console.log('📱 Mark all viewed response:', response?.ok ? 'success' : 'failed');
-          }
-          
           // Refresh unread count to update badge
           fetchUnreadCount().catch(() => {
             // Errors are already handled in fetchUnreadCount
           });
         } catch (error: any) {
-          if (__DEV__) {
-            console.warn('📱 Error marking all bookings as viewed:', error?.message || error);
-          }
           // Silently fail - marking as viewed is not critical
           // Errors are already handled by apiClient
         } finally {
@@ -244,6 +221,40 @@ export default function BookingsScreen() {
       markAllAsViewed();
     }, [user?.id, authLoading, bookingUnreadCount]) // Removed fetchUnreadCount from deps - it's stable
   );
+
+  // Accepts a showSpinner param (default: false)
+  // Memoized to prevent unnecessary re-creations
+  const loadBookings = React.useCallback(async (showSpinner = false) => {
+    try {
+      if (showSpinner) setIsLoading(true);
+      setError(null);
+      setErrorKey(null);
+
+      // Use centralized API client so token refresh and reconnection are handled globally
+      const { apiGet } = await import('@/utils/apiClient');
+
+      const response = await apiGet<{ status: string; data: { bookings: any[] } }>(
+        '/api/providers/bookings'
+      );
+
+      if (response.ok && response.data && response.data.status === 'success') {
+        const bookingsData = response.data.data.bookings || [];
+        setBookings(bookingsData);
+      } else {
+        if (response.status === 403) {
+          setErrorKey('accessDenied');
+        } else {
+          setErrorKey('fetchFailed');
+        }
+      }
+    } catch (error) {
+      // apiClient already handled token refresh / logout; remaining errors are network-level
+      setErrorKey('networkError');
+    } finally {
+      if (showSpinner) setIsLoading(false);
+      setRefreshing(false);
+    }
+  }, []); // Empty deps - function doesn't depend on any props/state that change
 
   useEffect(() => {
     // Wait for auth to finish loading before fetching data
@@ -297,52 +308,6 @@ export default function BookingsScreen() {
     return () => subscription?.remove();
   }, []);
 
-  // Accepts a showSpinner param (default: false)
-  // Memoized to prevent unnecessary re-creations
-  const loadBookings = React.useCallback(async (showSpinner = false) => {
-    try {
-      if (showSpinner) setIsLoading(true);
-      setError(null);
-      setErrorKey(null);
-
-      // Use centralized API client so token refresh and reconnection are handled globally
-      const { apiGet } = await import('@/utils/apiClient');
-
-      const response = await apiGet<{ status: string; data: { bookings: any[] } }>(
-        '/api/providers/bookings'
-      );
-
-      if (response.ok && response.data && response.data.status === 'success') {
-        const bookingsData = response.data.data.bookings || [];
-
-        // Debug location data (only in development, and only log once per fetch)
-        if (__DEV__ && bookingsData.length > 0) {
-          // Only log first booking as sample to avoid spam
-          console.log(`📋 Loaded ${bookingsData.length} bookings. Sample booking location data:`, {
-            customer_state: bookingsData[0].customer_state,
-            customer_address: bookingsData[0].customer_address,
-            customer_name: bookingsData[0].customer_name,
-          });
-        }
-
-        setBookings(bookingsData);
-      } else {
-        if (response.status === 403) {
-          setErrorKey('accessDenied');
-        } else {
-          setErrorKey('fetchFailed');
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
-      // apiClient already handled token refresh / logout; remaining errors are network-level
-      setErrorKey('networkError');
-    } finally {
-      if (showSpinner) setIsLoading(false);
-      setRefreshing(false);
-    }
-  }, []); // Empty deps - function doesn't depend on any props/state that change
-
   const onRefresh = async () => {
     setRefreshing(true);
     await loadBookings(false); // No spinner, just refresh
@@ -383,7 +348,6 @@ export default function BookingsScreen() {
         showAlert(t('alerts.error'), message);
       }
     } catch (error) {
-      console.error('Error updating booking status:', error);
       showAlert(t('alerts.error'), t('alerts.networkError'));
     }
   };

@@ -586,20 +586,9 @@ router.put('/:id/providers', auth, requireRole(['provider']), asyncHandler(async
         const uploadResult = await uploadMultipleImages(workingProofUrls, 'buildxpert/working-proofs');
         
         if (uploadResult.success) {
-          // PRODUCTION FIX: Check if mock URLs were returned (should not happen if Cloudinary is configured)
-          if (uploadResult.mockCount && uploadResult.mockCount > 0) {
-            logger.error('Cloudinary upload returned mock URLs - Cloudinary may not be properly configured', {
-              mockCount: uploadResult.mockCount,
-              totalUrls: uploadResult.urls.length,
-              errors: uploadResult.errors
-            });
-            throw new Error(`Failed to upload working proof images to Cloudinary. ${uploadResult.mockCount} mock URL(s) generated. Please check Cloudinary configuration.`);
-          }
-          
           cloudinaryUrls = uploadResult.urls;
           logger.info('Successfully uploaded images to Cloudinary', {
-            count: cloudinaryUrls.length,
-            mockCount: uploadResult.mockCount || 0
+            count: cloudinaryUrls.length
           });
         } else {
           logger.error('Failed to upload images to Cloudinary', {
@@ -621,15 +610,6 @@ router.put('/:id/providers', auth, requireRole(['provider']), asyncHandler(async
       const uploadResult = await uploadImage(engineeringCertificateUrl, 'buildxpert/certificates');
       
       if (uploadResult.success) {
-        // PRODUCTION FIX: Check if mock URL was returned (should not happen if Cloudinary is configured)
-        if (uploadResult.isMock) {
-          logger.error('Cloudinary upload returned mock URL for engineering certificate - Cloudinary may not be properly configured', {
-            isMock: uploadResult.isMock,
-            error: uploadResult.originalError
-          });
-          throw new Error('Failed to upload engineering certificate to Cloudinary. Mock URL generated. Please check Cloudinary configuration.');
-        }
-        
         cloudinaryCertificateUrl = uploadResult.url;
         logger.info('Successfully uploaded engineering certificate to Cloudinary');
       } else {
@@ -854,15 +834,6 @@ router.post('/:id/providers', auth, requireRole(['provider']), [
       const uploadResult = await uploadImage(engineeringCertificateUrl, 'buildxpert/certificates');
       
       if (uploadResult.success) {
-        // PRODUCTION FIX: Check if mock URL was returned (should not happen if Cloudinary is configured)
-        if (uploadResult.isMock) {
-          logger.error('Cloudinary upload returned mock URL for engineering certificate - Cloudinary may not be properly configured', {
-            isMock: uploadResult.isMock,
-            error: uploadResult.originalError
-          });
-          throw new Error('Failed to upload engineering certificate to Cloudinary. Mock URL generated. Please check Cloudinary configuration.');
-        }
-        
         cloudinaryCertificateUrl = uploadResult.url;
         logger.info('Successfully uploaded engineering certificate to Cloudinary');
       } else {
@@ -901,20 +872,9 @@ router.post('/:id/providers', auth, requireRole(['provider']), [
       const uploadResult = await uploadMultipleImages(validWorkingProofUrls, 'buildxpert/working-proofs');
       
       if (uploadResult.success) {
-        // PRODUCTION FIX: Check if mock URLs were returned (should not happen if Cloudinary is configured)
-        if (uploadResult.mockCount && uploadResult.mockCount > 0) {
-          logger.error('Cloudinary upload returned mock URLs - Cloudinary may not be properly configured', {
-            mockCount: uploadResult.mockCount,
-            totalUrls: uploadResult.urls.length,
-            errors: uploadResult.errors
-          });
-          throw new Error(`Failed to upload working proof images to Cloudinary. ${uploadResult.mockCount} mock URL(s) generated. Please check Cloudinary configuration.`);
-        }
-        
         cloudinaryUrls = uploadResult.urls;
         logger.info('Successfully uploaded images to Cloudinary', {
-          count: cloudinaryUrls.length,
-          mockCount: uploadResult.mockCount || 0
+          count: cloudinaryUrls.length
         });
       } else {
         logger.error('Failed to upload images to Cloudinary', {
@@ -1171,15 +1131,11 @@ router.delete('/my-registrations/:serviceId', auth, requireRole(['provider']), a
         count: serviceRegistration.working_proof_urls.length
       });
       
-      // Extract public IDs from Cloudinary URLs, filtering out mock URLs
+      // Extract public IDs from Cloudinary URLs
       const publicIds = serviceRegistration.working_proof_urls
         .filter(url => {
-          // Filter out mock URLs (mock-cloud domain) and invalid URLs
+          // Filter out invalid URLs
           if (!url || typeof url !== 'string') return false;
-          if (url.includes('mock-cloud') || url.includes('/mock-image-')) {
-            logger.info('Skipping mock URL (no deletion needed)', { url: url.substring(0, 100) });
-            return false;
-          }
           return true;
         })
         .map(url => {
@@ -1205,11 +1161,10 @@ router.delete('/my-registrations/:serviceId', auth, requireRole(['provider']), a
         const deleteResult = await deleteMultipleImages(publicIds);
         // Treat deletion as successful even if some images were already deleted (not found)
         // Only log errors for actual failures, not for "already deleted" cases
-        if (deleteResult.deleted > 0 || deleteResult.alreadyDeleted > 0 || deleteResult.mock > 0) {
+        if (deleteResult.deleted > 0 || deleteResult.alreadyDeleted > 0) {
           logger.info('Successfully processed image deletions', {
             deleted: deleteResult.deleted,
             alreadyDeleted: deleteResult.alreadyDeleted || 0,
-            mock: deleteResult.mock,
             failed: deleteResult.failed
           });
         }
@@ -1224,7 +1179,7 @@ router.delete('/my-registrations/:serviceId', auth, requireRole(['provider']), a
           }
         }
       } else {
-        logger.info('No valid Cloudinary URLs to delete (all were mock URLs or invalid)');
+        logger.info('No valid Cloudinary URLs to delete');
       }
   }
 

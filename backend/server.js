@@ -7,6 +7,7 @@ const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config({ path: './config.env' });
+const logger = require('./utils/logger');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -51,9 +52,7 @@ app.use(helmet());
 // Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000,https://app.example.com
 const getAllowedOrigins = () => {
   if (!process.env.ALLOWED_ORIGINS) {
-    console.error('❌ ERROR: ALLOWED_ORIGINS environment variable is not set.');
-    console.error('   Please set ALLOWED_ORIGINS in your config.env file.');
-    console.error('   Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000');
+    logger.error('ALLOWED_ORIGINS environment variable is not set. Please set ALLOWED_ORIGINS in your config.env file. Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000');
     process.exit(1);
   }
   
@@ -64,7 +63,7 @@ const getAllowedOrigins = () => {
     .filter(origin => origin.length > 0); // Remove empty strings
   
   if (origins.length === 0) {
-    console.error('❌ ERROR: ALLOWED_ORIGINS contains no valid origins.');
+    logger.error('ALLOWED_ORIGINS contains no valid origins.');
     process.exit(1);
   }
   
@@ -86,7 +85,7 @@ const corsOptions = {
       callback(null, true);
     } else {
       const error = new Error(`CORS: Origin ${origin} is not allowed`);
-      console.warn(`⚠️  CORS blocked: ${origin}`);
+      logger.warn('CORS blocked', { origin });
       callback(error);
     }
   },
@@ -117,7 +116,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use((req, res, next) => {
   // Set timeout for all requests (30 seconds)
   req.setTimeout(30000, () => {
-    console.error('⚠️ Request timeout:', {
+    logger.error('Request timeout', {
       url: req.url,
       method: req.method,
       ip: req.ip
@@ -131,7 +130,7 @@ app.use((req, res, next) => {
   });
   
   res.setTimeout(30000, () => {
-    console.error('⚠️ Response timeout:', {
+    logger.error('Response timeout', {
       url: req.url,
       method: req.method,
       ip: req.ip
@@ -462,14 +461,15 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, '0.0.0.0', async () => {
-  console.log(`🚀 BuildXpert API server running on port ${PORT}`);
-  console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-  console.log(`📊 API Documentation: http://localhost:${PORT}/api`);
-  console.log(`🌐 Allowed CORS origins: ${allowedOrigins.join(', ')}`);
+  logger.info('BuildXpert API server started', {
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development',
+    healthCheck: `http://localhost:${PORT}/health`,
+    allowedOrigins: allowedOrigins.join(', ')
+  });
   
   // Start background services
-  console.log('🔧 Starting background services...');
+  logger.info('Starting background services');
   serviceExpiryManager.start();
   initializeCleanupJob(); // Auth data cleanup (tokens, sessions, security logs)
   notificationQueue.start();
@@ -479,10 +479,13 @@ server.listen(PORT, '0.0.0.0', async () => {
   try {
     await preloadTableCache();
   } catch (error) {
-    console.warn('⚠️  Failed to preload table cache:', error.message);
+    logger.warn('Failed to preload table cache', {
+      error: error.message,
+      stack: error.stack
+    });
   }
   
-  console.log('✅ All background services started');
+  logger.info('All background services started');
 });
 
 module.exports = { app, io }; 

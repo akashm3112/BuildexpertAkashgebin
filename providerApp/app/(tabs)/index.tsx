@@ -193,7 +193,6 @@ export default function HomeScreen() {
         }
       }
     } catch (error) {
-      console.error('Error loading location preferences:', error);
       // Set default values
       setSelectedLocation('current');
       setLocation('Current Location');
@@ -206,21 +205,16 @@ export default function HomeScreen() {
       await AsyncStorage.setItem('selectedLocation', JSON.stringify(selectedType));
       await AsyncStorage.setItem('currentLocation', JSON.stringify(currentLocation));
     } catch (error) {
-      console.error('Error saving location preferences:', error);
+      // Silently fail - location preferences are not critical
     }
   };
 
   // Load saved location preferences
   useEffect(() => {
-    loadLocationPreferences().catch((error) => {
-      console.error('Error loading location preferences on mount:', error);
+    loadLocationPreferences().catch(() => {
+      // Silently fail - location preferences are not critical
     });
   }, []);
-
-  // Debug selectedLocation changes
-  useEffect(() => {
-    
-  }, [selectedLocation, location]);
 
   // Handle orientation changes for responsive design
   useEffect(() => {
@@ -254,13 +248,11 @@ export default function HomeScreen() {
           const isAuthError = error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required');
           
           if (!isSessionExpired && !isServerError && !isAuthError) {
-            console.error('Error fetching registered services:', error);
             globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
           }
         });
         // Initial earnings fetch (only once on mount)
         fetchEarnings().catch((error) => {
-          console.error('Error fetching earnings:', error);
           globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchEarnings');
         });
       }, 100);
@@ -386,18 +378,17 @@ export default function HomeScreen() {
           const isAuthError = error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required');
           
           if (!isSessionExpired && !isServerError && !isAuthError) {
-            console.error('Error fetching registered services on focus:', error);
             globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
           }
         });
       }
       // Reload location preferences when screen comes into focus
-      loadLocationPreferences().catch((error) => {
-        console.error('Error loading location preferences:', error);
+      loadLocationPreferences().catch(() => {
+        // Silently fail - location preferences are not critical
       });
       // Load recent searches
-      loadRecentSearches().catch((error) => {
-        console.error('Error loading recent searches:', error);
+      loadRecentSearches().catch(() => {
+        // Silently fail - recent searches are not critical
       });
     }, [user])
   );
@@ -534,7 +525,6 @@ export default function HomeScreen() {
   const fetchRegisteredServices = async () => {
     // PRODUCTION FIX: Only fetch if user is authenticated
     if (!user || !user.id) {
-      console.log('📱 fetchRegisteredServices: User not authenticated, skipping API call');
       setIsLoadingServices(false);
       return;
     }
@@ -586,13 +576,7 @@ export default function HomeScreen() {
         const isNetworkError = apiError?.isNetworkError === true ||
                               apiError?.message?.includes('Network request failed');
         
-        // Only log non-auth, non-network errors (these are unexpected)
-        if (!isAuthError && !isNetworkError) {
-          console.error('Error fetching registered services:', apiError);
-        } else if (isAuthError && user?.id) {
-          // User exists but authentication failed - might be token issue
-          console.log('📱 fetchRegisteredServices: Authentication failed, user may need to login again');
-        }
+        // Errors are handled silently - don't show error for home screen
       }
     } catch (error: any) {
       // Suppress "Session expired" errors - they're expected after 30 days
@@ -625,10 +609,7 @@ export default function HomeScreen() {
                           error?.message?.includes('Database') ||
                           error?.data?.errorCode === 'DATABASE_ERROR';
       
-      // Only log unexpected errors
-      if (!isSessionExpired && !isAuthError && !isNetworkError && !isServerError) {
-        console.error('Error fetching registered services:', error);
-      }
+      // Errors are handled silently - don't show error for home screen
     } finally {
       setIsLoadingServices(false);
     }
@@ -678,7 +659,6 @@ export default function HomeScreen() {
         });
       }
     } catch (error) {
-      console.error('Error fetching earnings:', error);
       // Set default values if there's an error
       setEarnings({
         thisMonth: '₹0',
@@ -741,7 +721,6 @@ export default function HomeScreen() {
         await saveLocationPreferences(savedLocations, 'current', 'Current Location');
       }
     } catch (e) {
-      console.error('📍 Error getting current location:', e);
       showAlert(t('alerts.error'), t('alerts.couldNotFetchLocation'), 'error', [
         { text: 'OK', onPress: () => {
           setShowAlertModal(false);
@@ -803,7 +782,7 @@ export default function HomeScreen() {
         fetchEarnings()
       ]);
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      // Errors are handled silently - refresh failures are not critical
     } finally {
       setRefreshing(false);
     }

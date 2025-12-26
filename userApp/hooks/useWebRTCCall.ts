@@ -38,7 +38,7 @@ export const useWebRTCCall = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const durationInterval = useRef<number | null>(null);
-  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionTimeoutRef = useRef<number | null>(null);
   
   // Connection timeout duration (20 seconds)
   const CONNECTION_TIMEOUT = 20000;

@@ -159,8 +159,6 @@ export default function HomeScreen() {
       try {
         locationData = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
-          maximumAge: 60000, // Accept cached location up to 1 minute old
-          timeout: 15000, // 15 second timeout
         });
       } catch (positionError: any) {
         // Handle specific location errors

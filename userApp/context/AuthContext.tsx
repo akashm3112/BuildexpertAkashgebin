@@ -38,9 +38,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const userData = await storage.getJSON<any>('user', {
         maxRetries: 3,
-        onRetry: (attempt, error) => {
-          console.log(`Storage retry attempt ${attempt}/3 for loading user:`, error.message);
-        },
       });
       
       if (userData) {
@@ -54,11 +51,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (!tokenData) {
             // No tokens found at all - user needs to login
-            console.log('📱 AuthContext: No tokens found, clearing user data');
             try {
               await storage.removeItem('user', { maxRetries: 2 });
             } catch (error) {
-              console.error('Error removing user data:', error);
+              // Error removing user data
             }
             setUser(null);
             return;
@@ -68,11 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const now = Date.now();
           if (tokenData.refreshTokenExpiresAt && tokenData.refreshTokenExpiresAt <= now) {
             // Refresh token expired after 30 days - user must login again
-            console.log('📱 AuthContext: Refresh token expired (30 days), clearing user data');
             try {
               await storage.removeItem('user', { maxRetries: 2 });
             } catch (error) {
-              console.error('Error removing user data:', error);
+              // Error removing user data
             }
             setUser(null);
             return;
@@ -80,13 +75,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Tokens exist and refresh token is still valid - load user
           // Access token might be expired, but that's fine - it will be refreshed on first API call
-          console.log('📱 AuthContext: Loading user from storage (tokens valid):', { 
-            id: userData.id, 
-            phone: userData.phone, 
-            role: userData.role,
-            fullName: userData.fullName || userData.full_name 
-          });
-          
           setUser(userData);
           
           // Optionally, try to refresh access token in the background (non-blocking)
@@ -99,12 +87,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (tokenError: any) {
           // If we can't check tokens (e.g., storage error), still load user
           // Token validation will happen on first API call
-          const isTimeout = tokenError instanceof Error && tokenError.message.includes('timeout');
-          if (isTimeout) {
-            console.log('📱 AuthContext: Token check timeout, loading user anyway (will validate on first API call)');
-          } else {
-            console.warn('📱 AuthContext: Error checking tokens, loading user anyway (will validate on first API call):', tokenError?.message || tokenError);
-          }
           // Load user anyway - token validation will happen on first API call
           setUser(userData);
         }
@@ -113,7 +95,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       }
     } catch (error) {
-      console.error('Error loading user:', error);
       // On error, clear user to force re-login
       setUser(null);
     } finally {
@@ -144,9 +125,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await storage.setJSON('user', userData, {
         maxRetries: 3,
         priority: 'critical',
-        onRetry: (attempt, error) => {
-          console.log(`Storage retry attempt ${attempt}/3 for saving user:`, error.message);
-        },
       });
       
       setUser(userData);
@@ -155,16 +133,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (userData.token) {
         await storage.setItem('token', userData.token, {
           maxRetries: 3,
-          onRetry: (attempt, error) => {
-            console.log(`Storage retry attempt ${attempt}/3 for saving token:`, error.message);
-          },
         });
       }
 
       // Note: Push notifications don't work in Expo Go SDK 53+
       // Real-time notifications work via Socket.io (already implemented)
     } catch (error) {
-      console.error('Error saving user:', error);
       throw error; // Re-throw to allow caller to handle
     }
   };
@@ -176,9 +150,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Clear all storage data except language preferences with retry
       const allKeys = await storage.getAllKeys({
         maxRetries: 2,
-        onRetry: (attempt, error) => {
-          console.log(`Storage retry attempt ${attempt}/2 for getting keys:`, error.message);
-        },
       });
       
       const keysToKeep = ['selectedLanguage'];
@@ -187,9 +158,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (keysToRemove.length > 0) {
         await storage.multiRemove(keysToRemove, {
           maxRetries: 3,
-          onRetry: (attempt, error) => {
-            console.log(`Storage retry attempt ${attempt}/3 for removing keys:`, error.message);
-          },
         });
       }
       
@@ -197,7 +165,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       
     } catch (error) {
-      console.error('❌ Error during logout:', error);
       // Even if there's an error, we should still clear the user state
       setUser(null);
     }
@@ -215,13 +182,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await storage.setJSON('user', updatedUser, {
           maxRetries: 3,
           priority: 'critical',
-          onRetry: (attempt, error) => {
-            console.log(`Storage retry attempt ${attempt}/3 for updating user:`, error.message);
-          },
         });
         setUser(updatedUser);
       } catch (error) {
-        console.error('Error updating user:', error);
         throw error; // Re-throw to allow caller to handle
       }
     }
@@ -232,9 +195,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Get all storage keys with retry
       const allKeys = await storage.getAllKeys({
         maxRetries: 2,
-        onRetry: (attempt, error) => {
-          console.log(`Storage retry attempt ${attempt}/2 for getting keys:`, error.message);
-        },
       });
       
       // Keep only essential keys that shouldn't be cleared (like language preferences)
@@ -244,14 +204,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (keysToRemove.length > 0) {
         await storage.multiRemove(keysToRemove, {
           maxRetries: 3,
-          onRetry: (attempt, error) => {
-            console.log(`Storage retry attempt ${attempt}/3 for removing keys:`, error.message);
-          },
         });
       }
       
     } catch (error) {
-      console.error('❌ Error clearing app data:', error);
+      // Error clearing app data
     }
   };
 
@@ -262,13 +219,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await storage.setJSON('user', updatedUser, {
           maxRetries: 3,
           priority: 'critical',
-          onRetry: (attempt, error) => {
-            console.log(`Storage retry attempt ${attempt}/3 for accepting terms:`, error.message);
-          },
         });
         setUser(updatedUser);
       } catch (error) {
-        console.error('Error accepting terms:', error);
         throw error; // Re-throw to allow caller to handle
       }
     }

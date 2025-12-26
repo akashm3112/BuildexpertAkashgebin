@@ -716,13 +716,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingRight: 24,
   },
-  notificationHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 6,
-    gap: 8,
-  },
   expandIndicator: {
     position: 'absolute',
     right: 0,

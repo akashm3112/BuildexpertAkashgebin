@@ -1,6 +1,7 @@
 const { Expo } = require('expo-server-sdk');
 const { query, getRow, getRows } = require('../database/connection');
 const cron = require('node-cron');
+const logger = require('./logger');
 
 // Create a new Expo SDK client
 const expo = new Expo({
@@ -34,7 +35,10 @@ class PushNotificationService {
     this.setupScheduledTasks();
     // bootstrap any pending work on startup
     this.bootstrapPendingWork().catch(error => {
-      console.error('❌ Error bootstrapping push notification queues:', error);
+      logger.error('Error bootstrapping push notification queues', {
+        error: error.message,
+        stack: error.stack
+      });
     });
   }
 
@@ -138,7 +142,10 @@ class PushNotificationService {
 
           this.schemaReady = true;
         } catch (error) {
-          console.error('❌ Failed to ensure push notification schema:', error);
+          logger.error('Failed to ensure push notification schema', {
+            error: error.message,
+            stack: error.stack
+          });
           throw error;
         }
       })();
@@ -160,7 +167,10 @@ class PushNotificationService {
 
       // Validate the push token
       if (!Expo.isExpoPushToken(pushToken)) {
-        console.error('❌ Invalid Expo push token:', pushToken);
+        logger.error('Invalid Expo push token', {
+          userId,
+          pushToken: pushToken ? `${pushToken.substring(0, 10)}...` : 'null'
+        });
         return { success: false, error: 'Invalid push token' };
       }
 
@@ -192,7 +202,11 @@ class PushNotificationService {
 
       return { success: true };
     } catch (error) {
-      console.error('❌ Error registering push token:', error);
+      logger.error('Error registering push token', {
+        userId,
+        error: error.message,
+        stack: error.stack
+      });
       return { success: false, error: error.message };
     }
   }
@@ -208,7 +222,11 @@ class PushNotificationService {
       );
       return tokens.map(t => t.push_token);
     } catch (error) {
-      console.error('❌ Error getting user push tokens:', error);
+      logger.error('Error getting user push tokens', {
+        userId,
+        error: error.message,
+        stack: error.stack
+      });
       return [];
     }
   }
@@ -272,7 +290,12 @@ class PushNotificationService {
           insertedIds.push(result.rows[0].id);
         }
       } catch (error) {
-        console.error('❌ Failed to enqueue notification:', error);
+        logger.error('Failed to enqueue notification', {
+          userId,
+          pushToken: pushToken ? `${pushToken.substring(0, 10)}...` : 'null',
+          error: error.message,
+          stack: error.stack
+        });
       }
     }
 
@@ -296,7 +319,11 @@ class PushNotificationService {
 
       return await this.sendToTokens(tokens, notification, { userId });
     } catch (error) {
-      console.error('❌ Error sending notification to user:', error);
+      logger.error('Error sending notification to user', {
+        userId,
+        error: error.message,
+        stack: error.stack
+      });
       return { success: false, error: error.message };
     }
   }
@@ -319,7 +346,11 @@ class PushNotificationService {
         queueIds: result.queueIds || [],
       };
     } catch (error) {
-      console.error('❌ Error enqueueing notifications:', error);
+      logger.error('Error enqueueing notifications', {
+        tokensCount: tokens?.length || 0,
+        error: error.message,
+        stack: error.stack
+      });
       return { success: false, error: error.message };
     }
   }
@@ -334,7 +365,11 @@ class PushNotificationService {
         [userId, JSON.stringify(notification), JSON.stringify(meta)]
       );
     } catch (error) {
-      console.error('❌ Error storing pending push notification:', error);
+      logger.error('Error storing pending push notification', {
+        userId,
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -368,7 +403,7 @@ class PushNotificationService {
         if (result.success) {
           await query('DELETE FROM pending_push_notifications WHERE id = $1', [record.id]);
         } else {
-          console.warn('⚠️ Failed to deliver pending push notification, will retry later', {
+          logger.warn('Failed to deliver pending push notification, will retry later', {
             userId,
             pendingId: record.id
           });
@@ -376,7 +411,11 @@ class PushNotificationService {
         }
       }
     } catch (error) {
-      console.error('❌ Error delivering pending push notifications:', error);
+      logger.error('Error delivering pending push notifications', {
+        userId,
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -396,7 +435,11 @@ class PushNotificationService {
         await this.deliverPendingForUser(row.user_id);
       }
     } catch (error) {
-      console.error('❌ Failed to flush pending push notifications:', error);
+      logger.error('Failed to flush pending push notifications', {
+        limit,
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -441,7 +484,10 @@ class PushNotificationService {
         await this.sendBatch(queueItems);
       }
     } catch (error) {
-      console.error('❌ Error processing notification queue:', error);
+      logger.error('Error processing notification queue', {
+        error: error.message,
+        stack: error.stack
+      });
     } finally {
       this.isProcessing = false;
     }
@@ -515,7 +561,11 @@ class PushNotificationService {
           const ticketChunk = await expo.sendPushNotificationsAsync(messages);
           await this.handleTicketChunk(validItems, ticketChunk);
         } catch (error) {
-          console.error('❌ Error sending notification chunk:', error);
+          logger.error('Error sending notification chunk', {
+            chunkSize: validItems.length,
+            error: error.message,
+            stack: error.stack
+          });
           await this.markChunkForRetry(validItems, error);
         }
 
@@ -524,7 +574,11 @@ class PushNotificationService {
         }
       }
     } catch (error) {
-      console.error('❌ Error in sendBatch:', error);
+      logger.error('Error in sendBatch', {
+        queueItemsCount: queueItems.length,
+        error: error.message,
+        stack: error.stack
+      });
       await this.markChunkForRetry(queueItems, error);
     }
   }
@@ -591,7 +645,12 @@ class PushNotificationService {
         [queueItem.id]
       );
     } catch (error) {
-      console.error('❌ Error storing pending receipt:', error);
+      logger.error('Error storing pending receipt', {
+        queueId: queueItem.id,
+        receiptId: ticket.id,
+        error: error.message,
+        stack: error.stack
+      });
       await this.markMessageForRetry(queueItem, error.message, 'ReceiptPersistError');
     }
   }
@@ -706,11 +765,18 @@ class PushNotificationService {
           const receipts = await expo.getPushNotificationReceiptsAsync(chunk);
           await this.handleReceiptResults(receipts, pendingReceipts);
         } catch (error) {
-          console.error('❌ Error fetching receipt chunk:', error);
+          logger.error('Error fetching receipt chunk', {
+            chunkSize: chunk.length,
+            error: error.message,
+            stack: error.stack
+          });
         }
       }
     } catch (error) {
-      console.error('❌ Error processing pending receipts:', error);
+      logger.error('Error processing pending receipts', {
+        error: error.message,
+        stack: error.stack
+      });
     } finally {
       this.isProcessingReceipts = false;
     }
@@ -816,7 +882,11 @@ class PushNotificationService {
         [pushToken]
       );
     } catch (error) {
-      console.error('❌ Error deactivating token:', error);
+      logger.error('Error deactivating token', {
+        pushToken: pushToken ? `${pushToken.substring(0, 10)}...` : 'null',
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -834,7 +904,12 @@ class PushNotificationService {
 
       return { success: true };
     } catch (error) {
-      console.error('❌ Error scheduling notification:', error);
+      logger.error('Error scheduling notification', {
+        userId,
+        scheduledTime,
+        error: error.message,
+        stack: error.stack
+      });
       return { success: false, error: error.message };
     }
   }
@@ -884,11 +959,19 @@ class PushNotificationService {
           );
 
         } catch (error) {
-          console.error('❌ Error sending scheduled notification:', error);
+          logger.error('Error sending scheduled notification', {
+            scheduledId: scheduled.id,
+            userId: scheduled.user_id,
+            error: error.message,
+            stack: error.stack
+          });
         }
       }
     } catch (error) {
-      console.error('❌ Error processing scheduled notifications:', error);
+      logger.error('Error processing scheduled notifications', {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
@@ -921,7 +1004,10 @@ class PushNotificationService {
       );
 
     } catch (error) {
-      console.error('❌ Error in cleanup:', error);
+      logger.error('Error in cleanup', {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 }

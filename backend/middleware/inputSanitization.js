@@ -1,8 +1,5 @@
 const logger = require('../utils/logger');
 
-/**
- * HTML entities that should be escaped
- */
 const htmlEntities = {
   '&': '&amp;',
   '<': '&lt;',

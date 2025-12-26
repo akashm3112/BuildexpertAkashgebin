@@ -1,10 +1,3 @@
-/**
- * ============================================================================
- * COMPREHENSIVE VALIDATION MIDDLEWARE
- * Purpose: Centralized validation schemas for all API endpoints
- * ============================================================================
- */
-
 const { body, param, query, validationResult } = require('express-validator');
 const { ValidationError } = require('../utils/errorTypes');
 
