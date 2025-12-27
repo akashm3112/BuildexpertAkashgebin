@@ -1,0 +1,73 @@
+# Node modules (will be installed in container)
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Environment files (use environment variables in container)
+config.env
+config.production.env
+*.env
+.env*
+
+# Logs
+logs
+*.log
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+tests
+test-*.js
+*.test.js
+*.spec.js
+
+# Documentation (not needed in production)
+*.md
+md files
+read_me_files
+
+# Reports
+reports
+
+# Load testing (not needed in production)
+load-testing
+
+# Development files
+app.json
+
+# Build artifacts
+dist
+build
+*.map
+
+# Temporary files
+tmp
+temp
+*.tmp
+
+# Uploads (should be in volume or external storage)
+uploads
+
+# Coverage
+coverage
+.nyc_output
+
+# Misc
+.editorconfig
+.eslintrc
+.prettierrc
+

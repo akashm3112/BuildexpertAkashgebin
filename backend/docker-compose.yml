@@ -1,0 +1,80 @@
+# ============================================================================
+# Docker Compose for Local Development/Testing
+# ============================================================================
+# Usage: docker-compose up -d
+# ============================================================================
+
+version: '3.8'
+
+services:
+  buildxpert-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: buildxpert-api
+    ports:
+      - "5000:5000"
+    environment:
+      # Server
+      - NODE_ENV=production
+      - PORT=5000
+      
+      # CORS (update with your domains)
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8081,http://localhost:19006
+      
+      # Database (use your existing Render database or local)
+      - DATABASE_URL=${DATABASE_URL}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      
+      # JWT
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRE=${JWT_EXPIRE:-7d}
+      
+      # Twilio
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      - TWILIO_PROXY_SERVICE_SID=${TWILIO_PROXY_SERVICE_SID}
+      - DEFAULT_COUNTRY_CODE=${DEFAULT_COUNTRY_CODE:-1}
+      
+      # Cloudinary
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      
+      # Paytm
+      - PAYTM_MID=${PAYTM_MID}
+      - PAYTM_MERCHANT_KEY=${PAYTM_MERCHANT_KEY}
+      - PAYTM_WEBSITE=${PAYTM_WEBSITE:-WEBSTAGING}
+      - PAYTM_CHANNEL_ID=${PAYTM_CHANNEL_ID:-WEB}
+      - PAYTM_INDUSTRY_TYPE_ID=${PAYTM_INDUSTRY_TYPE_ID:-Retail}
+      - PAYTM_CALLBACK_URL=${PAYTM_CALLBACK_URL}
+      
+      # Other
+      - OTP_EXPIRE=${OTP_EXPIRE:-300000}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-5242880}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+    volumes:
+      # Persist logs (optional)
+      - ./logs:/app/logs
+      # Persist uploads (optional, or use external storage)
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - buildxpert-network
+
+networks:
+  buildxpert-network:
+    driver: bridge
+

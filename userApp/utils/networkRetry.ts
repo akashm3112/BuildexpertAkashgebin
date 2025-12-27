@@ -152,15 +152,21 @@ export async function fetchWithRetry(
 
 /**
  * Check if device has network connectivity
+ * For local testing: Checks backend health endpoint instead of Google
+ * This allows testing even without internet access, as long as backend is reachable
  */
 export async function checkNetworkConnectivity(): Promise<boolean> {
   try {
-    // Try to fetch a small resource with a short timeout
+    // Import API_BASE_URL dynamically to avoid circular dependencies
+    const { API_BASE_URL } = await import('@/constants/api');
+    
+    // Check backend health endpoint instead of Google
+    // This works for local testing scenarios where backend is accessible but internet might not be
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch('https://www.google.com/favicon.ico', {
-      method: 'HEAD',
+    const response = await fetch(`${API_BASE_URL}/health`, {
+      method: 'GET',
       signal: controller.signal,
       cache: 'no-cache',
     });
@@ -168,7 +174,22 @@ export async function checkNetworkConnectivity(): Promise<boolean> {
     clearTimeout(timeoutId);
     return response.ok;
   } catch {
-    return false;
+    // If backend check fails, fallback to Google check (for production scenarios)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const response = await fetch('https://www.google.com/favicon.ico', {
+        method: 'HEAD',
+        signal: controller.signal,
+        cache: 'no-cache',
+      });
+      
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 }
 
