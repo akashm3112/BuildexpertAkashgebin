@@ -22,7 +22,17 @@ const PAYTM_CONFIG = {
   WEBSITE: process.env.PAYTM_WEBSITE || 'WEBSTAGING',
   CHANNEL_ID: process.env.PAYTM_CHANNEL_ID || 'WAP',
   INDUSTRY_TYPE_ID: process.env.PAYTM_INDUSTRY_TYPE || 'Retail',
-  CALLBACK_URL: process.env.PAYTM_CALLBACK_URL || 'http://localhost:3000/api/payments/paytm-callback'
+  get CALLBACK_URL() {
+    if (process.env.PAYTM_CALLBACK_URL) {
+      return process.env.PAYTM_CALLBACK_URL;
+    }
+    // In production, PAYTM_CALLBACK_URL must be set
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('PAYTM_CALLBACK_URL environment variable is required in production. Set it in Render environment variables.');
+    }
+    // Development fallback
+    return 'http://localhost:5000/api/payments/paytm-callback';
+  }
 };
 
 // Rate Limiting Configuration

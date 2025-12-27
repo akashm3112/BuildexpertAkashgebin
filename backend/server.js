@@ -6,7 +6,17 @@ const compression = require('compression');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
-require('dotenv').config({ path: './config.env' });
+// Load environment variables from config.env if it exists, otherwise use system environment variables
+// This allows the app to work with Render's environment variables (no config.env file needed)
+const fs = require('fs');
+const configPath = path.join(__dirname, 'config.env');
+if (fs.existsSync(configPath)) {
+  require('dotenv').config({ path: configPath });
+} else {
+  // In production (Render), environment variables are set in the platform
+  // Just load from system environment variables
+  require('dotenv').config();
+}
 const logger = require('./utils/logger');
 
 // Import routes
@@ -52,13 +62,21 @@ app.use(helmet());
 // Allowed origins are configured via ALLOWED_ORIGINS environment variable
 // Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000,https://app.example.com
 const getAllowedOrigins = () => {
-  if (!process.env.ALLOWED_ORIGINS) {
-    logger.error('ALLOWED_ORIGINS environment variable is not set. Please set ALLOWED_ORIGINS in your config.env file. Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000');
+  // In production, ALLOWED_ORIGINS must be set
+  // In development, provide a default for local testing
+  const defaultOrigins = process.env.NODE_ENV === 'production' 
+    ? null 
+    : 'http://localhost:3000,http://localhost:8081,http://localhost:19006';
+  
+  const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || defaultOrigins;
+  
+  if (!allowedOriginsEnv) {
+    logger.error('ALLOWED_ORIGINS environment variable is not set. Required for production. Set it in Render environment variables. Example: ALLOWED_ORIGINS=https://your-domain.com');
     process.exit(1);
   }
   
   // Parse comma-separated origins from environment variable
-  const origins = process.env.ALLOWED_ORIGINS
+  const origins = allowedOriginsEnv
     .split(',')
     .map(origin => origin.trim())
     .filter(origin => origin.length > 0); // Remove empty strings
@@ -147,6 +165,20 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Health check endpoints
 const healthRoutes = require('./routes/health');
 app.use('/health', healthRoutes);
+
+// Root path handler (for hosting platform health checks)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'BuildXpert API is running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      docs: 'API endpoints are prefixed with /api'
+    }
+  });
+});
 
 // Monitoring endpoints
 const monitoringRoutes = require('./routes/monitoring');
@@ -462,10 +494,13 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, '0.0.0.0', async () => {
+  // Get the actual host URL for health check (useful for Render/production)
+  const hostUrl = process.env.HOST_URL || `http://localhost:${PORT}`;
+  
   logger.info('BuildXpert API server started', {
     port: PORT,
     environment: process.env.NODE_ENV || 'development',
-    healthCheck: `http://localhost:${PORT}/health`,
+    healthCheck: `${hostUrl}/health`,
     allowedOrigins: allowedOrigins.join(', ')
   });
   
