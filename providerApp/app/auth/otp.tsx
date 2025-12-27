@@ -215,11 +215,7 @@ export default function OTPVerification() {
         }
         return;
       }
-      // Debug: log the response data
-      console.log('📥 OTP verification response:', data);
-      console.log('🖼️ Profile picture URL from backend:', data.data.user.profilePicUrl || data.data.user.profile_pic_url || 'No profile picture');
-      console.log('👤 User data:', data.data.user);
-    
+          
       // Validate response data
       if (!data.data) {
         throw new Error('Invalid response: missing data field');
@@ -250,8 +246,6 @@ export default function OTPVerification() {
         data.data.refreshTokenExpiresAt
       );
       
-      console.log('✅ Tokens stored successfully after OTP verification');
-
       // Success: log in and navigate (keep token for backward compatibility)
       await login({
         id: data.data.user.id,

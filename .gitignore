@@ -22,3 +22,14 @@ build/
 
 # bin
 node_modules/.bin/ 
+
+# Environment files (specific paths)
+backend/config.env
+backend/config.production.env
+**/config.env
+**/config.production.env
+
+# API URL files (only in constants folder, not utils)
+**/constants/api.ts
+userApp/constants/api.ts
+providerApp/constants/api.ts

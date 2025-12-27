@@ -96,10 +96,29 @@ export default function PaymentScreen() {
       setOrderId(data.orderId);
       setPaytmUrl(data.paytmUrl);
       
-      // Close payment method modal and open WebView
-      setShowPaymentModal(false);
-      setShowWebView(true);
-      setIsProcessing(false);
+      // ============================================================================
+      // DEV/TEST BYPASS: Skip WebView for painter services (for testing only)
+      // ============================================================================
+      // TODO: Remove this bypass before production release
+      const isDevMode = __DEV__ || process.env.NODE_ENV !== 'production';
+      const isPaintingService = category?.toLowerCase() === 'painting' || 
+                                serviceName?.toLowerCase().includes('painting') ||
+                                serviceName?.toLowerCase().includes('paint');
+      
+      if (isDevMode && isPaintingService) {
+        // In dev mode for painter services, skip WebView and directly verify payment
+        setShowPaymentModal(false);
+        setIsProcessing(true);
+        // Small delay to show processing state
+        setTimeout(() => {
+          verifyPayment(data.orderId, token);
+        }, 500);
+      } else {
+        // Close payment method modal and open WebView
+        setShowPaymentModal(false);
+        setShowWebView(true);
+        setIsProcessing(false);
+      }
 
     } catch (error: any) {
       setIsProcessing(false);

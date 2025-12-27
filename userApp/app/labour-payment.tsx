@@ -73,10 +73,26 @@ export default function LabourPaymentScreen() {
         setOrderId(orderId);
         setPaytmUrl(paytmUrl);
         
-        // Close payment method modal and open WebView
-        setShowPaymentModal(false);
-        setShowWebView(true);
-        setIsProcessing(false);
+        // ============================================================================
+        // DEV/TEST BYPASS: Skip WebView and directly verify payment (for testing only)
+        // ============================================================================
+        // TODO: Remove this bypass before production release
+        const isDevMode = __DEV__ || process.env.NODE_ENV !== 'production';
+        
+        if (isDevMode) {
+          // In dev mode, skip WebView and directly verify payment
+          setShowPaymentModal(false);
+          setIsProcessing(true);
+          // Small delay to show processing state
+          setTimeout(() => {
+            verifyPayment(orderId);
+          }, 500);
+        } else {
+          // Close payment method modal and open WebView
+          setShowPaymentModal(false);
+          setShowWebView(true);
+          setIsProcessing(false);
+        }
       } else {
         throw new Error(response.data?.message || 'Failed to initiate payment');
       }

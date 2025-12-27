@@ -488,9 +488,53 @@ router.post('/verify-paytm', auth, requireRole(['provider']), asyncHandler(async
     throw new ValidationError('Payment has already failed');
   }
 
-  // Verify payment with Paytm API OUTSIDE transaction to avoid long-held locks
-  // This is safe because we'll re-check status after acquiring the lock
-  const paymentVerification = await verifyPaytmPayment(orderId, transaction.id);
+  // ============================================================================
+  // DEV/TEST BYPASS: Painter Service Payment Bypass (for testing only)
+  // ============================================================================
+  // TODO: Remove this bypass before production release
+  const isDevMode = process.env.NODE_ENV !== 'production';
+  
+  // Get service details to check if it's a painting service
+  const serviceDetails = await getRow(`
+    SELECT ps.*, sm.name as service_name, sm.category
+    FROM provider_services ps
+    JOIN services_master sm ON ps.service_id = sm.id
+    WHERE ps.id = $1
+  `, [providerServiceId]);
+  
+  const isPaintingService = serviceDetails && (
+    serviceDetails.service_name?.toLowerCase().includes('painting') ||
+    serviceDetails.service_name?.toLowerCase().includes('paint') ||
+    serviceDetails.category?.toLowerCase() === 'painting'
+  );
+  
+  let paymentVerification;
+  
+  if (isDevMode && isPaintingService) {
+    // Bypass Paytm verification for painter services in dev mode
+    logger.payment('⚠️ DEV MODE: Bypassing Paytm verification for painter service payment', {
+      orderId,
+      userId: req.user.id,
+      providerServiceId,
+      serviceName: serviceDetails.service_name
+    });
+    
+    paymentVerification = {
+      success: true,
+      paytmResponse: {
+        STATUS: 'TXN_SUCCESS',
+        TXNID: `DEV_${Date.now()}`,
+        TXNAMOUNT: transaction.amount?.toString() || '0',
+        RESPCODE: '01',
+        RESPMSG: 'Dev mode bypass - payment successful'
+      },
+      transactionId: `DEV_${Date.now()}`
+    };
+  } else {
+    // Verify payment with Paytm API OUTSIDE transaction to avoid long-held locks
+    // This is safe because we'll re-check status after acquiring the lock
+    paymentVerification = await verifyPaytmPayment(orderId, transaction.id);
+  }
 
   // Use transaction with row-level locking to prevent race conditions
   const result = await withTransaction(async (client) => {
@@ -552,8 +596,7 @@ router.post('/verify-paytm', auth, requireRole(['provider']), asyncHandler(async
           UPDATE provider_services
              SET payment_status = 'active',
                  payment_start_date = $1,
-                 payment_end_date = $2,
-                 updated_at = NOW()
+                 payment_end_date = $2
            WHERE id = $3
         `,
         [startDate, endDate, providerServiceId]
@@ -927,8 +970,7 @@ router.post('/paytm-callback', webhookLimiter, asyncHandler(async (req, res) => 
           UPDATE provider_services
           SET payment_status = 'active',
               payment_start_date = $1,
-              payment_end_date = $2,
-              updated_at = NOW()
+              payment_end_date = $2
           WHERE id = $3
         `, [startDate, endDate, updatedTransaction.provider_service_id]);
       }
@@ -1479,8 +1521,36 @@ router.post('/verify-labour-payment', auth, requireRole(['user']), asyncHandler(
     throw new ValidationError('Payment has already failed');
   }
 
-  // Verify payment with Paytm API OUTSIDE transaction to avoid long-held locks
-  const paymentVerification = await verifyPaytmPayment(orderId, transaction.id);
+  // ============================================================================
+  // DEV/TEST BYPASS: Labour Payment Bypass (for testing only)
+  // ============================================================================
+  // TODO: Remove this bypass before production release
+  const isDevMode = process.env.NODE_ENV !== 'production';
+  let paymentVerification;
+  
+  if (isDevMode) {
+    // Bypass Paytm verification for labour payments in dev mode
+    logger.payment('⚠️ DEV MODE: Bypassing Paytm verification for labour payment', {
+      orderId,
+      userId: req.user.id,
+      transactionId: transaction.id
+    });
+    
+    paymentVerification = {
+      success: true,
+      paytmResponse: {
+        STATUS: 'TXN_SUCCESS',
+        TXNID: `DEV_${Date.now()}`,
+        TXNAMOUNT: transaction.amount?.toString() || '99',
+        RESPCODE: '01',
+        RESPMSG: 'Dev mode bypass - payment successful'
+      },
+      transactionId: `DEV_${Date.now()}`
+    };
+  } else {
+    // Verify payment with Paytm API OUTSIDE transaction to avoid long-held locks
+    paymentVerification = await verifyPaytmPayment(orderId, transaction.id);
+  }
 
   if (paymentVerification.success) {
     const { startDate, endDate, existingAccess } = await withTransaction(async (client) => {
