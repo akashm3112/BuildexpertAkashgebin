@@ -31,11 +31,17 @@ router.use(sanitizeQuery());
 // @desc    Get admin dashboard statistics
 // @access  Private (Admin only)
 router.get('/stats', auth, requireRole(['admin']), asyncHandler(async (req, res) => {
-  const stats = await AdminService.getDashboardStats();
-  res.json({
-    status: 'success',
-    data: stats
-  });
+  // Cache admin stats (dynamic - 2 minutes TTL)
+  const cacheKey = CacheKeys.adminStats();
+  const result = await cacheQuery(cacheKey, async () => {
+    const stats = await AdminService.getDashboardStats();
+    return {
+      status: 'success',
+      data: stats
+    };
+  }, { cacheType: 'dynamic', ttl: 120000 }); // 2 minutes
+
+  res.json(result);
 }));
 
 // @route   GET /api/admin/users

@@ -11,52 +11,101 @@ const { NotFoundError, ServiceUnavailableError, ApplicationError } = require('..
 
 const router = express.Router();
 
+// In-memory health state cache (updated periodically, not on each request)
+// This allows the health endpoint to be extremely fast (< 1ms)
+let cachedHealthState = {
+  lastUpdate: 0,
+  data: null
+};
+
+// Update health state cache every 5 seconds (non-blocking, background update)
+const HEALTH_CACHE_TTL = 5000;
+setInterval(() => {
+  try {
+    const memUsage = process.memoryUsage();
+    cachedHealthState = {
+      lastUpdate: Date.now(),
+      data: {
+        uptime: Math.floor(process.uptime()),
+        memory: {
+          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+          rss: Math.round(memUsage.rss / 1024 / 1024),
+          heapPercentage: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100)
+        },
+        database: {
+          poolSize: pool.totalCount || 0,
+          idleConnections: pool.idleCount || 0,
+          waitingClients: pool.waitingCount || 0
+        }
+      }
+    };
+  } catch (error) {
+    // Silent fail - don't break health check
+  }
+}, HEALTH_CACHE_TTL);
+
 /**
  * @route   GET /health
- * @desc    Basic health check
+ * @desc    Basic health check - Fast, in-memory only (no DB/Redis/async checks)
  * @access  Public
+ * 
+ * PRODUCTION OPTIMIZED: This endpoint is designed for load balancers and monitoring tools.
+ * It returns only in-memory state with zero external dependencies for maximum speed.
+ * 
+ * Performance: < 1ms response time (synchronous, no I/O, no async operations)
+ * 
+ * ✅ NO database queries
+ * ✅ NO Redis checks
+ * ✅ NO async operations
+ * ✅ Just returns memory state
  */
-router.get('/', asyncHandler(async (req, res) => {
+router.get('/', (req, res) => {
+  // Use cached state if available and fresh, otherwise get current state synchronously
+  let healthData;
+  if (cachedHealthState.data && (Date.now() - cachedHealthState.lastUpdate) < HEALTH_CACHE_TTL) {
+    healthData = cachedHealthState.data;
+  } else {
+    // Fallback: get current state synchronously (still fast, no I/O)
+    const memUsage = process.memoryUsage();
+    healthData = {
+      uptime: Math.floor(process.uptime()),
+      memory: {
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapPercentage: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100)
+      },
+      database: {
+        poolSize: pool.totalCount || 0,
+        idleConnections: pool.idleCount || 0,
+        waitingClients: pool.waitingCount || 0
+      }
+    };
+  }
+  
   const health = {
     status: 'healthy',
     message: 'BuildXpert API is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    uptime: Math.floor(process.uptime()),
+    uptime: healthData.uptime,
     memory: {
-      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
-      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
-      percentage: Math.round((process.memoryUsage().heapUsed / process.memoryUsage().heapTotal) * 100) + '%'
+      heapUsed: `${healthData.memory.heapUsed}MB`,
+      heapTotal: `${healthData.memory.heapTotal}MB`,
+      rss: `${healthData.memory.rss}MB`,
+      heapPercentage: `${healthData.memory.heapPercentage}%`
+    },
+    // Pool stats from memory (no DB query)
+    database: {
+      poolSize: healthData.database.poolSize,
+      idleConnections: healthData.database.idleConnections,
+      waitingClients: healthData.database.waitingClients
     }
   };
 
-  // Check database connectivity
-  try {
-    const result = await pool.query('SELECT NOW() as db_time, version() as db_version');
-    health.database = {
-      status: 'connected',
-      timestamp: result.rows[0].db_time,
-      version: result.rows[0].db_version.split(' ')[0] + ' ' + result.rows[0].db_version.split(' ')[1],
-      poolSize: pool.totalCount,
-      idleConnections: pool.idleCount,
-      waitingClients: pool.waitingCount
-    };
-    
-    res.status(200).json(health);
-  } catch (error) {
-    health.status = 'unhealthy';
-    health.database = {
-      status: 'disconnected',
-      error: error.message
-    };
-    
-    logger.error('Health check failed - database disconnected', { error: error.message });
-    // Throw error to be handled by error middleware, but include health data
-    const healthError = new ServiceUnavailableError('Database connection failed');
-    healthError.health = health;
-    throw healthError;
-  }
-}));
+  res.status(200).json(health);
+});
 
 /**
  * @route   GET /health/detailed

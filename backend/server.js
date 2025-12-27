@@ -31,6 +31,7 @@ const { validateCallPermissions } = require('./utils/callPermissions');
 const { WebRTCPermissionError } = require('./utils/errorTypes');
 const notificationQueue = require('./utils/notificationQueue');
 const { preloadTableCache } = require('./utils/tableCache');
+const { warmAllCaches } = require('./utils/cacheWarming');
 
 // Initialize memory leak prevention
 const { 
@@ -480,6 +481,16 @@ server.listen(PORT, '0.0.0.0', async () => {
     await preloadTableCache();
   } catch (error) {
     logger.warn('Failed to preload table cache', {
+      error: error.message,
+      stack: error.stack
+    });
+  }
+  
+  // Warm application caches
+  try {
+    await warmAllCaches();
+  } catch (error) {
+    logger.warn('Failed to warm caches', {
       error: error.message,
       stack: error.stack
     });

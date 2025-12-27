@@ -238,26 +238,24 @@ class DatabaseOptimizer {
       `);
       
       if (tableExists && tableExists.exists) {
-        const { getFrontendCategoryId } = require('./serviceMapping');
         subServices = await getRows(`
           SELECT 
             pss.id,
-            pss.service_id,
-            sm.name as service_name,
+            pss.sub_service_id,
             pss.price,
             pss.created_at,
             pss.updated_at
           FROM provider_sub_services pss
-          JOIN services_master sm ON pss.service_id = sm.id
           WHERE pss.provider_service_id = $1
+            AND pss.sub_service_id IS NOT NULL
           ORDER BY pss.created_at ASC
         `, [providerServiceId]);
 
         // Map to frontend format
         subServices = subServices.map(ss => ({
           id: ss.id,
-          serviceId: getFrontendCategoryId(ss.service_name) || ss.service_name,
-          serviceName: ss.service_name,
+          serviceId: ss.sub_service_id, // Use sub_service_id directly (frontend identifier)
+          serviceName: ss.sub_service_id, // For now, use sub_service_id as name
           price: parseFloat(ss.price),
           createdAt: ss.created_at,
           updatedAt: ss.updated_at

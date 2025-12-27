@@ -1,6 +1,14 @@
 const winston = require('winston');
-const config = require('./config');
 const crypto = require('crypto');
+
+// Lazy load config to avoid circular dependency
+let config = null;
+const getConfig = () => {
+  if (!config) {
+    config = require('./config');
+  }
+  return config;
+};
 
 // ============================================================================
 // SENSITIVE DATA MASKING
@@ -362,14 +370,18 @@ const consoleFormat = winston.format.combine(
 // ============================================================================
 
 // Create logger instance
+// Use process.env directly to avoid circular dependency during initialization
+const logLevel = process.env.LOG_LEVEL || process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
 const logger = winston.createLogger({
-  level: config.get('log.level') || 'info',
+  level: logLevel,
   format: logFormat,
   defaultMeta: { service: 'buildxpert-api' },
   transports: [
     // Write all logs to console in development
     new winston.transports.Console({
-      format: config.isDevelopment() ? consoleFormat : logFormat
+      format: isDevelopment ? consoleFormat : logFormat
     }),
     // Write all logs with level 'error' and below to error.log
     new winston.transports.File({ 

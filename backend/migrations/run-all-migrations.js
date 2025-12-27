@@ -40,6 +40,7 @@ const fixBookingsCascadeDelete = require('./026-fix-bookings-cascade-delete');
 const addSubServicesRemoveServiceCharge = require('./027-add-sub-services-remove-service-charge');
 const addComprehensiveIndexes = require('./028-comprehensive-database-indexes');
 const addMissingProductionIndexes = require('./029-add-missing-production-indexes');
+const addSubServiceIdColumn = require('./030-add-sub-service-id-column');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -245,6 +246,13 @@ const migrations = [
     description: 'Adds missing indexes identified during production code analysis: bookings (provider_id, updated_at), payment tables (user_id, order_id, status), labour payment tables, reports tables, and users (labour_access_status).',
     function: addMissingProductionIndexes,
     required: true // Required for optimal database performance
+  },
+  {
+    id: '030',
+    name: 'Add Sub Service ID Column',
+    description: 'Adds sub_service_id TEXT column to provider_sub_services table to store frontend sub-service IDs (like room-painting, fancy-wall-painting, etc.) that don\'t exist as separate services in services_master. Makes service_id nullable and updates unique constraint.',
+    function: addSubServiceIdColumn,
+    required: true // Required for sub-services feature to work correctly
   }
 ];
 

@@ -1,5 +1,8 @@
 const { query } = require('../database/connection');
 
+// Avoid circular dependency - don't require logger in migrations
+// Use console.log directly for migration output
+
 /**
  * Migration 029: Add Missing Production Indexes
  * 
@@ -248,19 +251,22 @@ const addMissingProductionIndexes = async () => {
     `);
     console.log('  ✅ Added index on user_reports_providers.created_at');
 
-    // Index on user_id (used in WHERE user_id = $1)
+    // Index on reported_by_user_id (used in WHERE reported_by_user_id = $1)
+    // Note: Column is named reported_by_user_id, not user_id
     await query(`
-      CREATE INDEX IF NOT EXISTS idx_user_reports_providers_user_id 
-      ON user_reports_providers(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_reports_providers_reported_by_user_id 
+      ON user_reports_providers(reported_by_user_id);
     `);
-    console.log('  ✅ Added index on user_reports_providers.user_id');
+    console.log('  ✅ Added index on user_reports_providers.reported_by_user_id');
 
-    // Index on provider_id (used in WHERE provider_id = $1)
+    // Index on reported_provider_id (used in WHERE reported_provider_id = $1)
+    // Note: Column is named reported_provider_id, not provider_id
+    // This index may already exist from migration 007, but IF NOT EXISTS makes it safe
     await query(`
-      CREATE INDEX IF NOT EXISTS idx_user_reports_providers_provider_id 
-      ON user_reports_providers(provider_id);
+      CREATE INDEX IF NOT EXISTS idx_user_reports_providers_reported_provider_id 
+      ON user_reports_providers(reported_provider_id);
     `);
-    console.log('  ✅ Added index on user_reports_providers.provider_id');
+    console.log('  ✅ Added index on user_reports_providers.reported_provider_id');
 
     // ============================================================================
     // 8. USERS TABLE - Additional Indexes

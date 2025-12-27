@@ -6,20 +6,90 @@
  */
 
 // Mapping of main service categories to their related sub-services
-// This should match the frontend mapping in serviceSubServices.ts
+// This MUST match the frontend mapping in serviceSubServices.ts
+// Frontend sends sub-service IDs like 'room-painting', 'fancy-wall-painting', etc.
 const SERVICE_SUB_SERVICES_MAP = {
-  'painting': ['plumber', 'cleaning', 'glass-mirror', 'interiors-building'],
-  'engineer-interior': ['plumber', 'granite-tiles', 'painting', 'mason-mastri', 'stainless-steel', 'glass-mirror', 'interiors-building', 'cleaning'],
-  'plumber': ['mason-mastri', 'borewell', 'cleaning', 'contact-building'],
-  'granite-tiles': ['mason-mastri', 'plumber', 'cleaning', 'interiors-building'],
-  'contact-building': ['mason-mastri', 'plumber', 'granite-tiles', 'painting', 'stainless-steel', 'borewell'],
-  'labor': ['mason-mastri', 'plumber', 'cleaning', 'contact-building'],
-  'mason-mastri': ['plumber', 'granite-tiles', 'painting', 'contact-building', 'stainless-steel'],
-  'interiors-building': ['painting', 'glass-mirror', 'granite-tiles', 'cleaning', 'stainless-steel'],
-  'stainless-steel': ['mason-mastri', 'plumber', 'contact-building', 'cleaning'],
-  'cleaning': ['plumber', 'glass-mirror'],
-  'glass-mirror': ['cleaning', 'interiors-building', 'painting'],
-  'borewell': ['plumber', 'mason-mastri', 'cleaning'],
+  // Painting related sub-services
+  'painting': [
+    'room-painting',
+    'fancy-wall-painting',
+    'wall-striking',
+    'full-house-painting',
+    'wall-panelling',
+  ],
+  // Engineer/Interior related sub-services
+  'engineer-interior': [
+    '2d-planning-floor',
+    'structural-planning',
+    '3d-house-elevation',
+    'interior-design',
+    'shop-interior-planning',
+  ],
+  // Plumber related sub-services
+  'plumber': [
+    'sanitary-pit-construction',
+    'bathroom-fixing-cleaning',
+    'a-to-z-plumbing-contract',
+    'tap-installation',
+    'shower-installation',
+  ],
+  // Granite & Tiles related sub-services
+  'granite-tiles': [
+    'wall-fitting',
+    'floor-fitting',
+    'parking-tile-fitting',
+    'granite-fitting',
+    'broken-tile-fitting',
+    'wall-stickering',
+    'a-to-z-tiles-contract',
+  ],
+  // Contact & Building related sub-services
+  'contact-building': [
+    'general-contractor',
+    'prime-contractor',
+    'speciality-trade-contractor',
+    'design-build-contractor',
+    'residential-commercial-contractor',
+  ],
+  // Labor related sub-services
+  'labor': [
+    'per-hour-charges',
+  ],
+  // Mason/Mastri related sub-services
+  'mason-mastri': [
+    'per-sqft-construction',
+  ],
+  // Interiors of the Building related sub-services
+  'interiors-building': [
+    'shop-interior',
+    'kitchen-interior',
+    'room-interior',
+    'top-interior',
+    'a-to-z-interior',
+  ],
+  // Stainless Steel related sub-services
+  'stainless-steel': [
+    'ss-fitting',
+    'ms-fitting',
+    'ss-with-glass-fitting',
+  ],
+  // Cleaning related sub-services
+  'cleaning': [
+    'sump-cleaning',
+    'tank-cleaning',
+    'bathroom-cleaning',
+    'total-house-cleaning',
+  ],
+  // Glass & Mirror related sub-services
+  'glass-mirror': [
+    'glass-fitting',
+    'mirror-fitting',
+  ],
+  // Borewell related sub-services
+  'borewell': [
+    'regular-borewell-drilling',
+    'premium-borewell-drilling',
+  ],
 };
 
 const { getDatabaseServiceName } = require('./serviceMapping');

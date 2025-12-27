@@ -14,6 +14,8 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const { validateOrThrow, throwIfMissing } = require('../utils/errorHelpers');
 const { validateSubServices, getDatabaseServiceName } = require('../utils/subServicesValidation');
 const { getFrontendCategoryId } = require('../utils/serviceMapping');
+const { CacheKeys, cacheQuery, invalidateServiceCache, invalidateUserCache } = require('../utils/cacheIntegration');
+const { caches } = require('../utils/cacheManager');
 
 const router = express.Router();
 
@@ -60,35 +62,41 @@ router.get('/', asyncHandler(async (req, res, next) => {
     throw new ValidationError('limit must be a positive integer between 1 and 100');
   }
 
-  // Get total count
-  const countResult = await getRow(`
-    SELECT COUNT(*) as total
-    FROM services_master
-  `);
-  const total = parseInt(countResult?.total || 0, 10);
-  const totalPages = Math.ceil(total / limitNum);
+  // Use cache for services list (static data - 1 hour TTL)
+  const cacheKey = CacheKeys.servicesList(pageNum, limitNum);
+  const result = await cacheQuery(cacheKey, async () => {
+    // Get total count
+    const countResult = await getRow(`
+      SELECT COUNT(*) as total
+      FROM services_master
+    `);
+    const total = parseInt(countResult?.total || 0, 10);
+    const totalPages = Math.ceil(total / limitNum);
 
-  // Get paginated services
-  const services = await getRows(`
-    SELECT id, name, is_paid, created_at
-    FROM services_master 
-    ORDER BY name
-    LIMIT $1 OFFSET $2
-  `, [limitNum, offset]);
+    // Get paginated services
+    const services = await getRows(`
+      SELECT id, name, is_paid, created_at
+      FROM services_master 
+      ORDER BY name
+      LIMIT $1 OFFSET $2
+    `, [limitNum, offset]);
 
-  res.json({
-    status: 'success',
-    data: { 
-      services,
-      pagination: {
-        currentPage: pageNum,
-        totalPages,
-        total,
-        limit: limitNum,
-        hasMore: pageNum < totalPages
+    return {
+      status: 'success',
+      data: { 
+        services,
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          total,
+          limit: limitNum,
+          hasMore: pageNum < totalPages
+        }
       }
-    }
-  });
+    };
+  }, { cacheType: 'static', ttl: 3600000 }); // 1 hour
+
+  res.json(result);
 }));
 
 router.use(auth);
@@ -179,14 +187,13 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
         SELECT 
           pss.id,
           pss.provider_service_id,
-          pss.service_id,
-          sm.name as service_name,
+          pss.sub_service_id,
           pss.price,
           pss.created_at,
           pss.updated_at
         FROM provider_sub_services pss
-        JOIN services_master sm ON pss.service_id = sm.id
         WHERE pss.provider_service_id = ANY($1::uuid[])
+          AND pss.sub_service_id IS NOT NULL
         ORDER BY pss.provider_service_id, pss.created_at ASC
       `, [providerServiceIds]);
     } catch (error) {
@@ -234,7 +241,7 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
       ...service,
       sub_services: subServices.map(ss => ({
         id: ss.id,
-        serviceId: getFrontendCategoryId(ss.service_name), // Map database service name to frontend category ID
+        serviceId: ss.sub_service_id, // Use sub_service_id directly (frontend identifier)
         serviceName: ss.service_name,
         price: parseFloat(ss.price),
         createdAt: ss.created_at,
@@ -262,10 +269,16 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
     sub_services: service.sub_services || []
   }));
 
-  res.json({
-    status: 'success',
-    data: { registeredServices: serializedServices }
-  });
+  // Cache user-specific registrations (semi-static - 5 minutes TTL)
+  const cacheKey = CacheKeys.providerRegistrations(req.user.id);
+  const result = await cacheQuery(cacheKey, async () => {
+    return {
+      status: 'success',
+      data: { registeredServices: serializedServices }
+    };
+  }, { cacheType: 'semiStatic', ttl: 300000 }); // 5 minutes
+
+  res.json(result);
 }));
 
 // @route   GET /api/services/:id
@@ -274,15 +287,21 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
 router.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   
-  const service = await getRow('SELECT * FROM services_master WHERE id = $1', [id]);
-  if (!service) {
-    throw new NotFoundError('Service', id);
-  }
+  // Cache service by ID (static data - 1 hour TTL)
+  const cacheKey = CacheKeys.serviceById(id);
+  const result = await cacheQuery(cacheKey, async () => {
+    const service = await getRow('SELECT * FROM services_master WHERE id = $1', [id]);
+    if (!service) {
+      throw new NotFoundError('Service', id);
+    }
 
-  res.json({
-    status: 'success',
-    data: { service }
-  });
+    return {
+      status: 'success',
+      data: { service }
+    };
+  }, { cacheType: 'static', ttl: 3600000 }); // 1 hour
+
+  res.json(result);
 }));
 
 // @route   GET /api/services/:id/providers
@@ -359,14 +378,13 @@ router.get('/:id/providers', asyncHandler(async (req, res) => {
           SELECT 
             pss.id,
             pss.provider_service_id,
-            pss.service_id,
-            sm.name as service_name,
+            pss.sub_service_id,
             pss.price,
             pss.created_at,
             pss.updated_at
           FROM provider_sub_services pss
-          JOIN services_master sm ON pss.service_id = sm.id
           WHERE pss.provider_service_id = ANY($1::uuid[])
+            AND pss.sub_service_id IS NOT NULL
           ORDER BY pss.provider_service_id, pss.created_at ASC
         `, [providerServiceIds]);
       }
@@ -392,8 +410,8 @@ router.get('/:id/providers', asyncHandler(async (req, res) => {
       ...provider,
       sub_services: subServices.map(ss => ({
         id: ss.id,
-        serviceId: getFrontendCategoryId(ss.service_name),
-        serviceName: ss.service_name,
+        serviceId: ss.sub_service_id, // Use sub_service_id directly (frontend identifier)
+        serviceName: ss.sub_service_id, // For now, use sub_service_id as name (can be enhanced with mapping later)
         price: parseFloat(ss.price),
         createdAt: ss.created_at,
         updatedAt: ss.updated_at
@@ -460,14 +478,13 @@ router.get('/:id/providers/:providerId', asyncHandler(async (req, res) => {
       subServices = await getRows(`
         SELECT 
           pss.id,
-          pss.service_id,
-          sm.name as service_name,
+          pss.sub_service_id,
           pss.price,
           pss.created_at,
           pss.updated_at
         FROM provider_sub_services pss
-        JOIN services_master sm ON pss.service_id = sm.id
         WHERE pss.provider_service_id = $1
+          AND pss.sub_service_id IS NOT NULL
         ORDER BY pss.created_at ASC
       `, [providerId]);
     }
@@ -656,68 +673,59 @@ router.put('/:id/providers', auth, requireRole(['provider']), asyncHandler(async
     `, [existingService.id]);
 
     // PRODUCTION OPTIMIZATION: Batch insert new sub-services
+    // Store sub-service IDs directly (like 'room-painting', 'fancy-wall-painting', etc.)
     if (subServices && subServices.length > 0) {
-      // Pre-validate all sub-services before inserting
       const subServiceRecords = [];
-      const subServiceNames = subServices.map(ss => getDatabaseServiceName(ss.serviceId));
-      
-      // Batch fetch all sub-service records in one query
-      if (subServiceNames.length > 0) {
-        const subServiceRecordsResult = await client.query(`
-          SELECT id, name FROM services_master WHERE name = ANY($1::text[])
-        `, [subServiceNames]);
-        
-        const subServiceMap = new Map(
-          subServiceRecordsResult.rows.map(r => [r.name, r.id])
-        );
 
-        // Validate and prepare sub-services for batch insert
-        for (const subService of subServices) {
-          const subServiceName = getDatabaseServiceName(subService.serviceId);
-          const subServiceRecordId = subServiceMap.get(subServiceName);
-          
-          if (!subServiceRecordId) {
-            logger.warn(`Sub-service not found in database: ${subServiceName}`, {
-              subServiceId: subService.serviceId,
-              providerServiceId: existingService.id
-            });
-            continue;
-          }
-
-          const price = parseFloat(subService.price);
-          if (isNaN(price) || price <= 0) {
-            logger.warn(`Invalid price for sub-service: ${subServiceName}`, {
-              price: subService.price,
-              providerServiceId: existingService.id
-            });
-            continue;
-          }
-
-          subServiceRecords.push({
-            provider_service_id: existingService.id,
-            service_id: subServiceRecordId,
-            price: price
+      // Validate and prepare sub-services for batch insert
+      for (const subService of subServices) {
+        // Validate sub-service ID
+        if (!subService.serviceId || typeof subService.serviceId !== 'string' || subService.serviceId.trim() === '') {
+          logger.warn(`Invalid sub-service ID`, {
+            subServiceId: subService.serviceId,
+            providerServiceId: existingService.id
           });
+          continue;
         }
 
-        // Batch insert all sub-services at once
-        if (subServiceRecords.length > 0) {
-          const values = subServiceRecords.map((_, index) => {
-            const baseIndex = index * 3;
-            return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`;
-          }).join(', ');
-          
-          const params = subServiceRecords.flatMap(ss => [
-            ss.provider_service_id,
-            ss.service_id,
-            ss.price
-          ]);
-
-          await client.query(`
-            INSERT INTO provider_sub_services (provider_service_id, service_id, price)
-            VALUES ${values}
-          `, params);
+        // Validate price
+        const price = parseFloat(subService.price);
+        if (isNaN(price) || price <= 0) {
+          logger.warn(`Invalid price for sub-service`, {
+            subServiceId: subService.serviceId,
+            price: subService.price,
+            providerServiceId: existingService.id
+          });
+          continue;
         }
+
+        // Store sub-service ID directly (frontend identifier like 'room-painting')
+        subServiceRecords.push({
+          provider_service_id: existingService.id,
+          sub_service_id: subService.serviceId.trim(),
+          price: price
+        });
+      }
+
+      // Batch insert all sub-services at once
+      if (subServiceRecords.length > 0) {
+        const values = subServiceRecords.map((_, index) => {
+          const baseIndex = index * 3;
+          return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`;
+        }).join(', ');
+        
+        const params = subServiceRecords.flatMap(ss => [
+          ss.provider_service_id,
+          ss.sub_service_id,
+          ss.price
+        ]);
+
+        await client.query(`
+          INSERT INTO provider_sub_services (provider_service_id, sub_service_id, price)
+          VALUES ${values}
+          ON CONFLICT (provider_service_id, sub_service_id) DO UPDATE
+          SET price = EXCLUDED.price, updated_at = NOW()
+        `, params);
       }
     }
   }, { name: 'update-provider-service-with-sub-services' });
@@ -730,6 +738,10 @@ router.put('/:id/providers', auth, requireRole(['provider']), asyncHandler(async
         ON CONFLICT DO NOTHING
     `, [req.user.id, state, city || null, fullAddress]);
   }
+
+  // Invalidate cache after update
+  invalidateUserCache(req.user.id);
+  invalidateServiceCache(id);
 
   res.json({
     status: 'success',
@@ -915,70 +927,61 @@ router.post('/:id/providers', auth, requireRole(['provider']), [
     const providerService = serviceResult.rows[0];
 
     // PRODUCTION OPTIMIZATION: Batch insert sub-services for better performance
+    // Store sub-service IDs directly (like 'room-painting', 'fancy-wall-painting', etc.)
+    // These are frontend identifiers that don't exist as separate services in services_master
     if (subServices && subServices.length > 0) {
-      // Pre-validate all sub-services before inserting
       const subServiceRecords = [];
-      const subServiceNames = subServices.map(ss => getDatabaseServiceName(ss.serviceId));
-      
-      // Batch fetch all sub-service records in one query
-      if (subServiceNames.length > 0) {
-        const subServiceRecordsResult = await client.query(`
-          SELECT id, name FROM services_master WHERE name = ANY($1::text[])
-        `, [subServiceNames]);
-        
-        const subServiceMap = new Map(
-          subServiceRecordsResult.rows.map(r => [r.name, r.id])
-        );
 
-        // Validate and prepare sub-services for batch insert
-        for (const subService of subServices) {
-          const subServiceName = getDatabaseServiceName(subService.serviceId);
-          const subServiceRecordId = subServiceMap.get(subServiceName);
-          
-          if (!subServiceRecordId) {
-            logger.warn(`Sub-service not found in database: ${subServiceName}`, {
-              subServiceId: subService.serviceId,
-              providerServiceId: providerService.id
-            });
-            continue;
-          }
-
-          const price = parseFloat(subService.price);
-          if (isNaN(price) || price <= 0) {
-            logger.warn(`Invalid price for sub-service: ${subServiceName}`, {
-              price: subService.price,
-              providerServiceId: providerService.id
-            });
-            continue;
-          }
-
-          subServiceRecords.push({
-            provider_service_id: providerService.id,
-            service_id: subServiceRecordId,
-            price: price
+      // Validate and prepare sub-services for batch insert
+      for (const subService of subServices) {
+        // Validate sub-service ID
+        if (!subService.serviceId || typeof subService.serviceId !== 'string' || subService.serviceId.trim() === '') {
+          logger.warn(`Invalid sub-service ID`, {
+            subServiceId: subService.serviceId,
+            providerServiceId: providerService.id
           });
+          continue;
         }
 
-        // Batch insert all sub-services at once
-        if (subServiceRecords.length > 0) {
-          const values = subServiceRecords.map((_, index) => {
-            const baseIndex = index * 3;
-            return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`;
-          }).join(', ');
-          
-          const params = subServiceRecords.flatMap(ss => [
-            ss.provider_service_id,
-            ss.service_id,
-            ss.price
-          ]);
-
-          await client.query(`
-            INSERT INTO provider_sub_services (provider_service_id, service_id, price)
-            VALUES ${values}
-            ON CONFLICT (provider_service_id, service_id) DO UPDATE
-            SET price = EXCLUDED.price, updated_at = NOW()
-          `, params);
+        // Validate price
+        const price = parseFloat(subService.price);
+        if (isNaN(price) || price <= 0) {
+          logger.warn(`Invalid price for sub-service`, {
+            subServiceId: subService.serviceId,
+            price: subService.price,
+            providerServiceId: providerService.id
+          });
+          continue;
         }
+
+        // Store sub-service ID directly (frontend identifier like 'room-painting')
+        // service_id is now nullable and not used for sub-services
+        subServiceRecords.push({
+          provider_service_id: providerService.id,
+          sub_service_id: subService.serviceId.trim(),
+          price: price
+        });
+      }
+
+      // Batch insert all sub-services at once
+      if (subServiceRecords.length > 0) {
+        const values = subServiceRecords.map((_, index) => {
+          const baseIndex = index * 3;
+          return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3})`;
+        }).join(', ');
+        
+        const params = subServiceRecords.flatMap(ss => [
+          ss.provider_service_id,
+          ss.sub_service_id,
+          ss.price
+        ]);
+
+        await client.query(`
+          INSERT INTO provider_sub_services (provider_service_id, sub_service_id, price)
+          VALUES ${values}
+          ON CONFLICT (provider_service_id, sub_service_id) DO UPDATE
+          SET price = EXCLUDED.price, updated_at = NOW()
+        `, params);
       }
     }
 
@@ -1204,6 +1207,10 @@ router.delete('/my-registrations/:serviceId', auth, requireRole(['provider']), a
     serviceId: req.params.serviceId,
     userId: req.user.id
   });
+
+  // Invalidate cache after cancellation
+  invalidateUserCache(req.user.id);
+  invalidateServiceCache(serviceRegistration.service_id);
 
   res.json({
     status: 'success',

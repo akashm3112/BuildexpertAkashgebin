@@ -15,6 +15,8 @@ const { createQueuedRateLimiter } = require('../utils/rateLimiterQueue');
 const { ServiceUnavailableError, DatabaseConnectionError, RateLimitError } = require('../utils/errorTypes');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { ValidationError, NotFoundError } = require('../utils/errorTypes');
+const { invalidateUserCache } = require('../utils/cacheIntegration');
+const { caches } = require('../utils/cacheManager');
 const {
   validateCreateBooking,
   validateUpdateBooking,
@@ -208,22 +210,17 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
   
   if (servicesToProcess.length > 0) {
     try {
-      // Map frontend category IDs to database service names
-      const { getDatabaseServiceName } = require('../utils/subServicesValidation');
-      const subServiceNames = servicesToProcess
-        .map(serviceId => getDatabaseServiceName(serviceId))
-        .filter(name => name !== null);
-      
-      if (subServiceNames.length > 0) {
-        // Batch fetch all sub-service prices in a single query
+      // Use sub-service IDs directly (frontend identifiers like 'room-painting', etc.)
+      // No need to map to database service names anymore
+      if (servicesToProcess.length > 0) {
+        // Batch fetch all sub-service prices in a single query using sub_service_id
         const { getRows } = require('../database/connection');
         const subServiceRecords = await getRows(`
           SELECT pss.price
           FROM provider_sub_services pss
-          JOIN services_master sm ON pss.service_id = sm.id
           WHERE pss.provider_service_id = $1
-            AND sm.name = ANY($2::text[])
-        `, [providerServiceId, subServiceNames]);
+            AND pss.sub_service_id = ANY($2::text[])
+        `, [providerServiceId, servicesToProcess]);
         
         // Sum all prices for multiple services
         if (subServiceRecords && subServiceRecords.length > 0) {

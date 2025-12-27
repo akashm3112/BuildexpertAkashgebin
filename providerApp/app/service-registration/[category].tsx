@@ -184,27 +184,30 @@ export default function ServiceRegistration() {
                                 trimmed.startsWith('data:image/') || 
                                 trimmed.startsWith('file://'));
                       })
-                        .map((url: any) => url.trim());
-                    } else if (typeof parsed === 'string' && parsed.trim() !== '') {
-                      // Single URL string in JSON
-                      const trimmed = parsed.trim();
-                      if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/') || trimmed.startsWith('file://')) {
-                        workingProofUrls = [trimmed];
-                      }
-                    }
-                  } catch (parseError) {
-                    // JSON parse failed - check if it's a single URL string
-                    if (strValue !== '' && 
-                        (strValue.startsWith('http://') || 
-                         strValue.startsWith('https://') ||
-                         strValue.startsWith('data:image/') ||
-                         strValue.startsWith('file://'))) {
-                      workingProofUrls = [strValue];
+                      .map((url: any) => url.trim());
+                  } else if (typeof parsed === 'string' && parsed.trim() !== '') {
+                    // Single URL string in JSON
+                    const trimmed = parsed.trim();
+                    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/') || trimmed.startsWith('file://')) {
+                      workingProofUrls = [trimmed];
                     }
                   }
+                } catch (parseError) {
+                  // JSON parse failed - check if it's a single URL string
+                  if (strValue !== '' && 
+                      (strValue.startsWith('http://') || 
+                       strValue.startsWith('https://') ||
+                       strValue.startsWith('data:image/') ||
+                       strValue.startsWith('file://'))) {
+                    workingProofUrls = [strValue];
+                  }
                 }
+              } else {
+                // Not a string or array - set empty
+                workingProofUrls = [];
               }
             } catch (error) {
+              // If any error occurs during parsing, default to empty array
               workingProofUrls = [];
             }
           }

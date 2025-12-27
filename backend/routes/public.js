@@ -6,6 +6,8 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const { NotFoundError, ValidationError } = require('../utils/errorTypes');
 const config = require('../utils/config');
 const { getFrontendCategoryId } = require('../utils/serviceMapping');
+const { CacheKeys, cacheQuery, invalidateServiceCache } = require('../utils/cacheIntegration');
+const { caches } = require('../utils/cacheManager');
 
 // Use node-fetch if global fetch is not available (Node.js < 18)
 let fetch;
@@ -34,35 +36,41 @@ router.get('/services', asyncHandler(async (req, res) => {
     throw new ValidationError('limit must be a positive integer between 1 and 100');
   }
 
-  // Get total count
-  const countResult = await getRows(`
-    SELECT COUNT(*) as total
-    FROM services_master
-  `);
-  const total = parseInt(countResult[0]?.total || 0, 10);
-  const totalPages = Math.ceil(total / limitNum);
+  // Cache services list (static data - 1 hour TTL)
+  const cacheKey = CacheKeys.servicesList(pageNum, limitNum);
+  const result = await cacheQuery(cacheKey, async () => {
+    // Get total count
+    const countResult = await getRows(`
+      SELECT COUNT(*) as total
+      FROM services_master
+    `);
+    const total = parseInt(countResult[0]?.total || 0, 10);
+    const totalPages = Math.ceil(total / limitNum);
 
-  // Get paginated services
-  const services = await getRows(`
-    SELECT id, name, is_paid, created_at
-    FROM services_master 
-    ORDER BY name
-    LIMIT $1 OFFSET $2
-  `, [limitNum, offset]);
+    // Get paginated services
+    const services = await getRows(`
+      SELECT id, name, is_paid, created_at
+      FROM services_master 
+      ORDER BY name
+      LIMIT $1 OFFSET $2
+    `, [limitNum, offset]);
 
-  res.json({
-    status: 'success',
-    data: { 
-      services,
-      pagination: {
-        currentPage: pageNum,
-        totalPages,
-        total,
-        limit: limitNum,
-        hasMore: pageNum < totalPages
+    return {
+      status: 'success',
+      data: { 
+        services,
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          total,
+          limit: limitNum,
+          hasMore: pageNum < totalPages
+        }
       }
-    }
-  });
+    };
+  }, { cacheType: 'static', ttl: 3600000 }); // 1 hour
+
+  res.json(result);
 }));
 
 // @route   GET /api/public/services/:id/providers
@@ -71,92 +79,103 @@ router.get('/services', asyncHandler(async (req, res) => {
 router.get('/services/:id/providers', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { page = 1, limit = 10, state, userCity, userState } = req.query;
-  const offset = (page - 1) * limit;
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  const offset = (pageNum - 1) * limitNum;
 
-  let whereClause = 'WHERE ps.service_id = $1 AND ps.payment_status = $2';
-  let queryParams = [id, 'active'];
-  let paramCount = 3;
+  // Generate cache key with all relevant parameters
+  // Normalize empty strings to 'all' for consistent caching
+  const normalizedState = (state && state.trim()) ? state.trim().toLowerCase() : 'all';
+  const normalizedCity = (userCity && userCity.trim()) ? userCity.trim().toLowerCase() : 'all';
+  const normalizedUserState = (userState && userState.trim()) ? userState.trim().toLowerCase() : 'all';
+  
+  // Cache key includes all parameters that affect the result (state, city, userState for sorting)
+  const cacheKey = CacheKeys.providersByService(id, normalizedState, normalizedCity, pageNum, limitNum, normalizedUserState);
+  
+  // Wrap ENTIRE query execution in cache - this is critical for performance
+  const result = await cacheQuery(cacheKey, async () => {
+    let whereClause = 'WHERE ps.service_id = $1 AND ps.payment_status = $2';
+    let queryParams = [id, 'active'];
+    let paramCount = 3;
 
-  if (state) {
-    whereClause += ` AND LOWER(TRIM(COALESCE(a.state, ''))) = LOWER(TRIM($${paramCount}))`;
-    queryParams.push(state);
-    paramCount++;
-  }
+    if (normalizedState !== 'all') {
+      whereClause += ` AND LOWER(TRIM(COALESCE(a.state, ''))) = LOWER(TRIM($${paramCount}))`;
+      queryParams.push(normalizedState);
+      paramCount++;
+    }
 
-  // Helper function to normalize city names (handles common variations)
-  const normalizeCityName = (cityName) => {
-    if (!cityName) return null;
-    const normalized = (cityName || '').trim().toLowerCase();
-    
-    // Map common variations to standard names for consistent matching
-    const cityVariations = {
-      'bangalore': 'bengaluru',
-      'bombay': 'mumbai',
-      'calcutta': 'kolkata',
-      'madras': 'chennai',
-      'puna': 'pune',
+    // Helper function to normalize city names (handles common variations)
+    const normalizeCityName = (cityName) => {
+      if (!cityName) return null;
+      const normalized = (cityName || '').trim().toLowerCase();
+      
+      // Map common variations to standard names for consistent matching
+      const cityVariations = {
+        'bangalore': 'bengaluru',
+        'bombay': 'mumbai',
+        'calcutta': 'kolkata',
+        'madras': 'chennai',
+        'puna': 'pune',
+      };
+      
+      return cityVariations[normalized] || normalized;
     };
-    
-    return cityVariations[normalized] || normalized;
-  };
 
-  // Build location-based sorting with case-insensitive matching and variation handling
-  // Priority: 1. Same city (and same state), 2. Same state (different city), 3. Others
-  // Within each group: Sort by experience DESC, then created_at DESC
-  let orderByClause = '';
-  if (userCity && userState) {
-    // Normalize user city/state for comparison
-    const normalizedUserCity = normalizeCityName(userCity);
-    const normalizedUserState = (userState || '').trim().toLowerCase();
-    
-    // Use CASE statement for location-based sorting
-    // Priority 0 = same city AND same state, 1 = same state (different city), 2 = others
-    // Handle city variations: check both normalized and original names
-    orderByClause = `
-      ORDER BY 
-        CASE 
-          WHEN (
-            LOWER(TRIM(COALESCE(a.city, ''))) = $${paramCount}
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'bengaluru' AND $${paramCount} = 'bangalore')
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'bangalore' AND $${paramCount} = 'bengaluru')
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'bombay' AND $${paramCount} = 'mumbai')
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'mumbai' AND $${paramCount} = 'bombay')
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'calcutta' AND $${paramCount} = 'kolkata')
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'kolkata' AND $${paramCount} = 'calcutta')
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'madras' AND $${paramCount} = 'chennai')
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'chennai' AND $${paramCount} = 'madras')
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'puna' AND $${paramCount} = 'pune')
-            OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'pune' AND $${paramCount} = 'puna')
-          )
-          AND LOWER(TRIM(COALESCE(a.state, ''))) = $${paramCount + 1} THEN 0
-          WHEN LOWER(TRIM(COALESCE(a.state, ''))) = $${paramCount + 1} THEN 1
-          ELSE 2
-        END,
-        pp.years_of_experience DESC,
-        ps.created_at DESC
-    `;
-    queryParams.push(normalizedUserCity, normalizedUserState);
-    paramCount += 2;
-  } else if (userState) {
-    // Only state available, sort by same state first
-    const normalizedUserState = (userState || '').trim().toLowerCase();
-    orderByClause = `
-      ORDER BY 
-        CASE 
-          WHEN LOWER(TRIM(COALESCE(a.state, ''))) = $${paramCount} THEN 0
-          ELSE 1
-        END,
-        pp.years_of_experience DESC,
-        ps.created_at DESC
-    `;
-    queryParams.push(normalizedUserState);
-    paramCount++;
-  } else {
-    // No location info, use default sorting
-    orderByClause = 'ORDER BY pp.years_of_experience DESC, ps.created_at DESC';
-  }
+    // Build location-based sorting with case-insensitive matching and variation handling
+    // Priority: 1. Same city (and same state), 2. Same state (different city), 3. Others
+    // Within each group: Sort by experience DESC, then created_at DESC
+    let orderByClause = '';
+    if (normalizedCity !== 'all' && normalizedUserState !== 'all') {
+      // Normalize user city/state for comparison
+      const normalizedUserCity = normalizeCityName(normalizedCity);
+      
+      // Use CASE statement for location-based sorting
+      // Priority 0 = same city AND same state, 1 = same state (different city), 2 = others
+      // Handle city variations: check both normalized and original names
+      orderByClause = `
+        ORDER BY 
+          CASE 
+            WHEN (
+              LOWER(TRIM(COALESCE(a.city, ''))) = $${paramCount}
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'bengaluru' AND $${paramCount} = 'bangalore')
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'bangalore' AND $${paramCount} = 'bengaluru')
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'bombay' AND $${paramCount} = 'mumbai')
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'mumbai' AND $${paramCount} = 'bombay')
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'calcutta' AND $${paramCount} = 'kolkata')
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'kolkata' AND $${paramCount} = 'calcutta')
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'madras' AND $${paramCount} = 'chennai')
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'chennai' AND $${paramCount} = 'madras')
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'puna' AND $${paramCount} = 'pune')
+              OR (LOWER(TRIM(COALESCE(a.city, ''))) = 'pune' AND $${paramCount} = 'puna')
+            )
+            AND LOWER(TRIM(COALESCE(a.state, ''))) = $${paramCount + 1} THEN 0
+            WHEN LOWER(TRIM(COALESCE(a.state, ''))) = $${paramCount + 1} THEN 1
+            ELSE 2
+          END,
+          pp.years_of_experience DESC,
+          ps.created_at DESC
+      `;
+      queryParams.push(normalizedUserCity, normalizedUserState);
+      paramCount += 2;
+    } else if (normalizedUserState !== 'all') {
+      // Only state available, sort by same state first
+      orderByClause = `
+        ORDER BY 
+          CASE 
+            WHEN LOWER(TRIM(COALESCE(a.state, ''))) = $${paramCount} THEN 0
+            ELSE 1
+          END,
+          pp.years_of_experience DESC,
+          ps.created_at DESC
+      `;
+      queryParams.push(normalizedUserState);
+      paramCount++;
+    } else {
+      // No location info, use default sorting
+      orderByClause = 'ORDER BY pp.years_of_experience DESC, ps.created_at DESC';
+    }
 
-  const providers = await getRows(`
+    const providers = await getRows(`
     SELECT 
       u.id as user_id,
       u.full_name,
@@ -186,12 +205,12 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
       pp.years_of_experience, pp.service_description,
       ps.id, ps.working_proof_urls, ps.payment_start_date, ps.payment_end_date,
       ps.created_at, a.state, a.city, sm.name
-    ${orderByClause}
-    LIMIT $${paramCount} OFFSET $${paramCount + 1}
-  `, [...queryParams, limit, offset]);
+      ${orderByClause}
+      LIMIT $${paramCount} OFFSET $${paramCount + 1}
+    `, [...queryParams, limitNum, offset]);
 
-  // Service descriptions mapping based on service category
-  const serviceDescriptions = {
+    // Service descriptions mapping based on service category
+    const serviceDescriptions = {
     'labors': 'Construction Labor, Brick Loading, Cement Mixing, Site Preparation, Foundation Work',
     'plumber': 'Tap Repair, Pipe Leakage, Bathroom Fitting, Water Tank Installation, Drainage Work',
     'electrician': 'Wiring Installation, Switch & Socket Installation, Fan Installation, MCB Installation',
@@ -209,46 +228,46 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
     'borewell': 'Borewell Drilling, Pump Installation, Maintenance, Water Testing'
   };
 
-  // PRODUCTION OPTIMIZATION: Batch fetch all sub-services for pricing
-  let allSubServices = [];
-  if (providers.length > 0) {
-    try {
-      const tableExists = await getRow(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'provider_sub_services'
-        );
-      `);
-      
-      if (tableExists && tableExists.exists) {
-        const providerServiceIds = providers.map(p => p.provider_service_id);
-        allSubServices = await getRows(`
-          SELECT 
-            pss.provider_service_id,
-            pss.price
-          FROM provider_sub_services pss
-          WHERE pss.provider_service_id = ANY($1::uuid[])
-          ORDER BY pss.provider_service_id, pss.price ASC
-        `, [providerServiceIds]);
+    // PRODUCTION OPTIMIZATION: Batch fetch all sub-services for pricing
+    let allSubServices = [];
+    if (providers.length > 0) {
+      try {
+        const tableExists = await getRow(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'provider_sub_services'
+          );
+        `);
+        
+        if (tableExists && tableExists.exists) {
+          const providerServiceIds = providers.map(p => p.provider_service_id);
+          allSubServices = await getRows(`
+            SELECT 
+              pss.provider_service_id,
+              pss.price
+            FROM provider_sub_services pss
+            WHERE pss.provider_service_id = ANY($1::uuid[])
+            ORDER BY pss.provider_service_id, pss.price ASC
+          `, [providerServiceIds]);
+        }
+      } catch (error) {
+        logger.warn('Could not fetch sub-services for pricing', { error: error.message });
+        allSubServices = [];
       }
-    } catch (error) {
-      logger.warn('Could not fetch sub-services for pricing', { error: error.message });
-      allSubServices = [];
     }
-  }
 
-  // Group sub-services by provider_service_id and calculate pricing summary
-  const pricingByProviderServiceId = new Map();
-  allSubServices.forEach(ss => {
-    if (!pricingByProviderServiceId.has(ss.provider_service_id)) {
-      pricingByProviderServiceId.set(ss.provider_service_id, []);
-    }
-    pricingByProviderServiceId.get(ss.provider_service_id).push(parseFloat(ss.price));
-  });
+    // Group sub-services by provider_service_id and calculate pricing summary
+    const pricingByProviderServiceId = new Map();
+    allSubServices.forEach(ss => {
+      if (!pricingByProviderServiceId.has(ss.provider_service_id)) {
+        pricingByProviderServiceId.set(ss.provider_service_id, []);
+      }
+      pricingByProviderServiceId.get(ss.provider_service_id).push(parseFloat(ss.price));
+    });
 
-  // Calculate pricing summary for each provider
-  const calculatePricingSummary = (prices) => {
+    // Calculate pricing summary for each provider
+    const calculatePricingSummary = (prices) => {
     if (!prices || prices.length === 0) {
       return {
         minPrice: null,
@@ -283,17 +302,17 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
       displayPrice = `Starting from ₹${minPrice}`;
     }
 
-    return {
-      minPrice,
-      maxPrice,
-      priceRange: minPrice === maxPrice ? minPrice : `${minPrice} - ${maxPrice}`,
-      displayPrice,
-      subServiceCount
+      return {
+        minPrice,
+        maxPrice,
+        priceRange: minPrice === maxPrice ? minPrice : `${minPrice} - ${maxPrice}`,
+        displayPrice,
+        subServiceCount
+      };
     };
-  };
 
-  // Update service descriptions based on service category and normalize rating fields
-  const updatedProviders = providers.map(provider => {
+    // Update service descriptions based on service category and normalize rating fields
+    const updatedProviders = providers.map(provider => {
     const prices = pricingByProviderServiceId.get(provider.provider_service_id) || [];
     const pricing = calculatePricingSummary(prices);
 
@@ -303,52 +322,55 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
       averageRating: parseFloat(provider.average_rating) || 0,
       totalReviews: parseInt(provider.total_reviews) || 0,
       // Pricing information from sub-services
-      pricing: pricing
-    };
-  });
-
-  // Get total count - use only WHERE clause parameters (not ORDER BY parameters)
-  // Create a separate params array for count query that excludes location sorting params
-  const countQueryParams = [id, 'active'];
-  if (state) {
-    countQueryParams.push(state);
-  }
-  
-  const countResult = await getRow(`
-    SELECT COUNT(*) as total
-    FROM provider_services ps
-    JOIN provider_profiles pp ON ps.provider_id = pp.id
-    JOIN users u ON pp.user_id = u.id
-    JOIN services_master sm ON ps.service_id = sm.id
-    LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
-    ${whereClause}
-  `, countQueryParams);
-
-  const total = parseInt(countResult.total);
-  const totalPages = Math.ceil(total / limit);
-
-  // Log if no providers found for debugging
-  if (updatedProviders.length === 0) {
-    logger.info('No providers found', { 
-      serviceId: id, 
-      paymentStatus: 'active',
-      state: state || 'all',
-      totalInDb: total
+        pricing: pricing
+      };
     });
-  }
 
-  res.json({
-    status: 'success',
-    data: {
-      providers: updatedProviders,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages,
-        total,
-        limit: parseInt(limit)
-      }
+    // Get total count - use only WHERE clause parameters (not ORDER BY parameters)
+    // Create a separate params array for count query that excludes location sorting params
+    const countQueryParams = [id, 'active'];
+    if (normalizedState !== 'all') {
+      countQueryParams.push(normalizedState);
     }
-  });
+    
+    const countResult = await getRow(`
+      SELECT COUNT(*) as total
+      FROM provider_services ps
+      JOIN provider_profiles pp ON ps.provider_id = pp.id
+      JOIN users u ON pp.user_id = u.id
+      JOIN services_master sm ON ps.service_id = sm.id
+      LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
+      ${whereClause}
+    `, countQueryParams);
+
+    const total = parseInt(countResult.total);
+    const totalPages = Math.ceil(total / limitNum);
+
+    // Log if no providers found for debugging
+    if (updatedProviders.length === 0) {
+      logger.info('No providers found', { 
+        serviceId: id, 
+        paymentStatus: 'active',
+        state: normalizedState,
+        totalInDb: total
+      });
+    }
+
+    return {
+      status: 'success',
+      data: {
+        providers: updatedProviders,
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          total,
+          limit: limitNum
+        }
+      }
+    };
+  }, { cacheType: 'semiStatic', ttl: 900000 }); // 15 minutes - Critical: This wraps ALL database queries
+
+  res.json(result);
 }));
 
 // @route   GET /api/public/services/:id/providers/:providerId
@@ -357,7 +379,10 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
 router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) => {
   const { id, providerId } = req.params;
 
-  const provider = await getRow(`
+  // Cache provider details (semi-static - 10 minutes TTL)
+  const cacheKey = CacheKeys.providerDetails(id, providerId);
+  const result = await cacheQuery(cacheKey, async () => {
+    const provider = await getRow(`
     SELECT 
       u.id as user_id,
       u.full_name,
@@ -379,11 +404,11 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
     WHERE ps.service_id = $1 AND ps.id = $2 AND ps.payment_status = 'active'
   `, [id, providerId]);
 
-  if (!provider) {
-    throw new NotFoundError('Provider', providerId);
-  }
+    if (!provider) {
+      throw new NotFoundError('Provider', providerId);
+    }
 
-  // Get sub-services for this provider service (if table exists)
+    // Get sub-services for this provider service (if table exists)
   let subServices = [];
   try {
     const tableExists = await getRow(`
@@ -398,14 +423,13 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
       subServices = await getRows(`
         SELECT 
           pss.id,
-          pss.service_id,
-          sm.name as service_name,
+          pss.sub_service_id,
           pss.price,
           pss.created_at,
           pss.updated_at
         FROM provider_sub_services pss
-        JOIN services_master sm ON pss.service_id = sm.id
         WHERE pss.provider_service_id = $1
+          AND pss.sub_service_id IS NOT NULL
         ORDER BY pss.created_at ASC
       `, [providerId]);
     }
@@ -434,14 +458,14 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
     'borewell': 'Borewell Drilling, Pump Installation, Maintenance, Water Testing'
   };
 
-  // Update service description based on service category
-  const updatedProvider = {
-    ...provider,
-    service_description: serviceDescriptions[provider.service_name] || provider.service_description
-  };
+    // Update service description based on service category
+    const updatedProvider = {
+      ...provider,
+      service_description: serviceDescriptions[provider.service_name] || provider.service_description
+    };
 
-  // Get provider's ratings
-  const ratings = await getRows(`
+    // Get provider's ratings
+    const ratings = await getRows(`
     SELECT r.rating, r.review, r.created_at, u.full_name as customer_name
     FROM ratings r
     JOIN bookings b ON r.booking_id = b.id
@@ -451,31 +475,34 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
     LIMIT 10
   `, [providerId]);
 
-  // Calculate average rating
-  const avgRating = ratings.length > 0 
-    ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length 
-    : 0;
+    // Calculate average rating
+    const avgRating = ratings.length > 0 
+      ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length 
+      : 0;
 
-  res.json({
-    status: 'success',
-    data: {
-      provider: {
-        ...provider,
-        serviceDescription: serviceDescriptions[provider.service_name] || provider.service_description,
-        averageRating: Math.round(avgRating * 10) / 10,
-        totalReviews: ratings.length,
-        sub_services: subServices.map(ss => ({
-          id: ss.id,
-          serviceId: getFrontendCategoryId(ss.service_name),
-          serviceName: ss.service_name,
-          price: parseFloat(ss.price),
-          createdAt: ss.created_at,
-          updatedAt: ss.updated_at
-        })),
-        ratings
+    return {
+      status: 'success',
+      data: {
+        provider: {
+          ...updatedProvider,
+          serviceDescription: serviceDescriptions[provider.service_name] || provider.service_description,
+          averageRating: Math.round(avgRating * 10) / 10,
+          totalReviews: ratings.length,
+          sub_services: subServices.map(ss => ({
+            id: ss.id,
+            serviceId: ss.sub_service_id, // Use sub_service_id directly (frontend identifier)
+            serviceName: ss.sub_service_id, // For now, use sub_service_id as name
+            price: parseFloat(ss.price),
+            createdAt: ss.created_at,
+            updatedAt: ss.updated_at
+          })),
+          ratings
+        }
       }
-    }
-  });
+    };
+  }, { cacheType: 'semiStatic', ttl: 600000 }); // 10 minutes
+
+  res.json(result);
 }));
 
 // @route   GET /api/public/provider-service/:providerServiceId

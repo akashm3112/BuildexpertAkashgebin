@@ -81,18 +81,24 @@ router.get('/', requireRole(['provider']), asyncHandler(async (req, res) => {
       return `₹${parseInt(amount).toLocaleString('en-IN')}`;
     };
 
-  const earnings = {
-    thisMonth: formatAmount(thisMonthEarnings[0]?.total_earnings || 0),
-    today: formatAmount(todayEarnings[0]?.total_earnings || 0),
-    pending: formatAmount(pendingEarnings[0]?.total_earnings || 0)
-  };
+  // Cache earnings (user-specific - 1 minute TTL, recalculates frequently)
+  const cacheKey = CacheKeys.earnings(providerProfileId);
+  const result = await cacheQuery(cacheKey, async () => {
+    const earnings = {
+      thisMonth: formatAmount(thisMonthEarnings[0]?.total_earnings || 0),
+      today: formatAmount(todayEarnings[0]?.total_earnings || 0),
+      pending: formatAmount(pendingEarnings[0]?.total_earnings || 0)
+    };
 
-  res.json({
-    status: 'success',
-    data: {
-      earnings
-    }
-  });
+    return {
+      status: 'success',
+      data: {
+        earnings
+      }
+    };
+  }, { cacheType: 'user', ttl: 60000 }); // 1 minute
+
+  res.json(result);
 }));
 
 module.exports = router;

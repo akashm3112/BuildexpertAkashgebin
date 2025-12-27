@@ -781,7 +781,16 @@ router.put('/bookings/:id/status', [
       // Emit earnings update to provider when booking is completed
       if (status === 'completed') {
         await emitEarningsUpdate(req.user.id);
+        // Invalidate earnings cache when booking is completed
+        const providerProfile = await getRow('SELECT id FROM provider_profiles WHERE user_id = $1', [req.user.id]);
+        if (providerProfile) {
+          caches.user.delete(CacheKeys.earnings(providerProfile.id));
+        }
       }
+      
+      // Invalidate user cache for both user and provider when booking status changes
+      invalidateUserCache(bookingDetails.user_id);
+      invalidateUserCache(req.user.id);
     }
 
   res.json({
