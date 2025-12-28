@@ -84,15 +84,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   // Fetch all notifications
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (force = false) => {
     if (!user?.id) {
       return;
     }
     
     // Debounce: Prevent rapid duplicate fetches (within 500ms)
+    // But allow forced fetches (e.g., from socket events or manual refresh)
     const now = Date.now();
-    if (fetchInProgress.current || (now - lastFetchTime.current < DEBOUNCE_DELAY)) {
-      return; // Skip if fetch is in progress or too soon after last fetch
+    if (!force && (fetchInProgress.current || (now - lastFetchTime.current < DEBOUNCE_DELAY))) {
+      return; // Skip if fetch is in progress or too soon after last fetch (unless forced)
     }
     
     fetchInProgress.current = true;
@@ -186,7 +187,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Refresh notifications (for pull-to-refresh)
   const refreshNotifications = () => {
-    fetchNotifications().catch(() => {
+    // Force refresh (bypasses debounce)
+    fetchNotifications(true).catch(() => {
       // Silently fail - notification refresh errors are not critical
     });
   };
@@ -325,7 +327,23 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         handleBookingNotification(data);
       }
       
-      fetchNotifications().catch((error: any) => {
+      // OPTIMISTIC UI UPDATE: Add notification immediately if provided in socket event
+      if (data && data.notification) {
+        setNotifications((prev) => {
+          // Check if notification already exists (prevent duplicates)
+          const exists = prev.some((n: Notification) => n.id === data.notification.id);
+          if (exists) return prev;
+          // Add new notification at the beginning
+          return [data.notification, ...prev];
+        });
+        // Update unread count optimistically
+        if (!data.notification.is_read) {
+          setUnreadCount((prev) => prev + 1);
+        }
+      }
+      
+      // Force fetch to get latest data (bypasses debounce)
+      fetchNotifications(true).catch((error: any) => {
         if (!error?._handled) {
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
@@ -340,7 +358,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('notification_updated', () => {
-      fetchNotifications().catch((error: any) => {
+      // Force fetch to get latest data (bypasses debounce)
+      fetchNotifications(true).catch((error: any) => {
         if (!error?._handled) {
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;
@@ -355,7 +374,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('notification_deleted', () => {
-      fetchNotifications().catch((error: any) => {
+      // Force fetch to get latest data (bypasses debounce)
+      fetchNotifications(true).catch((error: any) => {
         if (!error?._handled) {
           (error as any)._handled = true;
           (error as any)._suppressUnhandled = true;

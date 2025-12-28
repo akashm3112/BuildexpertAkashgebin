@@ -93,53 +93,68 @@ class WebRTCService {
   }
 
   // Initialize Socket.io connection
-  async initialize(userId: string, token: string) {
-    if (this.socket?.connected) {
-      return;
-    }
-
-    this.userId = userId;
-
-    this.socket = io(API_BASE_URL, {
-      transports: ['websocket'],
-      auth: { token },
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
-
-    this.socket.on('connect', () => {
-      this.socket?.emit('join', userId);
-    });
-
-    this.socket.on('disconnect', () => {
-      this.handleSocketDisconnect();
-    });
-
-    this.socket.on('error', (error) => {
-      // Suppress socket errors - they're expected when backend is off
-      // Don't log or show errors to user
-      this.handleSocketError(error);
-    });
-
-    this.socket.on('connect_error', (error: any) => {
-      // Suppress socket connection errors - they're expected when backend is off
-      // Don't log or show errors to user
-    });
-
-    this.socket.on('reconnect', () => {
-      // Socket reconnected successfully
-      if (this.userId) {
-        this.socket?.emit('join', this.userId);
+  async initialize(userId: string, token: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this.socket?.connected && this.userId === userId) {
+        resolve();
+        return;
       }
-    });
 
-    this.socket.on('reconnect_error', (error) => {
-      // Suppress socket reconnection errors - they're expected when backend is off
-      // Don't log or show errors to user
-    });
+      this.userId = userId;
 
-    this.setupSocketListeners();
+      // Disconnect existing socket if any
+      if (this.socket) {
+        this.socket.disconnect();
+        this.socket = null;
+      }
+
+      this.socket = io(API_BASE_URL, {
+        transports: ['websocket'],
+        auth: { token },
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        timeout: 20000,
+      });
+
+      const connectionTimeout = setTimeout(() => {
+        this.socket?.disconnect();
+        reject(new Error('Socket connection timed out. Please check your internet connection.'));
+      }, 10000); // 10 seconds timeout for connection
+
+      this.socket.on('connect', () => {
+        clearTimeout(connectionTimeout);
+        this.socket?.emit('join', userId, () => {
+          // Ensure 'join' is acknowledged before resolving
+          this.setupSocketListeners();
+          resolve();
+        });
+      });
+
+      this.socket.on('connect_error', (error: any) => {
+        clearTimeout(connectionTimeout);
+        reject(new Error(`Socket connection error: ${error?.message || 'Unknown error'}`));
+      });
+
+      this.socket.on('disconnect', () => {
+        this.handleSocketDisconnect();
+      });
+
+      this.socket.on('error', (error) => {
+        this.handleSocketError(error);
+      });
+
+      this.socket.on('reconnect', () => {
+        if (this.userId) {
+          this.socket?.emit('join', this.userId);
+        }
+      });
+
+      this.socket.on('reconnect_error', (error) => {
+        // Suppress socket reconnection errors - they're expected when backend is off
+        // Don't log or show errors to user
+      });
+    });
   }
 
   // Set up Socket.io event listeners

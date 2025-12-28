@@ -29,7 +29,6 @@
         {
           "icon": "./assets/images/icon.png",
           "color": "#3B82F6",
-          "sounds": ["default"],
           "mode": "production"
         }
       ]

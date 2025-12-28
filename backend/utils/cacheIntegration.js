@@ -14,6 +14,7 @@ const CacheKeys = {
   // Services
   servicesList: (page, limit) => `services:list:${page}:${limit}`,
   servicesCount: () => `services:count`,
+  featuredProviders: () => `providers:featured`,
   serviceById: (id) => `services:id:${id}`,
   serviceByName: (name) => `services:name:${name}`,
   
@@ -22,6 +23,7 @@ const CacheKeys = {
     `providers:service:${serviceId}:state:${state || 'all'}:city:${city || 'all'}:userState:${userState || 'all'}:page:${page}:limit:${limit}`,
   providerDetails: (serviceId, providerId) => `providers:details:${serviceId}:${providerId}`,
   providerRegistrations: (userId) => `providers:registrations:${userId}`,
+  featuredProviders: () => `providers:featured`,
   
   // Sub-services
   subServicesByProvider: (providerServiceId) => `subservices:provider:${providerServiceId}`,

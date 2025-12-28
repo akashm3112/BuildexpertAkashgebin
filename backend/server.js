@@ -302,12 +302,13 @@ io.on('connection', (socket) => {
     } catch (error) {
       const message = error.message || 'Failed to initiate call';
       const errorCode = error.errorCode || 'WEBRTC_ERROR';
-      // logger.error('Socket call initiate failed', { // Original code had this line commented out
-      //   bookingId,
-      //   callerId,
-      //   error: message,
-      //   errorCode
-      // });
+      logger.error('Socket call initiate failed', {
+        bookingId,
+        callerId,
+        error: message,
+        errorCode,
+        stack: error.stack
+      });
 
       ack?.({ status: 'error', message, errorCode });
       socket.emit('call:error', { bookingId, message, errorCode });

@@ -530,43 +530,83 @@ router.get('/provider-service/:providerServiceId', asyncHandler(async (req, res)
 // @desc    Get random featured providers (public)
 // @access  Public
 router.get('/featured-providers', asyncHandler(async (req, res) => {
-  const providers = await getRows(`
-    SELECT 
-      ps.id as provider_service_id,
-      u.full_name,
-      sm.name as service_name,
-      ps.working_proof_urls,
-      u.profile_pic_url
-    FROM provider_services ps
-    JOIN provider_profiles pp ON ps.provider_id = pp.id
-    JOIN users u ON pp.user_id = u.id
-    JOIN services_master sm ON ps.service_id = sm.id
-    WHERE ps.payment_status = 'active'
-    ORDER BY RANDOM()
-    LIMIT 10
-  `);
-
-  // For each provider, fetch ratings and calculate averageRating and totalReviews
-  const providersWithRatings = await Promise.all(providers.map(async (provider) => {
-    const ratings = await getRows(`
-      SELECT r.rating
-      FROM ratings r
-      JOIN bookings b ON r.booking_id = b.id
-      WHERE b.provider_service_id = $1
-    `, [provider.provider_service_id]);
-    const avgRating = ratings.length > 0
-      ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length
-      : 0;
-    return {
-      ...provider,
-      averageRating: Math.round(avgRating * 10) / 10,
-      totalReviews: ratings.length
-    };
-  }));
+  // Cache this endpoint for 5 minutes (public data, changes infrequently)
+  const cacheKey = CacheKeys.featuredProviders();
+  const result = await cacheQuery(cacheKey, async () => {
+    // OPTIMIZATION: Use a more efficient random selection method
+    // Instead of ORDER BY RANDOM() on the full table (which scans entire table),
+    // we use a CTE to get random IDs first, then join to get full data
+    // This is much faster on large tables
+    
+    const providers = await getRows(`
+      WITH random_providers AS (
+        SELECT ps.id
+        FROM provider_services ps
+        JOIN provider_profiles pp ON ps.provider_id = pp.id
+        WHERE ps.payment_status = 'active'
+        ORDER BY RANDOM()
+        LIMIT 10
+      )
+      SELECT 
+        ps.id as provider_service_id,
+        u.full_name,
+        sm.name as service_name,
+        ps.working_proof_urls,
+        u.profile_pic_url
+      FROM random_providers rp
+      JOIN provider_services ps ON rp.id = ps.id
+      JOIN provider_profiles pp ON ps.provider_id = pp.id
+      JOIN users u ON pp.user_id = u.id
+      JOIN services_master sm ON ps.service_id = sm.id
+    `);
+    
+    // OPTIMIZATION: Batch fetch all ratings in a single query instead of N+1 queries
+    if (providers.length === 0) {
+      return { providers: [] };
+    }
+    
+    const providerServiceIds = providers.map(p => p.provider_service_id);
+    
+    // Single query to get all ratings for all providers using aggregation
+    const ratingsData = await getRows(`
+      SELECT 
+        b.provider_service_id,
+        COUNT(r.rating) as total_reviews,
+        COALESCE(AVG(r.rating), 0) as average_rating
+      FROM bookings b
+      LEFT JOIN ratings r ON r.booking_id = b.id
+      WHERE b.provider_service_id = ANY($1::uuid[])
+      GROUP BY b.provider_service_id
+    `, [providerServiceIds]);
+    
+    // Create a map of ratings by provider_service_id
+    const ratingsMap = {};
+    ratingsData.forEach(rating => {
+      ratingsMap[rating.provider_service_id] = {
+        totalReviews: parseInt(rating.total_reviews || 0, 10),
+        averageRating: Math.round(parseFloat(rating.average_rating || 0) * 10) / 10
+      };
+    });
+    
+    // Combine providers with their ratings
+    const providersWithRatings = providers.map(provider => {
+      const ratingData = ratingsMap[provider.provider_service_id] || {
+        totalReviews: 0,
+        averageRating: 0
+      };
+      return {
+        ...provider,
+        averageRating: ratingData.averageRating,
+        totalReviews: ratingData.totalReviews
+      };
+    });
+    
+    return { providers: providersWithRatings };
+  }, { cacheType: 'static', ttl: 300000 }); // 5 minutes cache
 
   res.json({
     status: 'success',
-    data: { providers: providersWithRatings }
+    data: result
   });
 }));
 

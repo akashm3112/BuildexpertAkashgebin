@@ -238,7 +238,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Refresh notifications (for pull-to-refresh)
   const refreshNotifications = () => {
-    fetchNotifications();
+    // Force refresh (bypasses debounce)
+    fetchNotifications(1, 20, true);
   };
 
   const resetNotificationState = () => {
@@ -326,13 +327,23 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     socket.on('notification_created', (data) => {
       
-      // Trigger vibration and sound for booking-related notifications
-      // Temporarily disabled due to expo-haptics plugin issue
-      // if (data && data.type) {
-      //   handleBookingNotification(data);
-      // }
+      // OPTIMISTIC UI UPDATE: Add notification immediately if provided in socket event
+      if (data && data.notification) {
+        setNotifications((prev) => {
+          // Check if notification already exists (prevent duplicates)
+          const exists = prev.some((n: Notification) => n.id === data.notification.id);
+          if (exists) return prev;
+          // Add new notification at the beginning
+          return [data.notification, ...prev];
+        });
+        // Update unread count optimistically
+        if (!data.notification.is_read) {
+          setUnreadCount((prev) => prev + 1);
+        }
+      }
       
-      fetchNotifications().catch((error) => {
+      // Force fetch to get latest data (bypasses debounce)
+      fetchNotifications(1, 20, true).catch((error) => {
         // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
@@ -349,7 +360,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('notification_updated', () => {
-      fetchNotifications().catch((error) => {
+      // Force fetch to get latest data (bypasses debounce)
+      fetchNotifications(1, 20, true).catch((error) => {
         // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' || 
                                  error?.status === 401 && error?.message?.includes('Session expired');
@@ -366,7 +378,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('notification_deleted', () => {
-      fetchNotifications().catch((error) => {
+      // Force fetch to get latest data (bypasses debounce)
+      fetchNotifications(1, 20, true).catch((error) => {
         // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
         const isSessionExpired = error?.message === 'Session expired' ||
                                  error?.status === 401 && error?.message?.includes('Session expired');

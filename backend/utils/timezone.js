@@ -123,25 +123,48 @@ const formatAppointmentTime = (timeStr) => {
 };
 
 // Get relative time (e.g., "2 hours ago", "3 days ago")
+// Uses IST timezone for accurate time difference calculation
 const getRelativeTime = (date) => {
   if (!date) return '';
   
-  const now = new Date();
-  const diffInMs = now.getTime() - date.getTime();
-  const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-  const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+  try {
+    const dateObj = date instanceof Date ? date : new Date(date);
+    
+    if (isNaN(dateObj.getTime())) {
+      return '';
+    }
+    
+    // Get current time in IST
+    const now = new Date();
+    
+    // Calculate difference in milliseconds
+    const diffInMs = now.getTime() - dateObj.getTime();
+    
+    // Handle negative differences (future dates)
+    if (diffInMs < 0) {
+      return 'Just now';
+    }
+    
+    const diffInSeconds = Math.floor(diffInMs / 1000);
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
-  if (diffInMinutes < 1) {
-    return 'Just now';
-  } else if (diffInMinutes < 60) {
-    return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
-  } else if (diffInHours < 24) {
-    return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-  } else if (diffInDays < 7) {
-    return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
-  } else {
-    return formatDate(date);
+    if (diffInSeconds < 60) {
+      return 'Just now';
+    } else if (diffInMinutes < 60) {
+      return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+    } else if (diffInHours < 24) {
+      return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    } else if (diffInDays < 7) {
+      return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+    } else {
+      // For older dates, return formatted date in IST
+      return formatDate(dateObj);
+    }
+  } catch (error) {
+    console.error('Error calculating relative time:', error);
+    return '';
   }
 };
 

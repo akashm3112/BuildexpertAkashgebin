@@ -62,39 +62,81 @@ router.get('/', asyncHandler(async (req, res, next) => {
     throw new ValidationError('limit must be a positive integer between 1 and 100');
   }
 
-  // Use cache for services list (static data - 1 hour TTL)
+  // OPTIMIZATION: Check cache first before any processing
   const cacheKey = CacheKeys.servicesList(pageNum, limitNum);
-  const result = await cacheQuery(cacheKey, async () => {
-    // Get total count
+  const cache = caches.static;
+  const cached = cache.get(cacheKey);
+  
+  // If cached, return immediately with ETag check
+  if (cached !== null) {
+    // Generate ETag from cached data
+    const crypto = require('crypto');
+    const etag = crypto.createHash('md5').update(JSON.stringify(cached)).digest('hex');
+    res.set('ETag', `"${etag}"`);
+    
+    // Check if client has matching ETag (304 Not Modified) - return immediately
+    if (req.headers['if-none-match'] === `"${etag}"`) {
+      return res.status(304).end();
+    }
+    
+    return res.json(cached);
+  }
+
+  // Cache miss - fetch from database
+  // OPTIMIZATION: Cache the total count separately since it rarely changes
+  const countCacheKey = CacheKeys.servicesCount();
+  const cachedCount = cache.get(countCacheKey);
+  
+  let total;
+  if (cachedCount !== null) {
+    total = cachedCount;
+  } else {
+    // Get total count (only if not cached)
     const countResult = await getRow(`
       SELECT COUNT(*) as total
       FROM services_master
     `);
-    const total = parseInt(countResult?.total || 0, 10);
-    const totalPages = Math.ceil(total / limitNum);
+    total = parseInt(countResult?.total || 0, 10);
+    // Cache count for 1 hour (services don't change frequently)
+    cache.set(countCacheKey, total, { ttl: 3600000 });
+  }
+  
+  const totalPages = Math.ceil(total / limitNum);
 
-    // Get paginated services
-    const services = await getRows(`
-      SELECT id, name, is_paid, created_at
-      FROM services_master 
-      ORDER BY name
-      LIMIT $1 OFFSET $2
-    `, [limitNum, offset]);
+  // Get paginated services
+  const services = await getRows(`
+    SELECT id, name, is_paid, created_at
+    FROM services_master 
+    ORDER BY name
+    LIMIT $1 OFFSET $2
+  `, [limitNum, offset]);
 
-    return {
-      status: 'success',
-      data: { 
-        services,
-        pagination: {
-          currentPage: pageNum,
-          totalPages,
-          total,
-          limit: limitNum,
-          hasMore: pageNum < totalPages
-        }
+  const result = {
+    status: 'success',
+    data: { 
+      services,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        total,
+        limit: limitNum,
+        hasMore: pageNum < totalPages
       }
-    };
-  }, { cacheType: 'static', ttl: 3600000 }); // 1 hour
+    }
+  };
+
+  // Cache the result
+  cache.set(cacheKey, result, { ttl: 3600000 });
+
+  // Set ETag for future conditional requests
+  const crypto = require('crypto');
+  const etag = crypto.createHash('md5').update(JSON.stringify(result)).digest('hex');
+  res.set('ETag', `"${etag}"`);
+  
+  // Check if client has matching ETag (304 Not Modified)
+  if (req.headers['if-none-match'] === `"${etag}"`) {
+    return res.status(304).end();
+  }
 
   res.json(result);
 }));

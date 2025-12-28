@@ -10,7 +10,7 @@ const { blacklistAllUserTokens } = require('../utils/tokenBlacklist');
 const { invalidateAllUserSessions } = require('../utils/sessionManager');
 const { logSecurityEvent } = require('../utils/securityAudit');
 const { asyncHandler } = require('../middleware/errorHandler');
-const { NotFoundError, ValidationError } = require('../utils/errorTypes');
+const { NotFoundError, ValidationError, DatabaseConnectionError } = require('../utils/errorTypes');
 const { validateOrThrow, throwIfMissing } = require('../utils/errorHelpers');
 const {
   validateUpdateProfile,
@@ -176,9 +176,62 @@ router.put('/profile', [profileUpdateLimiter, ...validateUpdateProfile], asyncHa
 
   if (fullName) {
     // Check current name to see if it's actually changing
-    const currentUser = await getRow('SELECT full_name, name_change_count FROM users WHERE id = $1', [req.user.id]);
+    let currentUser;
+    let hasNameChangeCountColumn = true;
+    let dbError = null;
     
-    if (currentUser && currentUser.full_name !== fullName.trim()) {
+    try {
+      // Try to query with name_change_count column
+      currentUser = await getRow(`
+        SELECT 
+          full_name, 
+          COALESCE(name_change_count, 0) as name_change_count 
+        FROM users 
+        WHERE id = $1
+      `, [req.user.id]);
+    } catch (error) {
+      dbError = error;
+      // Check if error is due to column not existing
+      if (error.message && (
+        error.message.includes('column "name_change_count" does not exist') ||
+        error.message.includes('column name_change_count does not exist') ||
+        error.code === '42703' // PostgreSQL error code for undefined column
+      )) {
+        // Column doesn't exist - query without it
+        logger.warn('name_change_count column does not exist, querying without it', {
+          userId: req.user.id
+        });
+        hasNameChangeCountColumn = false;
+        try {
+          currentUser = await getRow('SELECT full_name FROM users WHERE id = $1', [req.user.id]);
+          if (currentUser) {
+            currentUser.name_change_count = 0; // Default to 0 if column doesn't exist
+          }
+        } catch (fallbackError) {
+          logger.error('Failed to fetch user for profile update', {
+            error: fallbackError.message,
+            userId: req.user.id,
+            stack: fallbackError.stack
+          });
+          throw new DatabaseConnectionError('Failed to fetch user profile. Please try again.');
+        }
+      } else {
+        // Different database error - log and rethrow
+        logger.error('Database error fetching user profile', {
+          error: error.message,
+          code: error.code,
+          userId: req.user.id,
+          stack: error.stack
+        });
+        throw new DatabaseConnectionError('Database operation failed. Please try again.');
+      }
+    }
+    
+    if (!currentUser) {
+      throw new NotFoundError('User not found');
+    }
+    
+    if (currentUser.full_name !== fullName.trim()) {
       // Name is actually changing - check limit
       const nameChangeCount = currentUser.name_change_count || 0;
       
@@ -186,21 +239,20 @@ router.put('/profile', [profileUpdateLimiter, ...validateUpdateProfile], asyncHa
         throw new ValidationError('You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.');
       }
       
-      // Increment name change count
+      // Update the name
       updateFields.push(`full_name = $${paramCount}`);
       updateValues.push(fullName.trim());
       paramCount++;
-      updateFields.push(`name_change_count = $${paramCount}`);
-      updateValues.push(nameChangeCount + 1);
-      paramCount++;
-    } else if (currentUser && currentUser.full_name === fullName.trim()) {
+      
+      // Only add name_change_count if column exists
+      if (hasNameChangeCountColumn) {
+        updateFields.push(`name_change_count = $${paramCount}`);
+        updateValues.push(nameChangeCount + 1);
+        paramCount++;
+      }
+    } else {
       // Name is not changing, just update other fields
       // Don't add full_name to updateFields
-    } else {
-      // First time setting name (shouldn't happen, but handle it)
-      updateFields.push(`full_name = $${paramCount}`);
-      updateValues.push(fullName.trim());
-      paramCount++;
     }
   }
 
@@ -304,35 +356,65 @@ router.put('/profile', [profileUpdateLimiter, ...validateUpdateProfile], asyncHa
   }
 
   updateValues.push(req.user.id);
-  // Debug query logging removed for production
   
-  const result = await query(`
-    UPDATE users 
-    SET ${updateFields.join(', ')}
-    WHERE id = $${paramCount}
-    RETURNING id, full_name, email, phone, role, is_verified, profile_pic_url, name_change_count, created_at
-  `, updateValues);
-
-  const updatedUser = result.rows[0];
-  // Profile picture update logging removed for production
-
-  res.json({
-    status: 'success',
-    message: 'Profile updated successfully',
-    data: {
-      user: {
-        id: updatedUser.id,
-        fullName: updatedUser.full_name,
-        email: updatedUser.email,
-        phone: updatedUser.phone,
-        role: updatedUser.role,
-        isVerified: updatedUser.is_verified,
-        profilePicUrl: updatedUser.profile_pic_url,
-        nameChangeCount: updatedUser.name_change_count || 0,
-        createdAt: updatedUser.created_at
-      }
+  // Build RETURNING clause - only include name_change_count if we're updating it
+  const returningFields = ['id', 'full_name', 'email', 'phone', 'role', 'is_verified', 'profile_pic_url', 'created_at'];
+  const hasNameChangeCountInUpdate = updateFields.some(field => field.includes('name_change_count'));
+  if (hasNameChangeCountInUpdate) {
+    returningFields.push('name_change_count');
+  }
+  
+  try {
+    const result = await query(`
+      UPDATE users 
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING ${returningFields.join(', ')}
+    `, updateValues);
+    
+    if (!result.rows || result.rows.length === 0) {
+      throw new NotFoundError('User not found or update failed');
     }
-  });
+    
+    const updatedUser = result.rows[0];
+
+    res.json({
+      status: 'success',
+      message: 'Profile updated successfully',
+      data: {
+        user: {
+          id: updatedUser.id,
+          fullName: updatedUser.full_name,
+          email: updatedUser.email,
+          phone: updatedUser.phone,
+          role: updatedUser.role,
+          isVerified: updatedUser.is_verified,
+          profilePicUrl: updatedUser.profile_pic_url,
+          nameChangeCount: updatedUser.name_change_count || 0,
+          createdAt: updatedUser.created_at
+        }
+      }
+    });
+  } catch (dbError) {
+    logger.error('Database error updating user profile', {
+      error: dbError.message,
+      code: dbError.code,
+      userId: req.user.id,
+      updateFields: updateFields.join(', '),
+      stack: dbError.stack
+    });
+    
+    // Check for specific database errors
+    if (dbError.code === '42703') {
+      // Column doesn't exist - this shouldn't happen if we checked, but handle it
+      throw new DatabaseConnectionError('Database schema error. Please contact support.');
+    } else if (dbError.code === '23505') {
+      // Unique constraint violation (e.g., duplicate email)
+      throw new ValidationError('Email already taken by another user');
+    } else {
+      throw new DatabaseConnectionError('Database operation failed. Please try again.');
+    }
+  }
 }));
 
 // @route   GET /api/users/addresses

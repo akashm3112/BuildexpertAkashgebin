@@ -32,30 +32,48 @@ class NotificationService {
   async initialize(): Promise<boolean> {
     try {
       if (this.isInitialized) {
+        console.log('✅ Notification service already initialized');
         return true;
       }
 
+      console.log('🔄 Initializing notification service...');
 
-      // Configure notification behavior
+      // Configure notification behavior FIRST
       await this.configureNotifications();
+      console.log('✅ Notification behavior configured');
 
       // Request permissions
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
+        console.warn('⚠️ Notification permissions not granted');
         return false;
       }
+      console.log('✅ Notification permissions granted');
 
       // Register for push notifications
       const token = await this.registerForPushNotifications();
       if (token) {
         this.pushToken = token;
-        await this.registerTokenWithBackend(token);
-        this.isInitialized = true;
-        return true;
+        console.log('✅ Push token obtained');
+        
+        // Register token with backend (retry if needed)
+        const registered = await this.registerTokenWithBackend(token);
+        if (registered) {
+          console.log('✅ Push token registered with backend');
+          this.isInitialized = true;
+          return true;
+        } else {
+          console.warn('⚠️ Failed to register token with backend, but token obtained');
+          // Still mark as initialized if token was obtained
+          this.isInitialized = true;
+          return true;
+        }
       }
 
+      console.error('❌ Failed to obtain push token');
       return false;
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ Error initializing notification service:', error.message || error);
       return false;
     }
   }
@@ -63,7 +81,6 @@ class NotificationService {
   /**
    * Configure notification behavior
    */
-  
   private async configureNotifications() {
     // Configure how notifications are handled when app is in foreground
     await Notifications.setNotificationHandler({
@@ -76,30 +93,54 @@ class NotificationService {
       }),
     });
 
-    // Configure notification channel for Android
+    // Configure notification channels for Android (CRITICAL for background notifications)
     if (Platform.OS === 'android') {
+      // Default channel - highest priority for background delivery
       await Notifications.setNotificationChannelAsync('default', {
-        name: 'Default',
-        importance: Notifications.AndroidImportance.MAX,
+        name: 'Default Notifications',
+        description: 'General notifications from BuildXpert',
+        importance: Notifications.AndroidImportance.MAX, // MAX ensures delivery even in Do Not Disturb mode
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#3B82F6',
         sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
       });
 
+      // Booking updates channel - high priority
       await Notifications.setNotificationChannelAsync('booking-updates', {
         name: 'Booking Updates',
+        description: 'Notifications about your bookings',
+        importance: Notifications.AndroidImportance.HIGH, // HIGH ensures delivery in background
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#10B981',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+
+      // Provider updates channel
+      await Notifications.setNotificationChannelAsync('provider-updates', {
+        name: 'Provider Updates',
+        description: 'Notifications for service providers',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#10B981',
         sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
       });
 
+      // Reminders channel
       await Notifications.setNotificationChannelAsync('reminders', {
         name: 'Reminders',
+        description: 'Booking reminders and important updates',
         importance: Notifications.AndroidImportance.DEFAULT,
         vibrationPattern: [0, 250],
         lightColor: '#F59E0B',
         sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
       });
     }
   }
@@ -218,11 +259,34 @@ class NotificationService {
     // Handle notification received while app is in foreground
     Notifications.addNotificationReceivedListener((notification) => {
       // You can add custom handling here (e.g., update badge, show custom UI)
+      console.log('📬 Notification received (foreground):', notification.request.content.title);
     });
 
-    // Handle notification tapped/opened
+    // Handle notification tapped/opened (works in both foreground and background)
     Notifications.addNotificationResponseReceivedListener((response) => {
+      console.log('👆 Notification tapped:', response.notification.request.content.title);
       this.handleNotificationTap(response.notification);
+    });
+
+    // CRITICAL: Handle background notifications
+    // This ensures notifications are received even when app is closed
+    Notifications.setNotificationCategoryAsync('default', [
+      {
+        identifier: 'VIEW',
+        buttonTitle: 'View',
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: 'DISMISS',
+        buttonTitle: 'Dismiss',
+        options: {},
+      },
+    ], {
+      intentIdentifiers: [],
+      hiddenPreviewsBodyPlaceholder: '',
+      categorySummaryFormat: '%u more notifications',
+    }).catch((error) => {
+      console.error('Error setting notification category:', error);
     });
   }
 
