@@ -305,7 +305,23 @@ class MetricsCollector {
    */
   calculateErrorRate() {
     if (this.metrics.requests.total === 0) return 0;
-    return (this.metrics.requests.errors / this.metrics.requests.total) * 100;
+    const errorRate = (this.metrics.requests.errors / this.metrics.requests.total) * 100;
+    
+    // Log diagnostic info if error rate is very high (helps debug issues)
+    if (errorRate > 50 && this.metrics.requests.total > 10) {
+      logger.warn('High error rate detected - diagnostic info', {
+        errorRate: errorRate.toFixed(2),
+        totalRequests: this.metrics.requests.total,
+        errorCount: this.metrics.requests.errors,
+        statusBreakdown: this.metrics.requests.byStatus,
+        topErrorRoutes: Object.entries(this.metrics.requests.byRoute)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([route, count]) => ({ route, count }))
+      });
+    }
+    
+    return errorRate;
   }
 
   /**
@@ -426,15 +442,43 @@ class MetricsCollector {
 const monitoringMiddleware = (req, res, next) => {
   const startTime = Date.now();
   
-  // Use on-finished instead of patching res.end
+  // Track status code explicitly
+  let trackedStatusCode = null;
+  
+  // Override status() to track status code
+  const originalStatus = res.status;
+  res.status = function(code) {
+    trackedStatusCode = code;
+    res.statusCode = code; // Ensure statusCode is set
+    return originalStatus.call(this, code);
+  };
+  
+  // Use on-finished to record metrics after response is complete
   onFinished(res, (err) => {
     const responseTime = Date.now() - startTime;
+    
+    // Determine final status code with better fallback logic
+    let finalStatusCode = 200; // Default to success
+    
+    if (err) {
+      // If there's an error, it's a 500
+      finalStatusCode = 500;
+    } else if (trackedStatusCode !== null) {
+      // Use explicitly tracked status code
+      finalStatusCode = trackedStatusCode;
+    } else if (res.statusCode && res.statusCode >= 100 && res.statusCode < 600) {
+      // Use res.statusCode if it's a valid HTTP status code
+      finalStatusCode = res.statusCode;
+    } else {
+      // Default to 200 if no status was set (Express default)
+      finalStatusCode = 200;
+    }
     
     // Record metrics
     metricsCollector.recordRequest(
       req.method,
       req.path || req.url,
-      res.statusCode || (err ? 500 : 200),
+      finalStatusCode,
       responseTime
     );
     
@@ -443,7 +487,7 @@ const monitoringMiddleware = (req, res, next) => {
       logger.warn('Slow request detected', {
         method: req.method,
         path: req.path || req.url,
-        statusCode: res.statusCode || (err ? 500 : 200),
+        statusCode: finalStatusCode,
         responseTime,
         userId: req.user?.id,
         error: err ? err.message : undefined

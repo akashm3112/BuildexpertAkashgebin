@@ -195,6 +195,7 @@ class NotificationService {
 
       const token = tokenData.data;
       console.log('✅ Push token obtained:', token.substring(0, 20) + '...');
+      console.log('📱 FULL PUSH TOKEN (for testing):', token); // Temporary: Full token for testing
 
       // Store token locally
       await AsyncStorage.setItem('expo_push_token', token);
