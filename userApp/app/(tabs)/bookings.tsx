@@ -8,7 +8,6 @@ import { useBookings } from '@/context/BookingContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { format } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { io as socketIOClient } from 'socket.io-client';
 import { router } from 'expo-router';
 import { API_BASE_URL } from '@/constants/api';
 import { Bell, Search, Filter, Calendar, Clock, MapPin, X, Check, ChevronDown, ChevronUp, CreditCard } from 'lucide-react-native';
@@ -191,38 +190,9 @@ export default function BookingsScreen() {
     if (!authLoading && user?.id) {
       fetchBookings(true);
       
-      // Setup socket connection
-      const socket = socketIOClient(`${API_BASE_URL}`);
-      socket.on('connect', () => console.log('Socket connected:', socket.id));
-      socket.emit('join', user.id);
-      socket.on('booking_created', () => {
-        fetchBookings(false).catch((error) => {
-          // Errors are already handled in fetchBookings, but catch here to prevent unhandled rejections
-          const isSessionExpired = error?.message === 'Session expired' || 
-                                   error?.status === 401 && error?.message?.includes('Session expired');
-          if (!isSessionExpired) {
-            console.warn('fetchBookings error on booking_created (handled):', error?.message || error);
-          }
-        });
-      });
-      socket.on('booking_updated', () => {
-        fetchBookings(false).catch((error) => {
-          // Errors are already handled in fetchBookings, but catch here to prevent unhandled rejections
-          const isSessionExpired = error?.message === 'Session expired' || 
-                                   error?.status === 401 && error?.message?.includes('Session expired');
-          if (!isSessionExpired) {
-            console.warn('fetchBookings error on booking_updated (handled):', error?.message || error);
-          }
-        });
-      });
-      socket.on('disconnect', () => console.log('Socket disconnected'));
-      socket.on('error', (error) => {
-        // Handle socket errors silently - they're usually connection issues
-        console.warn('Socket error (handled):', error);
-      });
-      return () => {
-        socket.disconnect();
-      };
+      // NOTE: Socket connection is handled by BookingContext
+      // No need to create duplicate socket connection here
+      // BookingContext already listens to booking_updated and will trigger refresh
     } else if (!authLoading && !user?.id) {
       // Auth finished loading but no user, set loading to false
       setLoading(false);

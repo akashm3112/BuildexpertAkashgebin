@@ -28,6 +28,7 @@ docker run -d \
   -e TWILIO_PHONE_NUMBER="your_twilio_number" \
   -e PAYTM_MID="your_paytm_mid" \
   -e PAYTM_MERCHANT_KEY="your_paytm_key" \
+  -e EXPO_ACCESS_TOKEN="your_expo_access_token" \
   buildxpert-api:latest
 ```
 
@@ -46,6 +47,7 @@ TWILIO_AUTH_TOKEN=your_token
 TWILIO_PHONE_NUMBER=your_number
 PAYTM_MID=your_mid
 PAYTM_MERCHANT_KEY=your_key
+EXPO_ACCESS_TOKEN=your_expo_access_token
 ```
 
 **Run:**
@@ -121,6 +123,7 @@ All environment variables from `config.env` should be set in your hosting platfo
 - `TWILIO_PHONE_NUMBER`
 - `PAYTM_MID`
 - `PAYTM_MERCHANT_KEY`
+- `EXPO_ACCESS_TOKEN` (for push notifications - get from https://expo.dev/accounts/[your-account]/settings/access-tokens)
 
 **Optional:**
 - `OTP_EXPIRE=300000`
@@ -227,5 +230,4 @@ Current setup uses:
 4. ✅ Deploy to hosting platform
 5. ✅ Update frontend API URLs
 6. ✅ Rebuild APKs with new backend URL
-
 

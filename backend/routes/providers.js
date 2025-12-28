@@ -653,19 +653,22 @@ router.put('/bookings/:id/status', [
 
   const updatedBooking = result.rows[0];
 
-  // Fetch user_id and service_name for notification
-  const bookingDetails = await getRow(`
-      SELECT b.user_id, sm.name as service_name, b.appointment_date, b.appointment_time
-      FROM bookings b
-      JOIN provider_services ps ON b.provider_service_id = ps.id
-      JOIN services_master sm ON ps.service_id = sm.id
-      WHERE b.id = $1
-    `, [id]);
-    
-    // Import time formatting utility
-    const { formatAppointmentTime, formatDate } = require('../utils/timezone');
-    
-    if (bookingDetails) {
+  // Fetch user_id and service_name for notification (async - don't block response)
+  setImmediate(async () => {
+    try {
+      const bookingDetails = await getRow(`
+        SELECT b.user_id, sm.name as service_name, b.appointment_date, b.appointment_time
+        FROM bookings b
+        JOIN provider_services ps ON b.provider_service_id = ps.id
+        JOIN services_master sm ON ps.service_id = sm.id
+        WHERE b.id = $1
+      `, [id]);
+      
+      if (!bookingDetails) return;
+      
+      // Import time formatting utility
+      const { formatAppointmentTime, formatDate } = require('../utils/timezone');
+      
       // Format appointment date and time for display
       const formattedDate = bookingDetails.appointment_date 
         ? formatDate(new Date(bookingDetails.appointment_date)) 
@@ -674,15 +677,15 @@ router.put('/bookings/:id/status', [
       const timeDisplay = formattedTime ? ` at ${formattedTime}` : '';
       
       if (status === 'accepted') {
-        // Send in-app notification
-        const acceptedNotification = await sendNotification(
+        // Send in-app notification (async)
+        sendNotification(
           bookingDetails.user_id,
           'Booking Accepted',
           `Your booking for ${bookingDetails.service_name} on ${formattedDate}${timeDisplay} has been accepted.`,
           'user'
-        );
+        ).catch(err => logger.error('Failed to send acceptance notification', { error: err.message }));
 
-        // Send push notification
+        // Send push notification (async)
         const pushNotification = {
           ...NotificationTemplates.BOOKING_CONFIRMED,
           body: `Your ${bookingDetails.service_name} booking has been confirmed for ${bookingDetails.appointment_date}`,
@@ -692,21 +695,19 @@ router.put('/bookings/:id/status', [
             screen: 'bookings'
           }
         };
-        await pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification);
-        logger.booking('Push notification sent for booking acceptance', {
-          bookingId: id
-        });
+        pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification)
+          .catch(err => logger.error('Failed to send push notification', { error: err.message }));
 
       } else if (status === 'rejected') {
-        // Send in-app notification
-        const rejectedNotification = await sendNotification(
+        // Send in-app notification (async)
+        sendNotification(
           bookingDetails.user_id,
           'Booking Rejected',
           `Your booking for ${bookingDetails.service_name} on ${formattedDate}${timeDisplay} was rejected.`,
           'user'
-        );
+        ).catch(err => logger.error('Failed to send rejection notification', { error: err.message }));
 
-        // Send push notification
+        // Send push notification (async)
         const pushNotification = {
           ...NotificationTemplates.BOOKING_CANCELLED,
           title: '❌ Booking Rejected',
@@ -717,21 +718,19 @@ router.put('/bookings/:id/status', [
             screen: 'bookings'
           }
         };
-        await pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification);
-        logger.booking('Push notification sent for booking rejection', {
-          bookingId: id
-        });
+        pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification)
+          .catch(err => logger.error('Failed to send push notification', { error: err.message }));
 
       } else if (status === 'completed') {
-        // Send in-app notification
-        const completedNotification = await sendNotification(
+        // Send in-app notification (async)
+        sendNotification(
           bookingDetails.user_id,
           'Booking Completed',
           `Your booking for ${bookingDetails.service_name} on ${formattedDate}${timeDisplay} has been marked as completed. Please rate your experience.`,
           'user'
-        );
+        ).catch(err => logger.error('Failed to send completion notification', { error: err.message }));
 
-        // Send push notification
+        // Send push notification (async)
         const pushNotification = {
           ...NotificationTemplates.SERVICE_COMPLETED,
           body: `Your ${bookingDetails.service_name} service is complete! Please rate your experience.`,
@@ -741,20 +740,11 @@ router.put('/bookings/:id/status', [
             screen: 'bookings'
           }
         };
-        await pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification);
-        logger.booking('Push notification sent for service completion', {
-          bookingId: id
-        });
+        pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification)
+          .catch(err => logger.error('Failed to send push notification', { error: err.message }));
       }
 
-      // Notify provider about the status change
-      const providerNotification = await sendNotification(
-        req.user.id,
-        `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-        `You have ${status} a booking for ${bookingDetails.service_name} on ${formattedDate}${timeDisplay}.`,
-        'provider'
-      );
-      // Emit real-time event to both the user's and provider's userId rooms
+      // Emit real-time events (non-blocking)
       getIO().to(bookingDetails.user_id).emit('booking_updated', {
         booking: updatedBooking
       });
@@ -763,40 +753,122 @@ router.put('/bookings/:id/status', [
       });
       
       // Emit booking_unread_count_update event to user for real-time badge update
-      // This triggers the frontend to refresh the unread count
       if (['accepted', 'cancelled', 'completed'].includes(status)) {
         getIO().to(bookingDetails.user_id).emit('booking_unread_count_update');
       }
       
       // When provider accepts/rejects/completes a booking, mark it as viewed for provider
-      // This removes it from the unread count
-      await query(
+      query(
         `UPDATE bookings SET is_viewed_by_provider = TRUE WHERE id = $1`,
         [id]
-      );
+      ).catch(err => logger.error('Failed to mark booking as viewed', { error: err.message }));
       
       // Emit booking_unread_count_update event to provider for real-time badge update
       getIO().to(req.user.id).emit('booking_unread_count_update');
 
-      // Emit earnings update to provider when booking is completed
+      // Emit earnings update to provider when booking is completed (async)
       if (status === 'completed') {
-        await emitEarningsUpdate(req.user.id);
-        // Invalidate earnings cache when booking is completed
-        const providerProfile = await getRow('SELECT id FROM provider_profiles WHERE user_id = $1', [req.user.id]);
-        if (providerProfile) {
-          caches.user.delete(CacheKeys.earnings(providerProfile.id));
-        }
+        emitEarningsUpdate(req.user.id).catch(err => logger.error('Failed to emit earnings update', { error: err.message }));
+        
+        // Invalidate earnings cache when booking is completed (async)
+        getRow('SELECT id FROM provider_profiles WHERE user_id = $1', [req.user.id])
+          .then(providerProfile => {
+            if (providerProfile) {
+              const caches = require('../utils/cache');
+              const CacheKeys = require('../utils/cacheKeys');
+              caches.user.delete(CacheKeys.earnings(providerProfile.id));
+            }
+          })
+          .catch(err => logger.error('Failed to invalidate earnings cache', { error: err.message }));
       }
       
-      // Invalidate user cache for both user and provider when booking status changes
+      // Invalidate user cache for both user and provider when booking status changes (async)
+      const { invalidateUserCache } = require('../utils/cache');
       invalidateUserCache(bookingDetails.user_id);
       invalidateUserCache(req.user.id);
+    } catch (err) {
+      logger.error('Error in async booking status update', { error: err.message, bookingId: id });
     }
+  });
 
   res.json({
     status: 'success',
     message: `Booking ${status} successfully`,
     data: { booking: updatedBooking }
+  });
+}));
+
+// @route   POST /api/providers/bookings/:id/rate-customer
+// @desc    Rate a customer (for providers)
+// @access  Private (Provider only)
+router.post('/bookings/:id/rate-customer', [
+  body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
+  body('review').optional().isLength({ max: 500 }).withMessage('Review must be less than 500 characters')
+], asyncHandler(async (req, res) => {
+  validateOrThrow(req);
+
+  const { id } = req.params;
+  const { rating, review } = req.body;
+
+  throwIfMissing({ rating }, 'Rating is required');
+
+  // Check if booking belongs to provider
+  const booking = await getRow(`
+    SELECT b.*, b.user_id as customer_user_id
+    FROM bookings b
+    JOIN provider_services ps ON b.provider_service_id = ps.id
+    JOIN provider_profiles pp ON ps.provider_id = pp.id
+    WHERE b.id = $1 AND pp.user_id = $2
+  `, [id, req.user.id]);
+
+  if (!booking) {
+    throw new NotFoundError('Booking not found');
+  }
+
+  // Check if already rated
+  const existingRating = await getRow('SELECT * FROM ratings WHERE booking_id = $1', [id]);
+  if (existingRating) {
+    throw new ValidationError('Customer already rated for this booking');
+  }
+
+  // Create rating (using ratings table - same as user ratings)
+  const result = await query(`
+    INSERT INTO ratings (booking_id, rating, review, created_at)
+    VALUES ($1, $2, $3, NOW())
+    RETURNING *
+  `, [id, rating, review || null]);
+
+  const newRating = result.rows[0];
+
+  // Get service name for notification (async - don't block response)
+  setImmediate(async () => {
+    try {
+      const ratingBooking = await getRow(`
+        SELECT sm.name as service_name
+        FROM bookings b
+        JOIN provider_services ps ON b.provider_service_id = ps.id
+        JOIN services_master sm ON ps.service_id = sm.id
+        WHERE b.id = $1
+      `, [id]);
+      
+      if (ratingBooking && booking.customer_user_id) {
+        // Notify customer about the rating (async - non-blocking)
+        await sendNotification(
+          booking.customer_user_id,
+          'New Rating',
+          `You received a ${rating} star rating for ${ratingBooking.service_name}`,
+          'user'
+        ).catch(err => logger.error('Failed to send rating notification', { error: err.message }));
+      }
+    } catch (err) {
+      logger.error('Error in rating notification', { error: err.message });
+    }
+  });
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Rating submitted successfully',
+    data: { rating: newRating }
   });
 }));
 

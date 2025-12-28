@@ -175,9 +175,33 @@ router.put('/profile', [profileUpdateLimiter, ...validateUpdateProfile], asyncHa
   let paramCount = 1;
 
   if (fullName) {
-    updateFields.push(`full_name = $${paramCount}`);
-    updateValues.push(fullName);
-    paramCount++;
+    // Check current name to see if it's actually changing
+    const currentUser = await getRow('SELECT full_name, name_change_count FROM users WHERE id = $1', [req.user.id]);
+    
+    if (currentUser && currentUser.full_name !== fullName.trim()) {
+      // Name is actually changing - check limit
+      const nameChangeCount = currentUser.name_change_count || 0;
+      
+      if (nameChangeCount >= 2) {
+        throw new ValidationError('You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.');
+      }
+      
+      // Increment name change count
+      updateFields.push(`full_name = $${paramCount}`);
+      updateValues.push(fullName.trim());
+      paramCount++;
+      updateFields.push(`name_change_count = $${paramCount}`);
+      updateValues.push(nameChangeCount + 1);
+      paramCount++;
+    } else if (currentUser && currentUser.full_name === fullName.trim()) {
+      // Name is not changing, just update other fields
+      // Don't add full_name to updateFields
+    } else {
+      // First time setting name (shouldn't happen, but handle it)
+      updateFields.push(`full_name = $${paramCount}`);
+      updateValues.push(fullName.trim());
+      paramCount++;
+    }
   }
 
   if (email) {
@@ -286,7 +310,7 @@ router.put('/profile', [profileUpdateLimiter, ...validateUpdateProfile], asyncHa
     UPDATE users 
     SET ${updateFields.join(', ')}
     WHERE id = $${paramCount}
-    RETURNING id, full_name, email, phone, role, is_verified, profile_pic_url, created_at
+    RETURNING id, full_name, email, phone, role, is_verified, profile_pic_url, name_change_count, created_at
   `, updateValues);
 
   const updatedUser = result.rows[0];
@@ -304,6 +328,7 @@ router.put('/profile', [profileUpdateLimiter, ...validateUpdateProfile], asyncHa
         role: updatedUser.role,
         isVerified: updatedUser.is_verified,
         profilePicUrl: updatedUser.profile_pic_url,
+        nameChangeCount: updatedUser.name_change_count || 0,
         createdAt: updatedUser.created_at
       }
     }

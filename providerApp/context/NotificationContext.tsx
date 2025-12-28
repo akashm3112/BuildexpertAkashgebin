@@ -37,6 +37,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const appState = useRef(AppState.currentState);
+  const lastFetchTime = useRef<number>(0);
+  const fetchInProgress = useRef<boolean>(false);
+  const socketRef = useRef<any>(null);
+  const DEBOUNCE_DELAY = 500; // 500ms debounce to prevent duplicate fetches
 
   // Fetch unread count from API
   const fetchUnreadCount = async () => {
@@ -85,6 +89,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return;
     }
     
+    // Debounce: Prevent rapid duplicate fetches (within 500ms)
+    const now = Date.now();
+    if (fetchInProgress.current || (now - lastFetchTime.current < DEBOUNCE_DELAY)) {
+      return; // Skip if fetch is in progress or too soon after last fetch
+    }
+    
+    fetchInProgress.current = true;
+    lastFetchTime.current = now;
+    
     try {
       const token = await tokenManager.getValidToken();
       if (!token) {
@@ -120,6 +133,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       
       // Network errors are expected when backend is down or network is unavailable
       // Silently handle them (will retry on next fetch)
+    } finally {
+      fetchInProgress.current = false;
     }
   };
 
@@ -259,11 +274,45 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     appState.current = nextAppState;
   };
 
+  // Initialize push notifications when user logs in
+  useEffect(() => {
+    if (authLoading || !user?.id) {
+      return;
+    }
+
+    // Initialize push notifications in the background
+    const initPushNotifications = async () => {
+      try {
+        const { notificationService } = await import('@/services/NotificationService');
+        await notificationService.initialize().catch((error) => {
+          console.error('Failed to initialize push notifications:', error);
+        });
+      } catch (error) {
+        console.error('Error loading notification service:', error);
+      }
+    };
+    
+    initPushNotifications();
+  }, [user?.id, authLoading]);
+
   // Set up real-time notifications via socket.io - wait for auth to finish loading
   useEffect(() => {
-    if (authLoading || !user?.id) return;
+    if (authLoading || !user?.id) {
+      // Clean up socket if user logs out
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      return;
+    }
+
+    // Prevent duplicate socket connections
+    if (socketRef.current) {
+      return; // Socket already exists
+    }
 
     const socket = socketIOClient(`${API_BASE_URL}`);
+    socketRef.current = socket;
     
     socket.on('connect', () => {
       socket.emit('join', user.id);
@@ -335,7 +384,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     return () => {
-      socket.disconnect();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
   }, [user?.id, authLoading]);
 

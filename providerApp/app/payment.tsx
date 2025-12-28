@@ -150,6 +150,42 @@ export default function PaymentScreen() {
       setShowPaymentModal(false);
 
       if (response.ok && data.status === 'success') {
+        // Immediately cache the registration for instant UI update
+        try {
+          const { category, serviceId } = router.params || {};
+          const serviceNameToCategoryMap: { [key: string]: string } = {
+            'labors': 'labor',
+            'plumber': 'plumber',
+            'mason-mastri': 'mason-mastri',
+            'painting-cleaning': 'painting',
+            'painting': 'painting',
+            'cleaning': 'cleaning',
+            'granite-tiles': 'granite-tiles',
+            'engineer-interior': 'engineer-interior',
+            'electrician': 'electrician',
+            'carpenter': 'carpenter',
+            'painter': 'painting',
+            'interiors-building': 'interiors-building',
+            'stainless-steel': 'stainless-steel',
+            'contact-building': 'contact-building',
+            'glass-mirror': 'glass-mirror',
+            'borewell': 'borewell'
+          };
+          
+          const categoryId = (category as string) || (serviceId as string) || '';
+          const mappedCategoryId = serviceNameToCategoryMap[categoryId.toLowerCase()] || categoryId;
+          
+          // Store in AsyncStorage for immediate UI update
+          const cachedServices = await AsyncStorage.getItem('cached_registered_services');
+          const servicesArray = cachedServices ? JSON.parse(cachedServices) : [];
+          if (!servicesArray.includes(mappedCategoryId)) {
+            servicesArray.push(mappedCategoryId);
+            await AsyncStorage.setItem('cached_registered_services', JSON.stringify(servicesArray));
+          }
+        } catch (cacheError) {
+          // Silently fail - cache is not critical
+        }
+        
         showAlert(
           'Payment Successful!',
           `Your service registration is now active for 30 days. You will receive a reminder 2 days before expiry.`,

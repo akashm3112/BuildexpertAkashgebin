@@ -54,6 +54,9 @@ services:
       - PAYTM_INDUSTRY_TYPE_ID=${PAYTM_INDUSTRY_TYPE_ID:-Retail}
       - PAYTM_CALLBACK_URL=${PAYTM_CALLBACK_URL}
       
+      # Expo Push Notifications
+      - EXPO_ACCESS_TOKEN=${EXPO_ACCESS_TOKEN}
+      
       # Other
       - OTP_EXPIRE=${OTP_EXPIRE:-300000}
       - MAX_FILE_SIZE=${MAX_FILE_SIZE:-5242880}
@@ -77,5 +80,4 @@ services:
 networks:
   buildxpert-network:
     driver: bridge
-
 

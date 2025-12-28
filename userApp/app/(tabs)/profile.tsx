@@ -156,6 +156,7 @@ export default function ProfileScreen() {
     image: '',
   });
   const [imageLoading, setImageLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [bookingsCount, setBookingsCount] = useState(0);
   const [averageRating, setAverageRating] = useState(0);
   const [totalReviews, setTotalReviews] = useState(0);
@@ -696,11 +697,114 @@ export default function ProfileScreen() {
     setNotificationSettingsVisible(true);
   };
 
-  const saveProfile = () => {
-    setEditModalVisible(false);
-    showAlert('Success', t('alerts.success.profileUpdated'), 'success', [
-      { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
-    ]);
+  const saveProfile = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Get token
+      let token = user?.token;
+      if (!token) {
+        const storedToken = await AsyncStorage.getItem('token');
+        token = storedToken || undefined;
+      }
+      
+      if (!token) {
+        setIsLoading(false);
+        showAlert('Error', t('alerts.error.noToken'), 'error');
+        return;
+      }
+
+      // Validation
+      if (!userProfile.name.trim()) {
+        setIsLoading(false);
+        showAlert('Error', 'Name is required', 'error');
+        return;
+      }
+
+      if (!userProfile.email.trim()) {
+        setIsLoading(false);
+        showAlert('Error', 'Email is required', 'error');
+        return;
+      }
+
+      // Prepare update data
+      const updateData: any = {
+        fullName: userProfile.name.trim(),
+        email: userProfile.email.trim(),
+      };
+
+      // Upload profile image if it's a local URI
+      if (userProfile.image && userProfile.image.startsWith('file://')) {
+        try {
+          const { uploadImage } = await import('@/utils/cloudinary');
+          const uploadResult = await uploadImage(userProfile.image, 'buildxpert/profile-pictures');
+          if (uploadResult.success) {
+            updateData.profilePicUrl = uploadResult.url;
+          }
+        } catch (imageError) {
+          console.error('Failed to upload profile image:', imageError);
+          // Continue without image if upload fails
+        }
+      } else if (userProfile.image && userProfile.image.trim() !== '') {
+        updateData.profilePicUrl = userProfile.image;
+      }
+
+      // Call API to update profile
+      const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        responseData = { message: responseText || 'Unknown error' };
+      }
+
+      if (response.ok && responseData.status === 'success') {
+        // Update local user data
+        const updatedUser = {
+          ...user,
+          fullName: userProfile.name.trim(),
+          full_name: userProfile.name.trim(),
+          email: userProfile.email.trim(),
+          profile_pic_url: updateData.profilePicUrl || userProfile.image,
+          profilePicUrl: updateData.profilePicUrl || userProfile.image,
+        };
+
+        await updateUser(updatedUser);
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+
+        setEditModalVisible(false);
+        showAlert('Success', t('alerts.success.profileUpdated'), 'success', [
+          { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+        ]);
+      } else {
+        // Handle specific error cases
+        if (responseData.message && responseData.message.includes('name change limit')) {
+          showAlert(
+            'Name Change Limit Reached',
+            'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+            'error'
+          );
+        } else if (responseData.message && responseData.message.includes('Email already taken')) {
+          showAlert('Error', 'This email address is already in use by another account. Please use a different email address.', 'error');
+        } else {
+          showAlert('Error', responseData.message || t('alerts.error.updateFailed'), 'error');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      showAlert('Error', error.message || t('alerts.error.updateFailed'), 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteAccount = async () => {

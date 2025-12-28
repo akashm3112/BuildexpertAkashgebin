@@ -29,7 +29,7 @@ backend/config.production.env
 **/config.env
 **/config.production.env
 
-# API URL files (only in constants folder, not utils)
-**/constants/api.ts
-userApp/constants/api.ts
-providerApp/constants/api.ts
+# API URL files - These are safe to commit as they use environment variables
+# Removed from gitignore to fix EAS build errors
+# userApp/constants/api.ts - Uses EXPO_PUBLIC_API_URL env var
+# providerApp/constants/api.ts - Uses EXPO_PUBLIC_API_URL env var

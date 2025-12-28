@@ -96,11 +96,17 @@ class WebRTCService {
 
   // Initialize Socket.io connection
   async initialize(userId: string, token: string) {
-    if (this.socket?.connected) {
+    if (this.socket?.connected && this.userId === userId) {
       return;
     }
 
     this.userId = userId;
+
+    // Disconnect existing socket if any
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
 
     this.socket = io(API_BASE_URL, {
       transports: ['websocket'],
@@ -108,31 +114,46 @@ class WebRTCService {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      timeout: 20000,
     });
 
-    this.socket.on('connect', () => {
-      this.socket?.emit('join', userId);
-    });
+    // Wait for connection before proceeding
+    return new Promise<void>((resolve, reject) => {
+      const connectionTimeout = setTimeout(() => {
+        reject(new Error('Socket connection timeout'));
+      }, 10000);
 
-    this.socket.on('disconnect', () => {
-      this.handleSocketDisconnect();
-    });
+      this.socket!.on('connect', () => {
+        clearTimeout(connectionTimeout);
+        // Join user room immediately after connection
+        this.socket?.emit('join', userId);
+        this.setupSocketListeners();
+        resolve();
+      });
 
-    this.socket.on('error', (error) => {
-      this.handleSocketError(error);
-    });
+      this.socket!.on('connect_error', (error) => {
+        clearTimeout(connectionTimeout);
+        reject(new Error(`Socket connection failed: ${error.message || 'Unknown error'}`));
+      });
 
-    this.socket.on('reconnect', () => {
-      if (this.userId) {
-        this.socket?.emit('join', this.userId);
-      }
-    });
+      this.socket!.on('disconnect', () => {
+        this.handleSocketDisconnect();
+      });
 
-    this.socket.on('reconnect_error', (error) => {
-      // Socket reconnection error
-    });
+      this.socket!.on('error', (error) => {
+        this.handleSocketError(error);
+      });
 
-    this.setupSocketListeners();
+      this.socket!.on('reconnect', () => {
+        if (this.userId) {
+          this.socket?.emit('join', this.userId);
+        }
+      });
+
+      this.socket!.on('reconnect_error', (error) => {
+        // Socket reconnection error
+      });
+    });
   }
 
   // Set up Socket.io event listeners
@@ -899,11 +920,30 @@ class WebRTCService {
   private ensureServerCallSetup(callData: CallData) {
     return new Promise<void>((resolve, reject) => {
       if (!this.socket) {
-        reject(new Error('Not connected to call service.'));
+        reject(new Error('Not connected to call service. Please check your internet connection.'));
         return;
       }
 
-      this.socket.emit('call:initiate', { bookingId: callData.bookingId }, (response?: { status: string; message?: string; errorCode?: string }) => {
+      if (!this.socket.connected) {
+        reject(new Error('Socket not connected. Please wait a moment and try again.'));
+        return;
+      }
+
+      if (!this.userId) {
+        reject(new Error('User not authenticated. Please log in again.'));
+        return;
+      }
+
+      // Set timeout for call initiation
+      const timeout = setTimeout(() => {
+        reject(new Error('Call initiation timeout. Please try again.'));
+      }, 10000);
+
+      this.socket.emit('call:initiate', { 
+        bookingId: callData.bookingId,
+        callerType: 'user' // Add callerType for backend validation
+      }, (response?: { status: string; message?: string; errorCode?: string }) => {
+        clearTimeout(timeout);
         if (!response || response.status === 'success') {
           resolve();
         } else {

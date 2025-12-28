@@ -59,7 +59,6 @@ import {
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, parseISO } from 'date-fns';
-import { io as socketIOClient } from 'socket.io-client';
 
 // Responsive design utilities
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -135,6 +134,10 @@ export default function BookingsScreen() {
   const [ratingBookingId, setRatingBookingId] = useState<string | null>(null);
   const [customerRating, setCustomerRating] = useState(0);
   const [ratingFeedback, setRatingFeedback] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+
+  // Booking action loading state (track which booking is being processed)
+  const [processingBookingId, setProcessingBookingId] = useState<string | null>(null);
 
   const cancelReasons = [
     'Change of plans',
@@ -262,36 +265,9 @@ export default function BookingsScreen() {
       // Only show spinner on first load
       loadBookings(true);
       
-      // Setup socket connection
-      const socket = socketIOClient(`${API_BASE_URL}`);
-      socket.on('connect', () => {
-        // Socket connected successfully
-        socket.emit('join', user.id);
-      });
-      socket.on('booking_created', (data) => {
-        if (data && data.booking) {
-          setBookings(prev => [data.booking, ...prev]); // Prepend new booking for instant UI
-        }
-        // Refresh from backend in background (no spinner)
-        loadBookings(false);
-      });
-      socket.on('booking_updated', () => {
-        loadBookings(false);
-      });
-      socket.on('disconnect', () => {
-        // Socket disconnected - expected when backend is off
-      });
-      socket.on('connect_error', (error: any) => {
-        // Suppress socket connection errors - they're expected when backend is off
-        // Don't log or show errors to user
-      });
-      socket.on('error', (error: any) => {
-        // Suppress socket errors - they're expected when backend is off
-        // Don't log or show errors to user
-      });
-      return () => {
-        socket.disconnect();
-      };
+      // NOTE: Socket connection is handled by BookingContext
+      // No need to create duplicate socket connection here
+      // BookingContext already listens to booking_updated and will trigger refresh via refreshBookings
     } else if (!authLoading && !user?.id) {
       // Auth finished loading but no user, set loading to false
       setIsLoading(false);
@@ -319,6 +295,20 @@ export default function BookingsScreen() {
     action: 'accept' | 'reject' | 'complete',
     reason?: string
   ) => {
+    // Prevent duplicate actions
+    if (processingBookingId === bookingId) return;
+
+    setProcessingBookingId(bookingId);
+    
+    // Optimistic UI update - update the booking status immediately
+    setBookings(prevBookings => 
+      prevBookings.map(booking => 
+        booking.id === bookingId 
+          ? { ...booking, status: action === 'accept' ? 'accepted' : action === 'complete' ? 'completed' : 'rejected' as any }
+          : booking
+      )
+    );
+
     try {
       const { apiPut } = await import('@/utils/apiClient');
 
@@ -335,20 +325,45 @@ export default function BookingsScreen() {
       );
 
       if (response.ok && response.data && response.data.status === 'success') {
-        showAlert(
-          t('alerts.success'),
-          (response.data as any).message || t('alerts.bookingActionSuccess', { action })
-        );
-        // Refresh bookings to get updated data
-        loadBookings();
+        // Refresh bookings in background (non-blocking)
+        loadBookings().catch(() => {
+          // Silently fail - optimistic update already shows the change
+        });
+        
+        // Show success message (non-blocking)
+        setTimeout(() => {
+          showAlert(
+            t('alerts.success'),
+            (response.data as any).message || t('alerts.bookingActionSuccess', { action })
+          );
+        }, 100);
       } else {
+        // Revert optimistic update on error
+        setBookings(prevBookings => 
+          prevBookings.map(booking => 
+            booking.id === bookingId 
+              ? { ...booking, status: 'pending' as any }
+              : booking
+          )
+        );
+        
         const message =
           (response.data && (response.data as any).message) ||
           t('alerts.failedToActionBooking', { action });
         showAlert(t('alerts.error'), message);
       }
     } catch (error) {
+      // Revert optimistic update on error
+      setBookings(prevBookings => 
+        prevBookings.map(booking => 
+          booking.id === bookingId 
+            ? { ...booking, status: 'pending' as any }
+            : booking
+        )
+      );
       showAlert(t('alerts.error'), t('alerts.networkError'));
+    } finally {
+      setProcessingBookingId(null);
     }
   };
 
@@ -398,15 +413,43 @@ export default function BookingsScreen() {
   };
 
   const handleRatingSubmit = async () => {
-    if (!ratingBookingId || customerRating === 0) return;
+    if (!ratingBookingId || customerRating === 0 || isSubmittingRating) return;
 
+    setIsSubmittingRating(true);
+    try {
+      const { apiPost } = await import('@/utils/apiClient');
+      
+      // First, submit the rating
+      const ratingResponse = await apiPost<{ status: string; message: string; data: { rating: any } }>(
+        `/api/providers/bookings/${ratingBookingId}/rate-customer`,
+        {
+          rating: customerRating,
+          review: ratingFeedback.trim() || undefined
+        }
+      );
 
-    await handleBookingAction(ratingBookingId, 'complete');
-    setRatingModalVisible(false);
-    setRatingBookingId(null);
-    setCustomerRating(0);
-    setRatingFeedback('');
-            showAlert(t('alerts.success'), t('alerts.bookingCompleted'));
+      if (!ratingResponse.ok || ratingResponse.data?.status !== 'success') {
+        const message = ratingResponse.data?.message || 'Failed to submit rating';
+        showAlert(t('alerts.error'), message);
+        setIsSubmittingRating(false);
+        return;
+      }
+
+      // Then, complete the booking
+      await handleBookingAction(ratingBookingId, 'complete');
+      
+      // Close modal and reset state
+      setRatingModalVisible(false);
+      setRatingBookingId(null);
+      setCustomerRating(0);
+      setRatingFeedback('');
+      showAlert(t('alerts.success'), 'Rating submitted and booking completed successfully');
+    } catch (error: any) {
+      console.error('Error submitting rating:', error);
+      showAlert(t('alerts.error'), error.message || 'Failed to submit rating. Please try again.');
+    } finally {
+      setIsSubmittingRating(false);
+    }
   };
 
   const handleRatingSkip = async () => {
@@ -621,15 +664,31 @@ export default function BookingsScreen() {
             {item.status === 'pending' && (
               <>
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.acceptButton]}
+                  style={[
+                    styles.actionButton, 
+                    styles.acceptButton,
+                    processingBookingId === item.id && styles.disabledButton
+                  ]}
                   onPress={() => handleBookingAction(item.id, 'accept')}
+                  disabled={processingBookingId === item.id}
                 >
-                  <CheckCircle size={14} color="#FFFFFF" />
-                  <Text style={[styles.actionButtonText, styles.acceptButtonText]}>Accept</Text>
+                  {processingBookingId === item.id ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <CheckCircle size={14} color="#FFFFFF" />
+                  )}
+                  <Text style={[styles.actionButtonText, styles.acceptButtonText]}>
+                    {processingBookingId === item.id ? 'Accepting...' : 'Accept'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.rejectButton]}
+                  style={[
+                    styles.actionButton, 
+                    styles.rejectButton,
+                    processingBookingId === item.id && styles.disabledButton
+                  ]}
                   onPress={() => openRejectModal(item.id)}
+                  disabled={processingBookingId === item.id}
                 >
                   <XCircle size={14} color="#FFFFFF" />
                   <Text style={[styles.actionButtonText, styles.rejectButtonText]}>Reject</Text>
@@ -639,11 +698,22 @@ export default function BookingsScreen() {
             
             {item.status === 'accepted' && (
               <TouchableOpacity
-                style={[styles.actionButton, styles.completeButton]}
+                style={[
+                  styles.actionButton, 
+                  styles.completeButton,
+                  processingBookingId === item.id && styles.disabledButton
+                ]}
                 onPress={() => openRatingModal(item.id)}
+                disabled={processingBookingId === item.id}
               >
-                <CheckCircle size={14} color="#2563EB" />
-                <Text style={[styles.actionButtonText, styles.completeButtonText]}>Complete</Text>
+                {processingBookingId === item.id ? (
+                  <ActivityIndicator size="small" color="#2563EB" />
+                ) : (
+                  <CheckCircle size={14} color="#2563EB" />
+                )}
+                <Text style={[styles.actionButtonText, styles.completeButtonText]}>
+                  {processingBookingId === item.id ? 'Completing...' : 'Complete'}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -906,16 +976,45 @@ export default function BookingsScreen() {
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton, { flex: 1, marginRight: 10 }]}
-                onPress={() => setRatingModalVisible(false)}
+                style={[styles.modalButton, styles.cancelButton, { flex: 1, marginRight: 10, opacity: isSubmittingRating ? 0.5 : 1 }]}
+                onPress={() => {
+                  if (!isSubmittingRating) {
+                    setRatingModalVisible(false);
+                  }
+                }}
+                disabled={isSubmittingRating}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton, { flex: 2, backgroundColor: '#3B82F6', borderRadius: 10, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 }]}
+                style={[
+                  styles.modalButton, 
+                  styles.submitButton, 
+                  { 
+                    flex: 2, 
+                    backgroundColor: '#3B82F6', 
+                    borderRadius: 10, 
+                    shadowColor: '#3B82F6', 
+                    shadowOffset: { width: 0, height: 2 }, 
+                    shadowOpacity: 0.15, 
+                    shadowRadius: 4, 
+                    elevation: 4,
+                    opacity: isSubmittingRating ? 0.7 : 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8
+                  }
+                ]}
                 onPress={handleRatingSubmit}
+                disabled={isSubmittingRating || customerRating === 0}
               >
-                <Text style={[styles.submitButtonText, { fontWeight: '700', fontSize: 16 }]}>Submit Rating</Text>
+                {isSubmittingRating && (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                )}
+                <Text style={[styles.submitButtonText, { fontWeight: '700', fontSize: 16 }]}>
+                  {isSubmittingRating ? 'Submitting...' : 'Submit Rating'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

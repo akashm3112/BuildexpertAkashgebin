@@ -23,7 +23,16 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#3B82F6",
+          "sounds": ["default"],
+          "mode": "production"
+        }
+      ]
     ],
     "android": {
       "permissions": [
@@ -37,7 +46,10 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "2fb313e8-0bf7-487a-a1d8-b635057bc01b"
+      }
     },
     "updates": {
       "enabled": false,

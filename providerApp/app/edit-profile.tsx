@@ -287,8 +287,7 @@ export default function EditProfileScreen() {
         ...(profileImageUrl && { profilePicUrl: profileImageUrl }),
       };
 
-
-      // Update user profile via API
+      // Update user profile via API (this updates the users table)
       const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
         method: 'PUT',
         headers: {
@@ -336,7 +335,13 @@ export default function EditProfileScreen() {
         console.error('Profile update failed:', errorData);
         
         // Handle specific error cases
-        if (errorData.message && errorData.message.includes('Email already taken')) {
+        if (errorData.message && errorData.message.includes('name change limit')) {
+          Alert.alert(
+            'Name Change Limit Reached',
+            'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+            [{ text: 'OK' }]
+          );
+        } else if (errorData.message && errorData.message.includes('Email already taken')) {
           Alert.alert(
             'Error', 
             'This email address is already in use by another account. Please use a different email address.',

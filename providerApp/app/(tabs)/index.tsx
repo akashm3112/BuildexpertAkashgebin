@@ -532,6 +532,17 @@ export default function HomeScreen() {
     try {
       setIsLoadingServices(true);
       
+      // First, load from cache for instant UI update
+      try {
+        const cachedServices = await AsyncStorage.getItem('cached_registered_services');
+        if (cachedServices) {
+          const cachedArray = JSON.parse(cachedServices);
+          setRegisteredServices(cachedArray);
+        }
+      } catch (cacheError) {
+        // Silently fail - cache is optional
+      }
+      
       // Use API client instead of direct fetch - it handles token refresh automatically
       const { apiGet } = await import('@/utils/apiClient');
       
@@ -565,6 +576,13 @@ export default function HomeScreen() {
           }).filter(Boolean);
 
           setRegisteredServices(registeredCategoryIds);
+          
+          // Update cache with fresh data
+          try {
+            await AsyncStorage.setItem('cached_registered_services', JSON.stringify(registeredCategoryIds));
+          } catch (cacheError) {
+            // Silently fail
+          }
         }
       } catch (apiError: any) {
         // Handle API errors silently - don't show error for home screen

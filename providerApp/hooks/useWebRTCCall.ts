@@ -62,6 +62,7 @@ export const useWebRTCCall = () => {
           const { tokenManager } = await import('@/utils/tokenManager');
           const token = await tokenManager.getValidToken();
           if (token) {
+            // Initialize and wait for socket connection
             await webRTCService.initialize(user.id, token);
             
             // Set up event handlers
@@ -73,17 +74,19 @@ export const useWebRTCCall = () => {
               onCallConnected: handleCallConnected,
               onError: handleError,
             });
+          } else {
+            console.warn('No token available for WebRTC initialization');
           }
-        } catch (err) {
-          console.error('Failed to initialize WebRTC:', err);
-          setError('Failed to initialize call service');
+        } catch (err: any) {
+          console.error('Failed to initialize WebRTC:', err?.message || err);
+          setError(err?.message || 'Failed to initialize call service. Please check your internet connection.');
         }
       }
     };
 
     init().catch((error) => {
-      console.error('Failed to initialize WebRTC service:', error);
-      setError('Failed to initialize call service');
+      console.error('Failed to initialize WebRTC service:', error?.message || error);
+      setError(error?.message || 'Failed to initialize call service');
     });
 
     return () => {

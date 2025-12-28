@@ -8,6 +8,19 @@ const expo = new Expo({
   accessToken: process.env.EXPO_ACCESS_TOKEN, // Optional: for better rate limiting
 });
 
+// Log Expo access token status on startup
+if (process.env.EXPO_ACCESS_TOKEN) {
+  logger.info('Expo push notifications configured', {
+    hasAccessToken: true,
+    tokenPrefix: process.env.EXPO_ACCESS_TOKEN.substring(0, 10) + '...'
+  });
+} else {
+  logger.warn('EXPO_ACCESS_TOKEN not set - push notifications will work but with limited rate limits', {
+    hasAccessToken: false,
+    note: 'Get token from https://expo.dev/accounts/[your-account]/settings/access-tokens'
+  });
+}
+
 const RETRYABLE_RECEIPT_ERRORS = new Set([
   'MessageRateExceeded',
   'ProviderError',
@@ -546,25 +559,30 @@ class PushNotificationService {
 
         const messages = validItems.map(entry => ({
           to: entry.push_token,
-          sound: entry.payload.sound,
+          sound: entry.payload.sound || 'default',
           title: entry.payload.title,
           body: entry.payload.body,
           data: entry.payload.data || {},
           badge: entry.payload.badge,
-          priority: entry.payload.priority || 'high',
-          ttl: entry.payload.ttl || 3600,
+          priority: entry.payload.priority || 'high', // 'default' | 'normal' | 'high' - 'high' ensures delivery even when device is in battery saver mode or app is closed
+          ttl: entry.payload.ttl || 86400, // 24 hours default (increased for better background delivery - notification will be delivered even if device is offline)
           expiration: entry.payload.expiration || null,
           channelId: entry.payload.channelId || 'default',
         }));
 
         try {
           const ticketChunk = await expo.sendPushNotificationsAsync(messages);
+          logger.info('Push notifications sent to Expo', {
+            count: messages.length,
+            tickets: ticketChunk.length
+          });
           await this.handleTicketChunk(validItems, ticketChunk);
         } catch (error) {
           logger.error('Error sending notification chunk', {
             chunkSize: validItems.length,
             error: error.message,
-            stack: error.stack
+            stack: error.stack,
+            expoAccessToken: process.env.EXPO_ACCESS_TOKEN ? 'Set' : 'Missing'
           });
           await this.markChunkForRetry(validItems, error);
         }
@@ -1019,7 +1037,8 @@ const NotificationTemplates = {
     body: 'Your booking has been confirmed by the provider.',
     sound: 'default',
     channelId: 'booking-updates',
-    priority: 'high',
+    priority: 'high', // High priority ensures delivery even when device is in battery saver mode
+    ttl: 86400, // 24 hours - notification will be delivered even if device is offline
   },
   
   BOOKING_CANCELLED: {
@@ -1028,6 +1047,7 @@ const NotificationTemplates = {
     sound: 'default',
     channelId: 'booking-updates',
     priority: 'high',
+    ttl: 86400, // 24 hours
   },
   
   SERVICE_COMPLETED: {
@@ -1036,6 +1056,7 @@ const NotificationTemplates = {
     sound: 'default',
     channelId: 'booking-updates',
     priority: 'high',
+    ttl: 86400, // 24 hours
   },
   
   BOOKING_REMINDER: {
@@ -1043,7 +1064,8 @@ const NotificationTemplates = {
     body: 'You have an upcoming appointment tomorrow.',
     sound: 'default',
     channelId: 'reminders',
-    priority: 'normal',
+    priority: 'high', // High priority for better background delivery
+    ttl: 86400, // 24 hours
   },
   
   NEW_BOOKING_REQUEST: {
@@ -1052,6 +1074,7 @@ const NotificationTemplates = {
     sound: 'default',
     channelId: 'provider-updates',
     priority: 'high',
+    ttl: 86400, // 24 hours
   },
   
   PAYMENT_RECEIVED: {
@@ -1059,7 +1082,8 @@ const NotificationTemplates = {
     body: 'Payment has been received for your service.',
     sound: 'default',
     channelId: 'payments',
-    priority: 'normal',
+    priority: 'high', // High priority for better background delivery
+    ttl: 86400, // 24 hours
   }
 };
 

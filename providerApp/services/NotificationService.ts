@@ -146,22 +146,30 @@ class NotificationService {
   private async registerForPushNotifications(): Promise<string | null> {
     try {
       if (!Device.isDevice) {
+        console.log('⚠️ Not a physical device, skipping push notification registration');
+        return null;
+      }
+
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      if (!projectId) {
+        console.error('❌ Project ID not found in app config. Push notifications will not work.');
         return null;
       }
 
       // Get the token
       const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: Constants.expoConfig?.extra?.eas?.projectId,
+        projectId: projectId,
       });
 
       const token = tokenData.data;
+      console.log('✅ Push token obtained:', token.substring(0, 20) + '...');
 
       // Store token locally
       await AsyncStorage.setItem('expo_push_token', token);
 
       return token;
-    } catch (error) {
-      console.error('❌ Error getting push token:', error);
+    } catch (error: any) {
+      console.error('❌ Error getting push token:', error.message || error);
       return null;
     }
   }
@@ -174,6 +182,7 @@ class NotificationService {
       const { tokenManager } = await import('../utils/tokenManager');
       const authToken = await tokenManager.getValidToken();
       if (!authToken) {
+        console.warn('⚠️ No auth token found, cannot register push token with backend');
         return false;
       }
 
@@ -200,14 +209,15 @@ class NotificationService {
       });
 
       if (response.ok) {
+        console.log('✅ Push token registered with backend successfully');
         return true;
       } else {
-        const data = await response.json();
-        console.error('❌ Failed to register token with backend:', data.message);
+        const data = await response.json().catch(() => ({}));
+        console.error('❌ Failed to register token with backend:', response.status, data.message || data);
         return false;
       }
-    } catch (error) {
-      console.error('❌ Error registering token with backend:', error);
+    } catch (error: any) {
+      console.error('❌ Error registering token with backend:', error.message || error);
       return false;
     }
   }

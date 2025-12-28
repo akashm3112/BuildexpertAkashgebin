@@ -890,11 +890,30 @@ class WebRTCService {
   private ensureServerCallSetup(callData: CallData) {
     return new Promise<void>((resolve, reject) => {
       if (!this.socket) {
-        reject(new Error('Not connected to call service.'));
+        reject(new Error('Not connected to call service. Please check your internet connection.'));
         return;
       }
 
-      this.socket.emit('call:initiate', { bookingId: callData.bookingId }, (response?: { status: string; message?: string; errorCode?: string }) => {
+      if (!this.socket.connected) {
+        reject(new Error('Socket not connected. Please wait a moment and try again.'));
+        return;
+      }
+
+      if (!this.userId) {
+        reject(new Error('User not authenticated. Please log in again.'));
+        return;
+      }
+
+      // Set timeout for call initiation
+      const timeout = setTimeout(() => {
+        reject(new Error('Call initiation timeout. Please try again.'));
+      }, 10000);
+
+      this.socket.emit('call:initiate', { 
+        bookingId: callData.bookingId,
+        callerType: 'provider' // Add callerType for backend validation
+      }, (response?: { status: string; message?: string; errorCode?: string }) => {
+        clearTimeout(timeout);
         if (!response || response.status === 'success') {
           resolve();
         } else {

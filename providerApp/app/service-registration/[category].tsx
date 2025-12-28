@@ -810,6 +810,41 @@ export default function ServiceRegistration() {
         
         if (providerServiceId) {
           if (isFreeService) {
+            // Free service (labor) - immediately cache the registration for instant UI update
+            try {
+              const serviceNameToCategoryMap: { [key: string]: string } = {
+                'labors': 'labor',
+                'plumber': 'plumber',
+                'mason-mastri': 'mason-mastri',
+                'painting-cleaning': 'painting',
+                'painting': 'painting',
+                'cleaning': 'cleaning',
+                'granite-tiles': 'granite-tiles',
+                'engineer-interior': 'engineer-interior',
+                'electrician': 'electrician',
+                'carpenter': 'carpenter',
+                'painter': 'painting',
+                'interiors-building': 'interiors-building',
+                'stainless-steel': 'stainless-steel',
+                'contact-building': 'contact-building',
+                'glass-mirror': 'glass-mirror',
+                'borewell': 'borewell'
+              };
+              
+              const serviceName = data.data?.serviceName || service?.name || '';
+              const categoryId = serviceNameToCategoryMap[serviceName.toLowerCase()] || category;
+              
+              // Store in AsyncStorage for immediate UI update
+              const cachedServices = await AsyncStorage.getItem('cached_registered_services');
+              const servicesArray = cachedServices ? JSON.parse(cachedServices) : [];
+              if (!servicesArray.includes(categoryId)) {
+                servicesArray.push(categoryId);
+                await AsyncStorage.setItem('cached_registered_services', JSON.stringify(servicesArray));
+              }
+            } catch (cacheError) {
+              // Silently fail - cache is not critical
+            }
+            
             // Free service (labor) - show success and navigate to services
             showAlert(
               'Registration Successful! 🎉',

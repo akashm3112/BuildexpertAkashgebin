@@ -6,17 +6,7 @@ const compression = require('compression');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
-// Load environment variables from config.env if it exists, otherwise use system environment variables
-// This allows the app to work with Render's environment variables (no config.env file needed)
-const fs = require('fs');
-const configPath = path.join(__dirname, 'config.env');
-if (fs.existsSync(configPath)) {
-  require('dotenv').config({ path: configPath });
-} else {
-  // In production (Render), environment variables are set in the platform
-  // Just load from system environment variables
-  require('dotenv').config();
-}
+require('dotenv').config({ path: './config.env' });
 const logger = require('./utils/logger');
 
 // Import routes
@@ -62,21 +52,13 @@ app.use(helmet());
 // Allowed origins are configured via ALLOWED_ORIGINS environment variable
 // Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000,https://app.example.com
 const getAllowedOrigins = () => {
-  // In production, ALLOWED_ORIGINS must be set
-  // In development, provide a default for local testing
-  const defaultOrigins = process.env.NODE_ENV === 'production' 
-    ? null 
-    : 'http://localhost:3000,http://localhost:8081,http://localhost:19006';
-  
-  const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || defaultOrigins;
-  
-  if (!allowedOriginsEnv) {
-    logger.error('ALLOWED_ORIGINS environment variable is not set. Required for production. Set it in Render environment variables. Example: ALLOWED_ORIGINS=https://your-domain.com');
+  if (!process.env.ALLOWED_ORIGINS) {
+    logger.error('ALLOWED_ORIGINS environment variable is not set. Please set ALLOWED_ORIGINS in your config.env file. Example: ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.8:3000');
     process.exit(1);
   }
   
   // Parse comma-separated origins from environment variable
-  const origins = allowedOriginsEnv
+  const origins = process.env.ALLOWED_ORIGINS
     .split(',')
     .map(origin => origin.trim())
     .filter(origin => origin.length > 0); // Remove empty strings
@@ -165,20 +147,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Health check endpoints
 const healthRoutes = require('./routes/health');
 app.use('/health', healthRoutes);
-
-// Root path handler (for hosting platform health checks)
-app.get('/', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    message: 'BuildXpert API is running',
-    version: '1.0.0',
-    endpoints: {
-      health: '/health',
-      api: '/api',
-      docs: 'API endpoints are prefixed with /api'
-    }
-  });
-});
 
 // Monitoring endpoints
 const monitoringRoutes = require('./routes/monitoring');
@@ -276,8 +244,16 @@ io.on('connection', (socket) => {
     const callerId = socket.userId;
     const bookingId = payload.bookingId;
 
-    if (!callerId || !bookingId) {
-      const message = 'Invalid call initiation payload';
+    if (!callerId) {
+      const message = 'User not authenticated. Please join the socket room first.';
+      logger.error('Call initiate failed - no userId', { socketId: socket.id, bookingId });
+      ack?.({ status: 'error', message, errorCode: 'WEBRTC_NOT_AUTHENTICATED' });
+      return;
+    }
+
+    if (!bookingId) {
+      const message = 'Invalid call initiation payload - bookingId required';
+      logger.error('Call initiate failed - no bookingId', { socketId: socket.id, callerId });
       ack?.({ status: 'error', message, errorCode: 'WEBRTC_INVALID_PAYLOAD' });
       return;
     }
@@ -494,13 +470,10 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, '0.0.0.0', async () => {
-  // Get the actual host URL for health check (useful for Render/production)
-  const hostUrl = process.env.HOST_URL || `http://localhost:${PORT}`;
-  
   logger.info('BuildXpert API server started', {
     port: PORT,
     environment: process.env.NODE_ENV || 'development',
-    healthCheck: `${hostUrl}/health`,
+    healthCheck: `http://localhost:${PORT}/health`,
     allowedOrigins: allowedOrigins.join(', ')
   });
   
@@ -532,6 +505,24 @@ server.listen(PORT, '0.0.0.0', async () => {
   }
   
   logger.info('All background services started');
+  
+  // Check critical environment variables
+  const criticalEnvVars = {
+    'DATABASE_URL': process.env.DATABASE_URL,
+    'JWT_SECRET': process.env.JWT_SECRET,
+    'EXPO_ACCESS_TOKEN': process.env.EXPO_ACCESS_TOKEN,
+  };
+  
+  const missingVars = Object.entries(criticalEnvVars)
+    .filter(([key, value]) => !value)
+    .map(([key]) => key);
+  
+  if (missingVars.length > 0) {
+    logger.warn('Missing optional environment variables (may affect functionality)', {
+      missing: missingVars,
+      note: 'EXPO_ACCESS_TOKEN is optional but recommended for better push notification rate limits'
+    });
+  }
 });
 
 module.exports = { app, io }; 
