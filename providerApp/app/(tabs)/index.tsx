@@ -259,10 +259,13 @@ export default function HomeScreen() {
       
       // Setup socket connection for real-time updates
       if (!socketRef.current) {
+        // CRITICAL: Use polling first for mobile data networks
+        // Mobile carriers often block WebSocket connections
         socketRef.current = io(API_BASE_URL, {
-          transports: ['websocket', 'polling'],
+          transports: ['polling', 'websocket'], // Try polling first, upgrade to websocket if available
+          upgrade: true, // Allow upgrade from polling to websocket
           timeout: 20000,
-          forceNew: true,
+          forceNew: false, // Reuse existing connection if available
           reconnection: true,
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
@@ -1131,6 +1134,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: getResponsiveSpacing(20, 24, 28), // Add padding at bottom to prevent blank space and account for tab bar
   },
   header: {
     flexDirection: 'row',

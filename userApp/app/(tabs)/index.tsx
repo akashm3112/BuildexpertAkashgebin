@@ -51,8 +51,8 @@ const getServiceTranslationKey = (serviceId: string) => {
 
 // Mock locations data
 const SAVED_LOCATIONS = [
-  { id: '1', name: 'Home', address: '147, 12th cross, Rachenahalli, Yelahanka, Bengaluru' },
-  { id: '2', name: 'Office', address: 'Tech Park, Whitefield, Bengaluru' },
+  { id: '1', name: 'Home', address: '' },
+  { id: '2', name: 'Office', address: '' },
   { id: '3', name: 'Current Location', address: 'Using device location' },
 ];
 
@@ -86,7 +86,8 @@ export default function HomeScreen() {
     return tabBarHeight; // 60px base for large devices
   };
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState(SAVED_LOCATIONS[0]);
+  const [selectedLocation, setSelectedLocation] = useState(SAVED_LOCATIONS[2]); // Default to Current Location
+  const [savedLocations, setSavedLocations] = useState(SAVED_LOCATIONS);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingLocation, setEditingLocation] = useState<typeof SAVED_LOCATIONS[0] | null>(null);
   const [locationName, setLocationName] = useState('');
@@ -118,9 +119,16 @@ export default function HomeScreen() {
     setShowAlertModal(true);
   };
 
-  const handleLocationSelect = (location: typeof SAVED_LOCATIONS[0]) => {
+  const handleLocationSelect = async (location: typeof SAVED_LOCATIONS[0]) => {
     setSelectedLocation(location);
     setShowLocationModal(false);
+    
+    // Save location preferences
+    try {
+      await AsyncStorage.setItem('selectedLocation', JSON.stringify(location.id === '3' ? 'current' : location.id));
+    } catch (error) {
+      console.warn('Failed to save location selection:', error);
+    }
   };
 
   const handleUseCurrentLocation = async () => {
@@ -189,17 +197,43 @@ export default function HomeScreen() {
 
       const { latitude, longitude } = locationData.coords;
       
+      // Reverse geocode to get address
+      let geocode;
+      try {
+        geocode = await Location.reverseGeocodeAsync(locationData.coords);
+      } catch (geocodeError) {
+        // If reverse geocoding fails, use coordinates as fallback
+        console.warn('Reverse geocoding failed:', geocodeError);
+      }
+      
+      let address = 'Current Location';
+      if (geocode && geocode.length > 0) {
+        const addr = `${geocode[0].name || ''} ${geocode[0].street || ''}, ${geocode[0].city || ''}, ${geocode[0].region || ''}`.trim();
+        if (addr && addr.length > 0) {
+          address = addr;
+        }
+      }
+      
       // Update selected location with current location data
-      // Display coordinates or a generic message since we're not reverse geocoding
       const currentLocationData = {
         id: '3',
         name: 'Current Location',
-        address: `Lat: ${latitude.toFixed(6)}, Lon: ${longitude.toFixed(6)}`,
+        address: address,
       };
       
       setSelectedLocation(currentLocationData);
       setShowLocationModal(false);
       setIsFetchingCurrentLocation(false);
+      
+      // Save location preferences
+      try {
+        await AsyncStorage.setItem('currentLocation', JSON.stringify(address));
+        await AsyncStorage.setItem('selectedLocation', JSON.stringify('current'));
+        const updatedLocations = SAVED_LOCATIONS.map(l => l.id === '3' ? currentLocationData : l);
+        await AsyncStorage.setItem('savedLocations', JSON.stringify(updatedLocations));
+      } catch (storageError) {
+        console.warn('Failed to save location preferences:', storageError);
+      }
       
       Toast.show({
         type: 'success',
@@ -398,9 +432,55 @@ export default function HomeScreen() {
     }
   };
 
+  // Load location preferences on component mount
+  const loadLocationPreferences = async () => {
+    try {
+      const savedLocationsData = await AsyncStorage.getItem('savedLocations');
+      const selectedLocationData = await AsyncStorage.getItem('selectedLocation');
+      const currentLocationData = await AsyncStorage.getItem('currentLocation');
+
+      let locations = [...SAVED_LOCATIONS];
+      
+      if (savedLocationsData) {
+        locations = JSON.parse(savedLocationsData);
+        setSavedLocations(locations);
+      }
+
+      if (selectedLocationData) {
+        const selectedType = JSON.parse(selectedLocationData);
+        
+        // Find the selected location and set it as current
+        const selectedLoc = locations.find((loc: any) => loc.id === selectedType || (selectedType === 'current' && loc.id === '3'));
+        if (selectedLoc) {
+          setSelectedLocation(selectedLoc);
+        } else {
+          // Default to current location
+          const currentLoc = locations.find((loc: any) => loc.id === '3') || SAVED_LOCATIONS[2];
+          if (currentLocationData) {
+            const currentAddr = JSON.parse(currentLocationData);
+            currentLoc.address = currentAddr;
+          }
+          setSelectedLocation(currentLoc);
+        }
+      } else {
+        // Default to current location
+        const currentLoc = locations.find((loc: any) => loc.id === '3') || SAVED_LOCATIONS[2];
+        if (currentLocationData) {
+          const currentAddr = JSON.parse(currentLocationData);
+          currentLoc.address = currentAddr;
+        }
+        setSelectedLocation(currentLoc);
+      }
+    } catch (error) {
+      // Set default values
+      setSelectedLocation(SAVED_LOCATIONS[2]); // Default to Current Location
+    }
+  };
+
   // Load recent searches on component mount
   useEffect(() => {
     loadRecentSearches();
+    loadLocationPreferences();
   }, []);
 
   // Handle pull-to-refresh
@@ -439,7 +519,7 @@ export default function HomeScreen() {
             <View style={styles.locationContainer}>
               <Text style={styles.locationNumber}>{selectedLocation.name}</Text>
               <Text style={styles.locationText} numberOfLines={1}>
-                {selectedLocation.address}
+                {selectedLocation.address || (selectedLocation.id === '3' ? 'Using device location' : 'No address set')}
               </Text>
             </View>
             <View style={styles.headerActions}>
@@ -498,7 +578,7 @@ export default function HomeScreen() {
                     <Plus size={20} color="#3B82F6" />
                   </TouchableOpacity>
                 </View>
-                {SAVED_LOCATIONS.map((location) => (
+                {savedLocations.map((location) => (
                   <View key={location.id} style={styles.locationItemContainer}>
                     <TouchableOpacity
                       style={[
@@ -510,7 +590,7 @@ export default function HomeScreen() {
                       <View style={styles.locationItemContent}>
                         <Text style={styles.locationItemName}>{location.name}</Text>
                         <Text style={styles.locationItemAddress} numberOfLines={1}>
-                          {location.address}
+                          {location.address || (location.id === '3' ? 'Using device location' : 'No address set')}
                         </Text>
                       </View>
                       {selectedLocation.id === location.id && (

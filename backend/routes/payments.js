@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { query, getRow, getRows, withTransaction } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const { sendNotification } = require('../utils/notifications');
+const { pushNotificationService, NotificationTemplates } = require('../utils/pushNotifications');
 const PaymentLogger = require('../utils/paymentLogging');
 const PaymentSecurity = require('../utils/paymentSecurity');
 const logger = require('../utils/logger');
@@ -725,7 +726,7 @@ router.post('/verify-paytm', auth, requireRole(['provider']), asyncHandler(async
       });
     }
 
-    // Send success notification (with error handling - don't fail if notification fails)
+    // Send in-app notification (with error handling - don't fail if notification fails)
     try {
       await sendNotification(
       req.user.id,
@@ -734,8 +735,29 @@ router.post('/verify-paytm', auth, requireRole(['provider']), asyncHandler(async
       'provider'
       );
     } catch (notifError) {
-      logger.error('Failed to send payment success notification', {
+      logger.error('Failed to send in-app payment success notification', {
         error: notifError.message,
+        userId: req.user.id,
+        orderId
+      });
+    }
+
+    // Send push notification (with error handling - don't fail if notification fails)
+    try {
+      const pushNotification = {
+        ...NotificationTemplates.PAYMENT_SUCCESS,
+        body: `Your service registration is now active until ${endDate.toLocaleDateString()}. You will receive a reminder before expiry.`,
+        data: {
+          type: 'payment_success',
+          orderId: orderId,
+          transactionId: finalPaymentVerification.transactionId,
+          screen: 'services'
+        }
+      };
+      await pushNotificationService.sendToUser(req.user.id, pushNotification);
+    } catch (pushError) {
+      logger.error('Failed to send push notification for payment success', {
+        error: pushError.message,
         userId: req.user.id,
         orderId
       });
@@ -783,7 +805,7 @@ router.post('/verify-paytm', auth, requireRole(['provider']), asyncHandler(async
       });
     }
 
-    // Send failure notification (with error handling)
+    // Send in-app failure notification (with error handling)
     try {
       await sendNotification(
       req.user.id,
@@ -792,8 +814,29 @@ router.post('/verify-paytm', auth, requireRole(['provider']), asyncHandler(async
       'provider'
       );
     } catch (notifError) {
-      logger.error('Failed to send payment failure notification', {
+      logger.error('Failed to send in-app payment failure notification', {
         error: notifError.message,
+        userId: req.user.id,
+        orderId
+      });
+    }
+
+    // Send push notification (with error handling)
+    try {
+      const pushNotification = {
+        ...NotificationTemplates.PAYMENT_FAILED,
+        body: `Your payment could not be processed. Please try again or contact support if the issue persists.`,
+        data: {
+          type: 'payment_failed',
+          orderId: orderId,
+          transactionId: transaction.id,
+          screen: 'services'
+        }
+      };
+      await pushNotificationService.sendToUser(req.user.id, pushNotification);
+    } catch (pushError) {
+      logger.error('Failed to send push notification for payment failure', {
+        error: pushError.message,
         userId: req.user.id,
         orderId
       });
@@ -1013,7 +1056,7 @@ router.post('/paytm-callback', webhookLimiter, asyncHandler(async (req, res) => 
     // Transaction was already processed, just return success to Paytm
     logger.payment('Callback processed for already handled transaction', { orderId });
   } else if (result.status === 'success') {
-    // Send success notification (with error handling - don't fail if notification fails)
+    // Send in-app success notification (with error handling - don't fail if notification fails)
     try {
       await sendNotification(
         result.transaction.user_id,
@@ -1022,8 +1065,29 @@ router.post('/paytm-callback', webhookLimiter, asyncHandler(async (req, res) => 
         'provider'
       );
     } catch (notifError) {
-      logger.error('Failed to send payment success notification in callback', {
+      logger.error('Failed to send in-app payment success notification in callback', {
         error: notifError.message,
+        userId: result.transaction.user_id,
+        orderId
+      });
+    }
+
+    // Send push notification (with error handling - don't fail if notification fails)
+    try {
+      const pushNotification = {
+        ...NotificationTemplates.PAYMENT_SUCCESS,
+        body: `Your service registration is now active for 30 days. You will receive a reminder 2 days before expiry.`,
+        data: {
+          type: 'payment_success',
+          orderId: orderId,
+          transactionId: result.transaction.id,
+          screen: 'services'
+        }
+      };
+      await pushNotificationService.sendToUser(result.transaction.user_id, pushNotification);
+    } catch (pushError) {
+      logger.error('Failed to send push notification for payment success in callback', {
+        error: pushError.message,
         userId: result.transaction.user_id,
         orderId
       });
@@ -1031,7 +1095,7 @@ router.post('/paytm-callback', webhookLimiter, asyncHandler(async (req, res) => 
 
     logger.payment('Payment successful via callback', { orderId });
   } else if (result.status === 'failed') {
-    // Send failure notification (with error handling)
+    // Send in-app failure notification (with error handling)
     try {
       await sendNotification(
         result.transaction.user_id,
@@ -1040,8 +1104,29 @@ router.post('/paytm-callback', webhookLimiter, asyncHandler(async (req, res) => 
         'provider'
       );
     } catch (notifError) {
-      logger.error('Failed to send payment failure notification in callback', {
+      logger.error('Failed to send in-app payment failure notification in callback', {
         error: notifError.message,
+        userId: result.transaction.user_id,
+        orderId
+      });
+    }
+
+    // Send push notification (with error handling)
+    try {
+      const pushNotification = {
+        ...NotificationTemplates.PAYMENT_FAILED,
+        body: `Your payment could not be processed. Please try again or contact support if the issue persists.`,
+        data: {
+          type: 'payment_failed',
+          orderId: orderId,
+          transactionId: result.transaction.id,
+          screen: 'services'
+        }
+      };
+      await pushNotificationService.sendToUser(result.transaction.user_id, pushNotification);
+    } catch (pushError) {
+      logger.error('Failed to send push notification for payment failure in callback', {
+        error: pushError.message,
         userId: result.transaction.user_id,
         orderId
       });
@@ -1662,7 +1747,7 @@ router.post('/verify-labour-payment', auth, requireRole(['user']), asyncHandler(
       });
     }
 
-    // Send success notification (with error handling)
+    // Send in-app success notification (with error handling)
     try {
       await sendNotification(
         req.user.id,
@@ -1671,8 +1756,29 @@ router.post('/verify-labour-payment', auth, requireRole(['user']), asyncHandler(
         'user'
       );
     } catch (notifError) {
-      logger.error('Failed to send labour payment success notification', {
+      logger.error('Failed to send in-app labour payment success notification', {
         error: notifError.message,
+        userId: req.user.id,
+        orderId
+      });
+    }
+
+    // Send push notification (with error handling)
+    try {
+      const pushNotification = {
+        ...NotificationTemplates.LABOUR_PAYMENT_SUCCESS,
+        body: `Your labour service access is now active until ${endDate.toLocaleDateString()}. You will receive a reminder before expiry.`,
+        data: {
+          type: 'labour_payment_success',
+          orderId: orderId,
+          transactionId: transaction.id,
+          screen: 'services'
+        }
+      };
+      await pushNotificationService.sendToUser(req.user.id, pushNotification);
+    } catch (pushError) {
+      logger.error('Failed to send push notification for labour payment success', {
+        error: pushError.message,
         userId: req.user.id,
         orderId
       });

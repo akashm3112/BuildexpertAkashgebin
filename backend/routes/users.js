@@ -145,7 +145,28 @@ router.delete('/delete-account', accountDeletionLimiter, asyncHandler(async (req
 // @desc    Get user profile
 // @access  Private
 router.get('/profile', asyncHandler(async (req, res) => {
-  const user = await getRow('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  // Try to get name_change_count, but handle if column doesn't exist
+  let user;
+  let nameChangeCount = 0;
+  
+  try {
+    user = await getRow(`
+      SELECT 
+        *,
+        COALESCE(name_change_count, 0) as name_change_count
+      FROM users 
+      WHERE id = $1
+    `, [req.user.id]);
+    nameChangeCount = user.name_change_count || 0;
+  } catch (error) {
+    // If column doesn't exist, query without it
+    if (error.code === '42703' || error.message?.includes('name_change_count')) {
+      user = await getRow('SELECT * FROM users WHERE id = $1', [req.user.id]);
+      nameChangeCount = 0;
+    } else {
+      throw error;
+    }
+  }
   
   res.json({
     status: 'success',
@@ -158,6 +179,7 @@ router.get('/profile', asyncHandler(async (req, res) => {
         role: user.role,
         isVerified: user.is_verified,
         profilePicUrl: user.profile_pic_url,
+        nameChangeCount: nameChangeCount,
         createdAt: user.created_at
       }
     }

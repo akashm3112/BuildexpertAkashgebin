@@ -1084,6 +1084,42 @@ const NotificationTemplates = {
     channelId: 'payments',
     priority: 'high', // High priority for better background delivery
     ttl: 86400, // 24 hours
+  },
+  
+  BOOKING_CREATED: {
+    title: '📝 Booking Submitted',
+    body: 'Your booking request has been submitted successfully.',
+    sound: 'default',
+    channelId: 'booking-updates',
+    priority: 'normal',
+    ttl: 86400, // 24 hours
+  },
+  
+  PAYMENT_SUCCESS: {
+    title: '✅ Payment Successful',
+    body: 'Your payment has been processed successfully.',
+    sound: 'default',
+    channelId: 'payments',
+    priority: 'high', // High priority for better background delivery
+    ttl: 86400, // 24 hours
+  },
+  
+  PAYMENT_FAILED: {
+    title: '❌ Payment Failed',
+    body: 'Your payment could not be processed. Please try again or contact support.',
+    sound: 'default',
+    channelId: 'payments',
+    priority: 'high', // High priority for better background delivery
+    ttl: 86400, // 24 hours
+  },
+  
+  LABOUR_PAYMENT_SUCCESS: {
+    title: '🎉 Labour Service Activated',
+    body: 'Your labour service access has been activated successfully.',
+    sound: 'default',
+    channelId: 'payments',
+    priority: 'high', // High priority for better background delivery
+    ttl: 86400, // 24 hours
   }
 };
 

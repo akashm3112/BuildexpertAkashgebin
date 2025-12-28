@@ -97,12 +97,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   // Fetch all notifications with debouncing to prevent duplicate fetches
-  const fetchNotifications = async (page = 1, limit = 20) => {
+  const fetchNotifications = async (page = 1, limit = 20, forceRefresh = false) => {
     if (!user?.id) return;
     
-    // Debounce: Prevent rapid duplicate fetches (within 500ms)
+    // Debounce: Prevent rapid duplicate fetches (within 500ms) - unless force refresh
     const now = Date.now();
-    if (fetchInProgress.current || (now - lastFetchTime.current < DEBOUNCE_DELAY)) {
+    if (!forceRefresh && (fetchInProgress.current || (now - lastFetchTime.current < DEBOUNCE_DELAY))) {
       return; // Skip if fetch is in progress or too soon after last fetch
     }
     
@@ -115,11 +115,23 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const response = await apiGet(`/api/notifications?page=${page}&limit=${limit}`);
 
       if (response.ok && response.data && response.data.status === 'success') {
-        setNotifications(response.data.data.notifications);
-        setPagination(response.data.data.pagination);
+        const fetchedNotifications = response.data.data.notifications || [];
+        setNotifications(fetchedNotifications);
+        setPagination(response.data.data.pagination || {
+          currentPage: page,
+          totalPages: 1,
+          totalCount: fetchedNotifications.length,
+          hasMore: false
+        });
         // Update unread count based on notifications
-        const unread = response.data.data.notifications.filter((n: Notification) => !n.is_read).length;
+        const unread = fetchedNotifications.filter((n: Notification) => !n.is_read).length;
         setUnreadCount(unread);
+      } else {
+        // If API call fails but we have existing notifications, don't clear them
+        // Only clear if this is the initial load (page 1 and no existing notifications)
+        if (page === 1 && notifications.length === 0) {
+          setNotifications([]);
+        }
       }
     } catch (error: any) {
       // Mark error as handled to prevent unhandled promise rejection warnings
@@ -138,9 +150,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         (error as any)._suppressUnhandled = true;
       }
       
+      // Only clear notifications on initial load if there's an error
+      // Don't clear existing notifications on subsequent fetch errors
+      if (page === 1 && notifications.length === 0) {
+        setNotifications([]);
+      }
+      
       // Errors are handled silently - network errors are expected when backend is down or network is unavailable
       // Session expired errors are handled by apiClient (logout triggered)
-      // Session expired errors are handled by apiClient (logout triggered)
+    } finally {
+      // CRITICAL: Always reset fetchInProgress flag to allow future fetches
+      fetchInProgress.current = false;
     }
   };
 
@@ -237,9 +257,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   // Refresh notifications (for pull-to-refresh)
-  const refreshNotifications = () => {
+  const refreshNotifications = async () => {
     // Force refresh (bypasses debounce)
-    fetchNotifications(1, 20, true);
+    await fetchNotifications(1, 20, true);
   };
 
   const resetNotificationState = () => {
@@ -318,7 +338,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return; // Socket already exists
     }
 
-    const socket = socketIOClient(`${API_BASE_URL}`);
+    // CRITICAL: Use polling as fallback for mobile data networks
+    // Mobile carriers often block WebSocket connections
+    const socket = socketIOClient(`${API_BASE_URL}`, {
+      transports: ['polling', 'websocket'], // Try polling first, upgrade to websocket if available
+      upgrade: true, // Allow upgrade from polling to websocket
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      forceNew: false,
+    });
     socketRef.current = socket;
     
     socket.on('connect', () => {
@@ -326,72 +357,62 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('notification_created', (data) => {
+      console.log('📬 Socket: notification_created received', { hasNotification: !!data?.notification });
       
       // OPTIMISTIC UI UPDATE: Add notification immediately if provided in socket event
       if (data && data.notification) {
         setNotifications((prev) => {
           // Check if notification already exists (prevent duplicates)
           const exists = prev.some((n: Notification) => n.id === data.notification.id);
-          if (exists) return prev;
+          if (exists) {
+            console.log('📬 Notification already exists, skipping duplicate');
+            return prev;
+          }
+          console.log('📬 Adding notification optimistically to UI');
           // Add new notification at the beginning
           return [data.notification, ...prev];
         });
         // Update unread count optimistically
         if (!data.notification.is_read) {
-          setUnreadCount((prev) => prev + 1);
+          setUnreadCount((prev) => {
+            const newCount = prev + 1;
+            console.log('📬 Updated unread count:', newCount);
+            return newCount;
+          });
         }
       }
       
-      // Force fetch to get latest data (bypasses debounce)
+      // Force fetch to get latest data (bypasses debounce) - but don't wait for it
+      // The optimistic update above ensures instant UI feedback
       fetchNotifications(1, 20, true).catch((error) => {
         // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
-        const isSessionExpired = error?.message === 'Session expired' || 
-                                 error?.status === 401 && error?.message?.includes('Session expired');
-        const isServerError = error?.status === 500 || 
-                             error?.isServerError === true ||
-                             error?.message?.includes('Database operation failed') ||
-                             error?.message?.includes('Database') ||
-                             error?.data?.errorCode === 'DATABASE_ERROR';
-        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
+        console.error('📬 Error fetching notifications after socket event:', error?.message);
       });
       fetchUnreadCount().catch((error) => {
         // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        console.error('📬 Error fetching unread count after socket event:', error?.message);
       });
     });
 
     socket.on('notification_updated', () => {
+      console.log('📬 Socket: notification_updated received');
       // Force fetch to get latest data (bypasses debounce)
       fetchNotifications(1, 20, true).catch((error) => {
-        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
-        const isSessionExpired = error?.message === 'Session expired' || 
-                                 error?.status === 401 && error?.message?.includes('Session expired');
-        const isServerError = error?.status === 500 || 
-                             error?.isServerError === true ||
-                             error?.message?.includes('Database operation failed') ||
-                             error?.message?.includes('Database') ||
-                             error?.data?.errorCode === 'DATABASE_ERROR';
-        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
+        console.error('📬 Error fetching notifications after update:', error?.message);
       });
       fetchUnreadCount().catch((error) => {
-        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        console.error('📬 Error fetching unread count after update:', error?.message);
       });
     });
 
     socket.on('notification_deleted', () => {
+      console.log('📬 Socket: notification_deleted received');
       // Force fetch to get latest data (bypasses debounce)
       fetchNotifications(1, 20, true).catch((error) => {
-        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
-        const isSessionExpired = error?.message === 'Session expired' ||
-                                 error?.status === 401 && error?.message?.includes('Session expired');
-        const isServerError = error?.status === 500 || 
-                             error?.isServerError === true ||
-                             error?.message?.includes('Database operation failed') ||
-                             error?.message?.includes('Database') ||
-                             error?.data?.errorCode === 'DATABASE_ERROR';
-        // Errors are already handled in fetchNotifications, but catch here to prevent unhandled rejections
+        console.error('📬 Error fetching notifications after delete:', error?.message);
       });
       fetchUnreadCount().catch((error) => {
-        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
+        console.error('📬 Error fetching unread count after delete:', error?.message);
       });
     });
 

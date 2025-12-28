@@ -155,6 +155,8 @@ export default function ProfileScreen() {
     location: '',
     image: '',
   });
+  const [nameChangeCount, setNameChangeCount] = useState(0);
+  const [originalName, setOriginalName] = useState('');
   const [imageLoading, setImageLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [bookingsCount, setBookingsCount] = useState(0);
@@ -548,6 +550,7 @@ export default function ProfileScreen() {
         const userData = profileData.data?.user || profileData.data || {};
         const profilePicUrl = userData.profilePicUrl || userData.profile_pic_url || '';
         const fullName = userData.fullName || userData.full_name || '';
+        const changeCount = userData.nameChangeCount || 0;
         
         
         setUserProfile((prev) => ({
@@ -557,6 +560,8 @@ export default function ProfileScreen() {
           phone: userData.phone || '',
           image: profilePicUrl,
         }));
+        setNameChangeCount(changeCount);
+        setOriginalName(fullName);
       } else {
         // If profile fetch fails, use user data from context as fallback
         if (user) {
@@ -721,6 +726,18 @@ export default function ProfileScreen() {
         return;
       }
 
+      // Check name change limit before submitting
+      const isNameChanging = userProfile.name.trim() !== originalName.trim();
+      if (isNameChanging && nameChangeCount >= 2) {
+        setIsLoading(false);
+        showAlert(
+          'Name Change Limit Reached',
+          'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+          'error'
+        );
+        return;
+      }
+
       if (!userProfile.email.trim()) {
         setIsLoading(false);
         showAlert('Error', 'Email is required', 'error');
@@ -769,6 +786,9 @@ export default function ProfileScreen() {
 
       if (response.ok && responseData.status === 'success') {
         // Update local user data
+        const updatedUserData = responseData.data?.user || {};
+        const updatedNameChangeCount = updatedUserData.nameChangeCount || nameChangeCount;
+        
         const updatedUser = {
           ...user,
           fullName: userProfile.name.trim(),
@@ -776,10 +796,17 @@ export default function ProfileScreen() {
           email: userProfile.email.trim(),
           profile_pic_url: updateData.profilePicUrl || userProfile.image,
           profilePicUrl: updateData.profilePicUrl || userProfile.image,
+          nameChangeCount: updatedNameChangeCount,
         };
 
         await updateUser(updatedUser);
         await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+
+        // Update name change tracking
+        if (userProfile.name.trim() !== originalName.trim()) {
+          setNameChangeCount(updatedNameChangeCount);
+          setOriginalName(userProfile.name.trim());
+        }
 
         setEditModalVisible(false);
         showAlert('Success', t('alerts.success.profileUpdated'), 'success', [
@@ -1366,13 +1393,45 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>{t('editProfile.fullName')}</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.formLabel}>{t('editProfile.fullName')}</Text>
+                {nameChangeCount >= 2 && userProfile.name.trim() !== originalName.trim() && (
+                  <Text style={styles.warningText}>
+                    {t('editProfile.nameChangeLimitReached') || 'Name change limit reached (2/2)'}
+                  </Text>
+                )}
+                {nameChangeCount < 2 && userProfile.name.trim() !== originalName.trim() && (
+                  <Text style={styles.infoText}>
+                    {t('editProfile.nameChangesRemaining') || `${2 - nameChangeCount} change${2 - nameChangeCount > 1 ? 's' : ''} remaining`}
+                  </Text>
+                )}
+              </View>
               <TextInput
-                style={styles.formInput}
+                style={[
+                  styles.formInput,
+                  nameChangeCount >= 2 && userProfile.name.trim() !== originalName.trim() && styles.disabledInput
+                ]}
                 value={userProfile.name}
-                onChangeText={(text) => setUserProfile(prev => ({ ...prev, name: text }))}
+                onChangeText={(text) => {
+                  // Prevent changes if limit reached and name is different from original
+                  if (nameChangeCount >= 2 && originalName.trim() !== '' && text.trim() !== originalName.trim()) {
+                    showAlert(
+                      'Name Change Limit Reached',
+                      'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+                      'error'
+                    );
+                    return;
+                  }
+                  setUserProfile(prev => ({ ...prev, name: text }));
+                }}
                 placeholder={t('editProfile.fullNamePlaceholder')}
+                editable={!(nameChangeCount >= 2 && userProfile.name.trim() !== originalName.trim())}
               />
+              {nameChangeCount >= 2 && (
+                <Text style={styles.limitReachedText}>
+                  {t('editProfile.nameChangeLimitMessage') || 'You have used all 2 name changes. You cannot change your name again.'}
+                </Text>
+              )}
             </View>
 
             <View style={styles.formGroup}>
@@ -2338,6 +2397,12 @@ const styles = StyleSheet.create({
   formGroup: {
     marginBottom: getResponsiveSpacing(16, 20, 24),
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   formLabel: {
     fontSize: getResponsiveFontSize(14, 16, 18),
     fontWeight: '500',
@@ -2362,6 +2427,22 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(10, 12, 14),
     color: '#64748B',
     marginTop: getResponsiveSpacing(2, 4, 6),
+  },
+  warningText: {
+    fontSize: getResponsiveFontSize(11, 12, 13),
+    color: '#EF4444',
+    fontWeight: '500',
+  },
+  infoText: {
+    fontSize: getResponsiveFontSize(11, 12, 13),
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  limitReachedText: {
+    fontSize: getResponsiveFontSize(11, 12, 13),
+    color: '#EF4444',
+    marginTop: getResponsiveSpacing(4, 6, 8),
+    fontStyle: 'italic',
   },
   deleteAccountSection: {
     marginTop: getResponsiveSpacing(24, 28, 32),

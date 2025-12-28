@@ -12,6 +12,7 @@ import {
   Dimensions,
   useWindowDimensions
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar, Flag, Star, X, XCircle, Phone, MapPin, CreditCard } from 'lucide-react-native';
 import { Modal } from '@/components/common/Modal';
 import WebRTCCallButton from '@/components/calls/WebRTCCallButton';
@@ -68,6 +69,7 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
   const { t } = useLanguage();
   const { fetchUnreadCount } = useBookings();
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   // Responsive design constants
   const isSmallDevice = width < 375;
@@ -620,14 +622,23 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
         onRequestClose={() => setShowCancelModal(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+          <View style={[
+            styles.modalHeader, 
+            { 
+              paddingTop: Math.max(insets.top + 8, 16),
+              paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+              paddingBottom: getResponsiveSpacing(16, 18, 20)
+            }
+          ]}>
             <TouchableOpacity 
               onPress={() => setShowCancelModal(false)}
               style={styles.closeButton}
             >
               <X size={24} color="#64748B" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{t('bookingItem.cancelBooking')}</Text>
+            <Text style={[styles.modalTitle, { fontSize: getResponsiveFontSize(16, 18, 20) }]}>
+              {t('bookingItem.cancelBooking')}
+            </Text>
             <View style={styles.placeholder} />
           </View>
 
@@ -732,14 +743,23 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
         onRequestClose={() => setShowReportModal(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+          <View style={[
+            styles.modalHeader, 
+            { 
+              paddingTop: Math.max(insets.top + 8, 16),
+              paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+              paddingBottom: getResponsiveSpacing(16, 18, 20)
+            }
+          ]}>
             <TouchableOpacity 
               onPress={() => setShowReportModal(false)}
               style={styles.closeButton}
             >
               <X size={24} color="#64748B" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{t('bookingItem.reportProvider')}</Text>
+            <Text style={[styles.modalTitle, { fontSize: getResponsiveFontSize(16, 18, 20) }]}>
+              {t('bookingItem.reportProvider')}
+            </Text>
             <View style={styles.placeholder} />
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalContentContainer}>
@@ -1058,18 +1078,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
   closeButton: {
     padding: 4,
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#1E293B',
+    textAlign: 'center',
+    flex: 1,
   },
   placeholder: {
     width: 32,

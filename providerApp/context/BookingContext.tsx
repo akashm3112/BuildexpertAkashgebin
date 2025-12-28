@@ -132,11 +132,16 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Initialize socket connection
+    // CRITICAL: Use polling as fallback for mobile data networks
     socketRef.current = socketIOClient(`${API_BASE_URL}`, {
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'], // Try polling first, upgrade to websocket if available
+      upgrade: true, // Allow upgrade from polling to websocket
       reconnection: true,
+      reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      forceNew: false,
     });
 
     const socket = socketRef.current;

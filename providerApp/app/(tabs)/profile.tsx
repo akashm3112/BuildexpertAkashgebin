@@ -1095,7 +1095,8 @@ export default function ProfileScreen() {
     <SafeView backgroundColor="#F8FAFC">
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
       <ScrollView 
-        style={styles.scrollView} 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -1244,14 +1245,16 @@ export default function ProfileScreen() {
         {/* Report Customer Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('profile.supportAndReporting')}</Text>
-          
           <TouchableOpacity 
             style={styles.reportButton}
             onPress={handleReportCustomer}
+            activeOpacity={0.7}
           >
             <AlertTriangle size={20} color="#DC2626" />
             <View style={styles.actionButtonContent}>
-              <Text style={styles.reportButtonText}>{t('profile.reportCustomer')}</Text>
+              <Text style={styles.reportButtonText} numberOfLines={1}>
+                {t('profile.reportCustomer')}
+              </Text>
             </View>
             <View style={styles.actionButtonArrow}>
               <Text style={styles.arrowText}>›</Text>
@@ -1386,7 +1389,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Logout Button */}
-        <View style={styles.section}>
+        <View style={[styles.section, styles.lastSection]}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <LogOut size={20} color="#EF4444" />
             <Text style={styles.logoutButtonText}>{t('profile.logout')}</Text>
@@ -1696,6 +1699,9 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: getResponsiveSpacing(20, 24, 28), // Add padding at bottom to prevent content from being cut off by tab bar
+  },
   profileHeader: {
     alignItems: 'center',
     padding: getResponsiveSpacing(20, 24, 28),
@@ -1813,7 +1819,10 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),
-    marginBottom: getResponsiveSpacing(16, 18, 20),
+    marginBottom: getResponsiveSpacing(12, 14, 16), // Reduced marginBottom to prevent excessive blank space
+  },
+  lastSection: {
+    marginBottom: getResponsiveSpacing(8, 10, 12), // Even less margin for last section
   },
   sectionTitle: {
     fontSize: getResponsiveSpacing(16, 17, 18),
@@ -1863,14 +1872,16 @@ const styles = StyleSheet.create({
     paddingVertical: getResponsiveSpacing(14, 16, 18),
     paddingHorizontal: getResponsiveSpacing(16, 18, 20),
     borderRadius: getResponsiveSpacing(14, 16, 18),
-    marginBottom: getResponsiveSpacing(8, 10, 12),
+    marginBottom: 0, // Remove marginBottom since it's the only item in the section
     borderWidth: 1,
     borderColor: '#FECACA',
+    minHeight: getResponsiveSpacing(48, 52, 56), // Ensure minimum height for proper rendering
   },
   reportButtonText: {
     fontSize: getResponsiveSpacing(14, 15, 16),
     fontFamily: 'Inter-SemiBold',
     color: '#DC2626',
+    flex: 1, // Ensure text takes available space
   },
   actionButton: {
     flexDirection: 'row',
@@ -1952,8 +1963,9 @@ const styles = StyleSheet.create({
   },
   appInfo: {
     alignItems: 'center',
-    paddingVertical: getResponsiveSpacing(16, 20, 24),
+    paddingVertical: getResponsiveSpacing(12, 16, 20), // Reduced padding to minimize blank space
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    marginBottom: getResponsiveSpacing(8, 10, 12), // Add small margin instead of relying on section margin
   },
   appVersion: {
     fontSize: getResponsiveSpacing(12, 13, 14),

@@ -54,6 +54,8 @@ export default function EditProfileScreen() {
     fullName: '',
     email: '',
   });
+  const [nameChangeCount, setNameChangeCount] = useState(0);
+  const [originalName, setOriginalName] = useState('');
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -86,6 +88,38 @@ export default function EditProfileScreen() {
       setFormData(initialData);
       setOriginalData(initialData);
       setProfileImage(user.profile_pic_url || user.profilePicUrl || '');
+      setOriginalName(initialData.fullName);
+      setNameChangeCount(user.nameChangeCount || 0);
+      
+      // Fetch latest profile to get accurate nameChangeCount
+      const fetchProfile = async () => {
+        try {
+          const { tokenManager } = await import('@/utils/tokenManager');
+          const token = await tokenManager.getValidToken();
+          if (!token) return;
+          
+          const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.status === 'success' && data.data?.user) {
+              const profileData = data.data.user;
+              setNameChangeCount(profileData.nameChangeCount || 0);
+              if (profileData.fullName && profileData.fullName !== initialData.fullName) {
+                setOriginalName(profileData.fullName);
+                setFormData(prev => ({ ...prev, fullName: profileData.fullName }));
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch profile:', error);
+          // Use user context data as fallback
+        }
+      };
+      
+      fetchProfile();
     }
   }, [user]);
 
@@ -269,6 +303,16 @@ export default function EditProfileScreen() {
       return;
     }
 
+    // Check name change limit before submitting
+    const isNameChanging = formData.fullName.trim() !== originalName.trim();
+    if (isNameChanging && nameChangeCount >= 2) {
+      Alert.alert(
+        'Name Change Limit Reached',
+        'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.'
+      );
+      return;
+    }
+
 
     try {
       setIsLoading(true);
@@ -301,6 +345,8 @@ export default function EditProfileScreen() {
 
       if (response.ok) {
         const responseData = JSON.parse(responseText);
+        const updatedUserData = responseData.data?.user || {};
+        const updatedNameChangeCount = updatedUserData.nameChangeCount || nameChangeCount;
 
         // Update local user data
         const updatedUser = {
@@ -310,10 +356,17 @@ export default function EditProfileScreen() {
           email: formData.email.trim(),
           profile_pic_url: profileImageUrl,
           profilePicUrl: profileImageUrl,
+          nameChangeCount: updatedNameChangeCount,
         };
 
         await updateUser(updatedUser);
         await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+
+        // Update name change tracking
+        if (formData.fullName.trim() !== originalName.trim()) {
+          setNameChangeCount(updatedNameChangeCount);
+          setOriginalName(formData.fullName.trim());
+        }
 
         Alert.alert(
           'Success',
@@ -511,14 +564,45 @@ export default function EditProfileScreen() {
         <View style={styles.formSection}>
           {/* Full Name */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t('profile.fullName')} *</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.inputLabel}>{t('profile.fullName')} *</Text>
+              {nameChangeCount >= 2 && formData.fullName.trim() !== originalName.trim() && (
+                <Text style={styles.warningText}>
+                  Limit reached (2/2)
+                </Text>
+              )}
+              {nameChangeCount < 2 && formData.fullName.trim() !== originalName.trim() && (
+                <Text style={styles.infoText}>
+                  {2 - nameChangeCount} change{2 - nameChangeCount > 1 ? 's' : ''} remaining
+                </Text>
+              )}
+            </View>
             <TextInput
-              style={styles.textInput}
+              style={[
+                styles.textInput,
+                nameChangeCount >= 2 && formData.fullName.trim() !== originalName.trim() && styles.disabledInput
+              ]}
               value={formData.fullName}
-              onChangeText={(value) => handleInputChange('fullName', value)}
+              onChangeText={(value) => {
+                // Prevent changes if limit reached and name is different from original
+                if (nameChangeCount >= 2 && originalName.trim() !== '' && value.trim() !== originalName.trim()) {
+                  Alert.alert(
+                    'Name Change Limit Reached',
+                    'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.'
+                  );
+                  return;
+                }
+                handleInputChange('fullName', value);
+              }}
               placeholder={t('profile.enterFullName')}
               placeholderTextColor="#9CA3AF"
+              editable={!(nameChangeCount >= 2 && formData.fullName.trim() !== originalName.trim())}
             />
+            {nameChangeCount >= 2 && (
+              <Text style={styles.limitReachedText}>
+                You have used all 2 name changes. You cannot change your name again.
+              </Text>
+            )}
           </View>
 
           {/* Email */}
@@ -675,6 +759,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: getResponsiveSpacing(16, 18, 20),
     paddingVertical: getResponsiveSpacing(20, 24, 28),
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   inputGroup: {
     marginBottom: getResponsiveSpacing(16, 18, 20),
   },
@@ -703,6 +793,26 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(14, 15, 16),
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
+  },
+  disabledInput: {
+    backgroundColor: '#F1F5F9',
+    color: '#64748B',
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#EF4444',
+    fontWeight: '500',
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  limitReachedText: {
+    fontSize: 11,
+    color: '#EF4444',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   readOnlyNote: {
     fontSize: getResponsiveFontSize(12, 13, 14),

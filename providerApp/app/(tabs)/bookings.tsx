@@ -1120,6 +1120,7 @@ const styles = StyleSheet.create({
   bookingsListContent: {
     flexGrow: 1,
     paddingTop: getResponsiveSpacing(6, 8, 10), // Space at the top to separate from filters
+    paddingBottom: getResponsiveSpacing(20, 24, 28), // Add padding at bottom to prevent blank space and account for tab bar
   },
   bookingCard: {
     backgroundColor: '#FFFFFF',

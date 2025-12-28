@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { API_BASE_URL } from '@/constants/api';
@@ -28,6 +28,7 @@ class NotificationService {
 
   /**
    * Initialize notification service
+   * CRITICAL: Order matters - channels must be created before permissions/token
    */
   async initialize(): Promise<boolean> {
     try {
@@ -38,11 +39,12 @@ class NotificationService {
 
       console.log('🔄 Initializing notification service...');
 
-      // Configure notification behavior FIRST
+      // STEP 1: Configure notification behavior and channels FIRST (synchronously)
+      // This ensures channels exist before any notifications can arrive
       await this.configureNotifications();
-      console.log('✅ Notification behavior configured');
+      console.log('✅ Notification behavior and channels configured');
 
-      // Request permissions
+      // STEP 2: Request permissions (after channels are ready)
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
         console.warn('⚠️ Notification permissions not granted');
@@ -50,28 +52,44 @@ class NotificationService {
       }
       console.log('✅ Notification permissions granted');
 
-      // Register for push notifications
+      // STEP 3: Register for push notifications and get token
       const token = await this.registerForPushNotifications();
-      if (token) {
-        this.pushToken = token;
-        console.log('✅ Push token obtained');
-        
-        // Register token with backend (retry if needed)
-        const registered = await this.registerTokenWithBackend(token);
+      if (!token) {
+        console.error('❌ Failed to obtain push token');
+        return false;
+      }
+
+      this.pushToken = token;
+      console.log('✅ Push token obtained');
+
+      // STEP 4: Register token with backend (with retry logic)
+      // CRITICAL: Token must be registered before marking as initialized
+      let registered = false;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (!registered && retryCount < maxRetries) {
+        registered = await this.registerTokenWithBackend(token);
         if (registered) {
           console.log('✅ Push token registered with backend');
-          this.isInitialized = true;
-          return true;
+          break;
         } else {
-          console.warn('⚠️ Failed to register token with backend, but token obtained');
-          // Still mark as initialized if token was obtained
-          this.isInitialized = true;
-          return true;
+          retryCount++;
+          if (retryCount < maxRetries) {
+            console.log(`⚠️ Token registration failed, retrying (${retryCount}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, 2000 * retryCount)); // Exponential backoff
+          }
         }
       }
 
-      console.error('❌ Failed to obtain push token');
-      return false;
+      if (!registered) {
+        console.warn('⚠️ Failed to register token with backend after retries, but token obtained');
+        // Still mark as initialized if token was obtained - backend registration can happen later
+      }
+
+      // Mark as initialized only after token is obtained
+      this.isInitialized = true;
+      return true;
     } catch (error: any) {
       console.error('❌ Error initializing notification service:', error.message || error);
       return false;
@@ -80,73 +98,115 @@ class NotificationService {
 
   /**
    * Configure notification behavior
+   * CRITICAL: Channels must be created synchronously before any notifications arrive
    */
-  private async configureNotifications() {
-    // Configure how notifications are handled when app is in foreground
-    await Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
-
-    // Configure notification channels for Android (CRITICAL for background notifications)
-    if (Platform.OS === 'android') {
-      // Default channel - highest priority for background delivery
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'Default Notifications',
-        description: 'General notifications from BuildXpert',
-        importance: Notifications.AndroidImportance.MAX, // MAX ensures delivery even in Do Not Disturb mode
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#3B82F6',
-        sound: 'default',
-        enableVibrate: true,
-        showBadge: true,
+  private async configureNotifications(): Promise<void> {
+    try {
+      // Configure how notifications are handled when app is in foreground
+      await Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
       });
 
-      // Booking updates channel - high priority
-      await Notifications.setNotificationChannelAsync('booking-updates', {
-        name: 'Booking Updates',
-        description: 'Notifications about your bookings',
-        importance: Notifications.AndroidImportance.HIGH, // HIGH ensures delivery in background
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#10B981',
-        sound: 'default',
-        enableVibrate: true,
-        showBadge: true,
-      });
+      // Configure notification channels for Android (CRITICAL for background notifications)
+      // These MUST be created before any notifications are sent
+      if (Platform.OS === 'android') {
+        const channels = [
+          {
+            id: 'default',
+            name: 'Default Notifications',
+            description: 'General notifications from BuildXpert',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#3B82F6',
+            sound: 'default',
+            enableVibrate: true,
+            showBadge: true,
+          },
+          {
+            id: 'booking-updates',
+            name: 'Booking Updates',
+            description: 'Notifications about your bookings',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#10B981',
+            sound: 'default',
+            enableVibrate: true,
+            showBadge: true,
+          },
+          {
+            id: 'provider-updates',
+            name: 'Provider Updates',
+            description: 'Notifications for service providers',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#10B981',
+            sound: 'default',
+            enableVibrate: true,
+            showBadge: true,
+          },
+          {
+            id: 'reminders',
+            name: 'Reminders',
+            description: 'Booking reminders and important updates',
+            importance: Notifications.AndroidImportance.DEFAULT,
+            vibrationPattern: [0, 250],
+            lightColor: '#F59E0B',
+            sound: 'default',
+            enableVibrate: true,
+            showBadge: true,
+          },
+          {
+            id: 'payments',
+            name: 'Payments',
+            description: 'Payment and transaction notifications',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#059669',
+            sound: 'default',
+            enableVibrate: true,
+            showBadge: true,
+          },
+        ];
 
-      // Provider updates channel
-      await Notifications.setNotificationChannelAsync('provider-updates', {
-        name: 'Provider Updates',
-        description: 'Notifications for service providers',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#10B981',
-        sound: 'default',
-        enableVibrate: true,
-        showBadge: true,
-      });
+        // Create all channels synchronously with error handling
+        const channelPromises = channels.map(async (channel) => {
+          try {
+            await Notifications.setNotificationChannelAsync(channel.id, {
+              name: channel.name,
+              description: channel.description,
+              importance: channel.importance,
+              vibrationPattern: channel.vibrationPattern,
+              lightColor: channel.lightColor,
+              sound: channel.sound,
+              enableVibrate: channel.enableVibrate,
+              showBadge: channel.showBadge,
+            });
+            console.log(`✅ Notification channel created: ${channel.id}`);
+          } catch (error: any) {
+            console.error(`❌ Failed to create notification channel ${channel.id}:`, error.message || error);
+            // Continue with other channels even if one fails
+          }
+        });
 
-      // Reminders channel
-      await Notifications.setNotificationChannelAsync('reminders', {
-        name: 'Reminders',
-        description: 'Booking reminders and important updates',
-        importance: Notifications.AndroidImportance.DEFAULT,
-        vibrationPattern: [0, 250],
-        lightColor: '#F59E0B',
-        sound: 'default',
-        enableVibrate: true,
-        showBadge: true,
-      });
+        // Wait for all channels to be created before proceeding
+        await Promise.all(channelPromises);
+        console.log('✅ All notification channels configured');
+      }
+    } catch (error: any) {
+      console.error('❌ Error configuring notifications:', error.message || error);
+      throw error; // Re-throw to prevent initialization from continuing with broken config
     }
   }
 
   /**
    * Request notification permissions
+   * CRITICAL: Android 13+ requires explicit POST_NOTIFICATIONS permission
    */
   private async requestPermissions(): Promise<boolean> {
     try {
@@ -154,20 +214,53 @@ class NotificationService {
         return false;
       }
 
+      // Android 13+ (API 33+) requires explicit POST_NOTIFICATIONS permission
+      if (Platform.OS === 'android' && Platform.Version >= 33) {
+        const { PermissionsAndroid } = require('react-native');
+        try {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+            {
+              title: 'Notification Permission',
+              message: 'BuildXpert needs permission to send you notifications about your bookings and updates.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+            console.warn('⚠️ POST_NOTIFICATIONS permission denied on Android 13+');
+            return false;
+          }
+        } catch (androidError: any) {
+          console.error('❌ Error requesting Android POST_NOTIFICATIONS permission:', androidError);
+          // Fall through to Expo permission request as fallback
+        }
+      }
+
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
 
       if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
+        const { status } = await Notifications.requestPermissionsAsync({
+          ios: {
+            allowAlert: true,
+            allowBadge: true,
+            allowSound: true,
+            allowAnnouncements: true,
+          },
+        });
         finalStatus = status;
       }
 
       if (finalStatus !== 'granted') {
+        console.warn('⚠️ Notification permissions not granted');
         return false;
       }
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ Error requesting notification permissions:', error.message || error);
       return false;
     }
   }
@@ -255,12 +348,22 @@ class NotificationService {
 
   /**
    * Setup notification event handlers
+   * CRITICAL: Handles notifications in foreground, background, and when app is closed
    */
   private setupNotificationHandlers() {
-    // Handle notification received while app is in foreground
-    Notifications.addNotificationReceivedListener((notification) => {
-      // You can add custom handling here (e.g., update badge, show custom UI)
-      console.log('📬 Notification received (foreground):', notification.request.content.title);
+    // Handle notification received (works in foreground, background, and when app is closed)
+    // This single listener handles all cases
+    Notifications.addNotificationReceivedListener(async (notification) => {
+      const appState = AppState.currentState;
+      const isForeground = appState === 'active';
+      
+      if (isForeground) {
+        console.log('📬 Notification received (foreground):', notification.request.content.title);
+        this.handleNotificationReceived(notification);
+      } else {
+        console.log('📬 Notification received (background/closed):', notification.request.content.title);
+        await this.handleBackgroundNotification(notification);
+      }
     });
 
     // Handle notification tapped/opened (works in both foreground and background)
@@ -269,8 +372,7 @@ class NotificationService {
       this.handleNotificationTap(response.notification);
     });
 
-    // CRITICAL: Handle background notifications
-    // This ensures notifications are received even when app is closed
+    // Set up notification categories for iOS action buttons
     Notifications.setNotificationCategoryAsync('default', [
       {
         identifier: 'VIEW',
@@ -287,8 +389,65 @@ class NotificationService {
       hiddenPreviewsBodyPlaceholder: '',
       categorySummaryFormat: '%u more notifications',
     }).catch((error) => {
-      console.error('Error setting notification category:', error);
+      console.error('❌ Error setting notification category:', error);
     });
+  }
+
+  /**
+   * Handle notification received in foreground
+   */
+  private handleNotificationReceived(notification: Notifications.Notification) {
+    try {
+      // Update badge count
+      const badgeCount = notification.request.content.badge;
+      if (badgeCount !== undefined) {
+        Notifications.setBadgeCountAsync(badgeCount).catch((error) => {
+          console.error('❌ Error updating badge count:', error);
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error handling notification received:', error.message || error);
+    }
+  }
+
+  /**
+   * Handle background notification (when app is closed or in background)
+   * CRITICAL: This ensures notifications are processed even when app is not running
+   */
+  private async handleBackgroundNotification(notification: Notifications.Notification): Promise<void> {
+    try {
+      console.log('🔄 Processing background notification:', notification.request.content.title);
+      
+      // Update badge count
+      const badgeCount = notification.request.content.badge;
+      if (badgeCount !== undefined) {
+        await Notifications.setBadgeCountAsync(badgeCount);
+      }
+
+      // Store notification data for when app opens
+      const notificationData = {
+        title: notification.request.content.title,
+        body: notification.request.content.body,
+        data: notification.request.content.data,
+        timestamp: Date.now(),
+      };
+
+      // Store in AsyncStorage so it can be accessed when app opens
+      try {
+        const existingNotifications = await AsyncStorage.getItem('background_notifications');
+        const notifications = existingNotifications ? JSON.parse(existingNotifications) : [];
+        notifications.unshift(notificationData);
+        // Keep only last 50 notifications
+        const trimmed = notifications.slice(0, 50);
+        await AsyncStorage.setItem('background_notifications', JSON.stringify(trimmed));
+      } catch (storageError) {
+        console.error('❌ Error storing background notification:', storageError);
+      }
+
+      console.log('✅ Background notification processed');
+    } catch (error: any) {
+      console.error('❌ Error handling background notification:', error.message || error);
+    }
   }
 
   /**

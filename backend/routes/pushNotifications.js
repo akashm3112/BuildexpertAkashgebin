@@ -21,7 +21,11 @@ router.post('/send-by-phone', [
   body('body').optional().isString().withMessage('Body must be a string'),
   body('secretKey').optional().isString().withMessage('Secret key must be a string')
 ], asyncHandler(async (req, res) => {
-  const validSecretKey = process.env.NOTIFICATION_TEST_SECRET || 'test123';
+  const validSecretKey = process.env.NOTIFICATION_TEST_SECRET;
+  if (!validSecretKey) {
+    throw new AuthorizationError('NOTIFICATION_TEST_SECRET environment variable is not configured');
+  }
+  
   const providedSecret = req.body.secretKey || '';
   
   if (providedSecret !== validSecretKey) {
@@ -102,8 +106,12 @@ router.post('/send-direct-test', [
   body('body').optional().isString().withMessage('Body must be a string'),
   body('secretKey').optional().isString().withMessage('Secret key must be a string')
 ], asyncHandler(async (req, res) => {
-  // Simple secret key protection (set via env or use default for testing)
-  const validSecretKey = process.env.NOTIFICATION_TEST_SECRET || 'test123';
+  // CRITICAL: Secret key must be set via environment variable
+  const validSecretKey = process.env.NOTIFICATION_TEST_SECRET;
+  if (!validSecretKey) {
+    throw new AuthorizationError('NOTIFICATION_TEST_SECRET environment variable is not configured');
+  }
+  
   const providedSecret = req.body.secretKey || '';
   
   if (providedSecret !== validSecretKey) {

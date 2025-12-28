@@ -296,6 +296,29 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
         serviceName: providerService.service_name
       }
     });
+
+    // Send push notification to user confirming booking creation
+    const userNotification = {
+      ...NotificationTemplates.BOOKING_CREATED,
+      body: `Your booking request for ${providerService.service_name} on ${appointmentDate} has been submitted. Waiting for provider confirmation.`,
+      data: {
+        type: 'booking_created',
+        bookingId: newBooking.id,
+        screen: 'bookings'
+      }
+    };
+    
+    pushNotificationService.sendToUser(customerUserId, userNotification)
+      .catch(err => logger.error('Failed to send booking creation notification to user', {
+        error: err.message,
+        bookingId: newBooking.id,
+        userId: customerUserId
+      }));
+    
+    logger.booking('Push notification sent to user for booking creation', {
+      bookingId: newBooking.id,
+      userId: customerUserId
+    });
   }
 
   // Format appointment date and time for better display

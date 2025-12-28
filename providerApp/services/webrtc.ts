@@ -109,12 +109,17 @@ class WebRTCService {
       }
 
       this.socket = io(API_BASE_URL, {
-        transports: ['websocket'],
+        // CRITICAL: Use polling as fallback for mobile data networks
+        // Mobile carriers often block WebSocket connections, so polling is more reliable
+        transports: ['polling', 'websocket'], // Try polling first, upgrade to websocket if available
+        upgrade: true, // Allow upgrade from polling to websocket
         auth: { token },
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
         timeout: 20000,
+        forceNew: false, // Reuse existing connection if available
       });
 
       const connectionTimeout = setTimeout(() => {

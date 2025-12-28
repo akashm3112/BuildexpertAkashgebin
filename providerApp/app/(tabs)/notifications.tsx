@@ -499,6 +499,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: getResponsiveSpacing(12, 12, 12),
     paddingTop: getResponsiveSpacing(12, 16, 20),
+    paddingBottom: getResponsiveSpacing(20, 24, 28), // Add padding at bottom to prevent blank space and account for tab bar
   },
   notificationCard: {
     flexDirection: 'row',

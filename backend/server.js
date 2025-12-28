@@ -470,6 +470,64 @@ io.on('connection', (socket) => {
   });
 });
 
+// CRITICAL: Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Promise Rejection', {
+    reason: reason?.message || String(reason),
+    stack: reason?.stack,
+    promise: String(promise)
+  });
+  // Don't exit in production - log and continue
+  // In development, exit to catch issues early
+  if (config.isDevelopment()) {
+    logger.error('Exiting due to unhandled rejection in development mode');
+    process.exit(1);
+  }
+});
+
+// CRITICAL: Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception', {
+    message: error.message,
+    stack: error.stack
+  });
+  // Exit gracefully after logging - uncaught exceptions are serious
+  process.exit(1);
+});
+
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
+  logger.info(`Received ${signal}, starting graceful shutdown...`);
+  
+  // Stop accepting new connections
+  server.close(() => {
+    logger.info('HTTP server closed');
+  });
+  
+  // Close Socket.IO
+  io.close(() => {
+    logger.info('Socket.IO closed');
+  });
+  
+  // Close database pool
+  try {
+    const { pool } = require('./database/connection');
+    await pool.end();
+    logger.info('Database connections closed');
+  } catch (error) {
+    logger.error('Error closing database pool', { error: error.message });
+  }
+  
+  // Give time for cleanup, then exit
+  setTimeout(() => {
+    logger.info('Graceful shutdown completed');
+    process.exit(0);
+  }, 5000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 server.listen(PORT, '0.0.0.0', async () => {
   logger.info('BuildXpert API server started', {
     port: PORT,
@@ -477,6 +535,46 @@ server.listen(PORT, '0.0.0.0', async () => {
     healthCheck: `http://localhost:${PORT}/health`,
     allowedOrigins: allowedOrigins.join(', ')
   });
+  
+  // Validate critical environment variables BEFORE starting services
+  const requiredEnvVars = {
+    'DATABASE_URL': process.env.DATABASE_URL,
+    'JWT_SECRET': process.env.JWT_SECRET,
+    'TWILIO_ACCOUNT_SID': process.env.TWILIO_ACCOUNT_SID,
+    'TWILIO_AUTH_TOKEN': process.env.TWILIO_AUTH_TOKEN,
+    'TWILIO_PHONE_NUMBER': process.env.TWILIO_PHONE_NUMBER,
+    'CLOUDINARY_CLOUD_NAME': process.env.CLOUDINARY_CLOUD_NAME,
+    'CLOUDINARY_API_KEY': process.env.CLOUDINARY_API_KEY,
+    'CLOUDINARY_API_SECRET': process.env.CLOUDINARY_API_SECRET,
+  };
+  
+  const optionalEnvVars = {
+    'EXPO_ACCESS_TOKEN': process.env.EXPO_ACCESS_TOKEN,
+    'PAYTM_MID': process.env.PAYTM_MID,
+    'PAYTM_MERCHANT_KEY': process.env.PAYTM_MERCHANT_KEY,
+  };
+  
+  const missingRequired = Object.entries(requiredEnvVars)
+    .filter(([key, value]) => !value)
+    .map(([key]) => key);
+  
+  const missingOptional = Object.entries(optionalEnvVars)
+    .filter(([key, value]) => !value)
+    .map(([key]) => key);
+  
+  if (missingRequired.length > 0) {
+    logger.error('Missing REQUIRED environment variables. Server cannot start.', {
+      missing: missingRequired
+    });
+    process.exit(1);
+  }
+  
+  if (missingOptional.length > 0) {
+    logger.warn('Missing optional environment variables (may affect functionality)', {
+      missing: missingOptional,
+      note: 'These are optional but some features may not work without them'
+    });
+  }
   
   // Start background services
   logger.info('Starting background services');
@@ -506,24 +604,6 @@ server.listen(PORT, '0.0.0.0', async () => {
   }
   
   logger.info('All background services started');
-  
-  // Check critical environment variables
-  const criticalEnvVars = {
-    'DATABASE_URL': process.env.DATABASE_URL,
-    'JWT_SECRET': process.env.JWT_SECRET,
-    'EXPO_ACCESS_TOKEN': process.env.EXPO_ACCESS_TOKEN,
-  };
-  
-  const missingVars = Object.entries(criticalEnvVars)
-    .filter(([key, value]) => !value)
-    .map(([key]) => key);
-  
-  if (missingVars.length > 0) {
-    logger.warn('Missing optional environment variables (may affect functionality)', {
-      missing: missingVars,
-      note: 'EXPO_ACCESS_TOKEN is optional but recommended for better push notification rate limits'
-    });
-  }
 });
 
 module.exports = { app, io }; 

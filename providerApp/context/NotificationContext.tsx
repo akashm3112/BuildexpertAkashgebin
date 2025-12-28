@@ -112,13 +112,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'success') {
-          setNotifications(data.data.notifications);
+          const fetchedNotifications = data.data.notifications || [];
+          setNotifications(fetchedNotifications);
           // Update unread count based on notifications
-          const unread = data.data.notifications.filter((n: Notification) => !n.is_read).length;
+          const unread = fetchedNotifications.filter((n: Notification) => !n.is_read).length;
           setUnreadCount(unread);
+        } else {
+          // If API call fails but we have existing notifications, don't clear them
+          // Only clear if this is the initial load (no existing notifications)
+          if (notifications.length === 0) {
+            setNotifications([]);
+          }
         }
       } else {
         const errorText = await response.text();
+        // Don't clear existing notifications on error - preserve what we have
+        if (notifications.length === 0) {
+          setNotifications([]);
+        }
       }
     } catch (error: any) {
       // Mark error as handled to prevent unhandled promise rejection warnings
@@ -134,6 +145,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       
       // Network errors are expected when backend is down or network is unavailable
       // Silently handle them (will retry on next fetch)
+      // Only clear notifications on initial load if there's an error
+      // Don't clear existing notifications on subsequent fetch errors
+      if (notifications.length === 0) {
+        setNotifications([]);
+      }
     } finally {
       fetchInProgress.current = false;
     }
@@ -313,7 +329,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return; // Socket already exists
     }
 
-    const socket = socketIOClient(`${API_BASE_URL}`);
+    // CRITICAL: Use polling as fallback for mobile data networks
+    // Mobile carriers often block WebSocket connections
+    const socket = socketIOClient(`${API_BASE_URL}`, {
+      transports: ['polling', 'websocket'], // Try polling first, upgrade to websocket if available
+      upgrade: true, // Allow upgrade from polling to websocket
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      forceNew: false,
+    });
     socketRef.current = socket;
     
     socket.on('connect', () => {
