@@ -42,7 +42,7 @@ const getServiceNamesFromIds = (selectedService: string | null | undefined): str
   return serviceNames.join(', ');
 };
 import { tokenManager } from '../../utils/tokenManager';
-import { SafeView } from '@/components/SafeView';
+import { SafeView, useSafeAreaInsets } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import WebRTCCallButton from '@/components/calls/WebRTCCallButton';
 import {
@@ -101,6 +101,7 @@ interface Booking {
 export default function BookingsScreen() {
   const { user, isLoading: authLoading } = useAuth();
   const { t, currentLanguage } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filter, setFilter] = useState<'pending' | 'accepted' | 'completed'| 'all' >('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -169,10 +170,11 @@ export default function BookingsScreen() {
     setShowAlertModal(true);
   };
 
-  const { fetchUnreadCount, unreadCount: bookingUnreadCount } = useBookings();
+  const { fetchUnreadCount, unreadCount: bookingUnreadCount, refreshTrigger } = useBookings();
   const markAllViewedInProgressRef = useRef(false);
   const lastMarkAllViewedTimeRef = useRef(0);
   const MARK_ALL_VIEWED_THROTTLE_MS = 2000; // Prevent duplicate calls within 2 seconds
+  const lastRefreshTriggerRef = useRef(0); // Track last processed refresh trigger
 
   // Mark all bookings as viewed when provider opens the bookings tab
   useFocusEffect(
@@ -273,6 +275,15 @@ export default function BookingsScreen() {
       setIsLoading(false);
     }
   }, [user?.id, authLoading, loadBookings]); // Added loadBookings to deps since it's now memoized
+
+  // Listen to refresh trigger from BookingContext (triggered by socket events)
+  useEffect(() => {
+    if (refreshTrigger > lastRefreshTriggerRef.current && user?.id && !authLoading) {
+      lastRefreshTriggerRef.current = refreshTrigger;
+      // Refresh booking list when socket event is received
+      loadBookings(false); // Don't show spinner for socket-triggered refreshes
+    }
+  }, [refreshTrigger, user?.id, authLoading, loadBookings]);
 
   // Handle orientation changes for responsive design
   useEffect(() => {
@@ -783,7 +794,7 @@ export default function BookingsScreen() {
   return (
     <SafeView backgroundColor="#F8FAFC">
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, getResponsiveSpacing(16, 20, 24)) }]}>
         <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{t('bookings.title')}</Text>
         <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">{t('bookings.subtitle')}</Text>
       </View>
@@ -1045,7 +1056,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),
-    paddingTop: getResponsiveSpacing(16, 20, 24),
     paddingBottom: getResponsiveSpacing(12, 14, 16),
     backgroundColor: '#FFFFFF', // Header background white
     borderBottomWidth: 1,

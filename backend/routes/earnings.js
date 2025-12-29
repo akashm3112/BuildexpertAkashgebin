@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 const { standardLimiter } = require('../middleware/rateLimiting');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { NotFoundError } = require('../utils/errorTypes');
+const { CacheKeys, cacheQuery } = require('../utils/cacheIntegration');
 
 const router = express.Router();
 
@@ -81,13 +82,24 @@ router.get('/', requireRole(['provider']), asyncHandler(async (req, res) => {
       return `₹${parseInt(amount).toLocaleString('en-IN')}`;
     };
 
+  // Safely extract earnings values with proper null checks
+  const thisMonthValue = thisMonthEarnings && thisMonthEarnings.length > 0 && thisMonthEarnings[0]?.total_earnings
+    ? parseFloat(thisMonthEarnings[0].total_earnings) || 0
+    : 0;
+  const todayValue = todayEarnings && todayEarnings.length > 0 && todayEarnings[0]?.total_earnings
+    ? parseFloat(todayEarnings[0].total_earnings) || 0
+    : 0;
+  const pendingValue = pendingEarnings && pendingEarnings.length > 0 && pendingEarnings[0]?.total_earnings
+    ? parseFloat(pendingEarnings[0].total_earnings) || 0
+    : 0;
+
   // Cache earnings (user-specific - 1 minute TTL, recalculates frequently)
   const cacheKey = CacheKeys.earnings(providerProfileId);
   const result = await cacheQuery(cacheKey, async () => {
     const earnings = {
-      thisMonth: formatAmount(thisMonthEarnings[0]?.total_earnings || 0),
-      today: formatAmount(todayEarnings[0]?.total_earnings || 0),
-      pending: formatAmount(pendingEarnings[0]?.total_earnings || 0)
+      thisMonth: formatAmount(thisMonthValue),
+      today: formatAmount(todayValue),
+      pending: formatAmount(pendingValue)
     };
 
     return {

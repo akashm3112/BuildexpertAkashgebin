@@ -625,6 +625,9 @@ export default {
     phoneNumber: 'ಫೋನ್ ಸಂಖ್ಯೆ',
     phonePlaceholder: 'ನಿಮ್ಮ ಫೋನ್ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ',
     phoneDisabled: 'ಮೊಬೈಲ್ ಸಂಖ್ಯೆಯನ್ನು ಬದಲಾಯಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ',
+    nameChangesRemaining: '{count} ಬದಲಾವಣೆ ಉಳಿದಿದೆ',
+    nameChangeLimitReached: 'ಹೆಸರು ಬದಲಾವಣೆ ಮಿತಿ ತಲುಪಿದೆ (2/2)',
+    nameChangeLimitMessage: 'ನೀವು ಎಲ್ಲಾ 2 ಹೆಸರು ಬದಲಾವಣೆಗಳನ್ನು ಬಳಸಿದ್ದೀರಿ. ನೀವು ನಿಮ್ಮ ಹೆಸರನ್ನು ಮತ್ತೆ ಬದಲಾಯಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ.',
   },
   termsPrivacy: {
     title: 'ನಿಯಮಗಳು ಮತ್ತು ಗೌಪ್ಯತೆ',

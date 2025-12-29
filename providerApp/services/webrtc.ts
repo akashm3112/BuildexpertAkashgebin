@@ -76,6 +76,7 @@ class WebRTCService {
   private useTurnServer: boolean = false;
   private connectionRetryCount: number = 0;
   private readonly MAX_CONNECTION_RETRIES = 3;
+  private pendingIceCandidates: any[] = [];
 
   constructor() {
     this.isWebRTCAvailable = Platform.OS !== 'web' && !!RTCPeerConnection;
@@ -129,11 +130,13 @@ class WebRTCService {
 
       this.socket.on('connect', () => {
         clearTimeout(connectionTimeout);
-        this.socket?.emit('join', userId, () => {
-          // Ensure 'join' is acknowledged before resolving
+        // Wait a small delay to ensure socket is fully ready
+        setTimeout(() => {
+          this.socket?.emit('join', userId);
           this.setupSocketListeners();
-          resolve();
-        });
+          // Give socket time to process join before resolving
+          setTimeout(() => resolve(), 100);
+        }, 100);
       });
 
       this.socket.on('connect_error', (error: any) => {
@@ -198,9 +201,18 @@ class WebRTCService {
     this.socket.on('call:ice-candidate', async ({ candidate }) => {
       if (candidate && this.peerConnection) {
         try {
-          await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          // Only add ICE candidate if remote description is set
+          if (this.peerConnection.remoteDescription) {
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          } else {
+            // Store candidate to add later when remote description is set
+            if (!this.pendingIceCandidates) {
+              this.pendingIceCandidates = [];
+            }
+            this.pendingIceCandidates.push(candidate);
+          }
         } catch (error) {
-          // Silently fail - ICE candidate errors are handled by recovery mechanisms
+          console.error('Error adding ICE candidate:', error);
         }
       }
     });
@@ -399,7 +411,28 @@ class WebRTCService {
   // Create WebRTC offer
   private async createOffer() {
     try {
-      if (!this.peerConnection) return;
+      if (!this.peerConnection) {
+        console.error('Cannot create offer: peer connection not initialized');
+        return;
+      }
+
+      // Wait for ICE gathering to complete or timeout after 5 seconds
+      if (this.peerConnection.iceGatheringState !== 'complete') {
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            resolve(); // Continue even if gathering doesn't complete
+          }, 5000);
+
+          const checkState = () => {
+            if (this.peerConnection?.iceGatheringState === 'complete') {
+              clearTimeout(timeout);
+              resolve();
+            }
+          };
+
+          this.peerConnection!.onicegatheringstatechange = checkState;
+        });
+      }
 
       const offer = await this.peerConnection.createOffer({
         offerToReceiveAudio: true,
@@ -408,12 +441,16 @@ class WebRTCService {
 
       await this.peerConnection.setLocalDescription(offer);
 
+      // Wait a bit for local description to be set
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       this.socket?.emit('call:offer', {
         bookingId: this.currentCall?.bookingId,
         offer: this.peerConnection.localDescription,
         to: this.currentCall?.receiverId,
       });
     } catch (error) {
+      console.error('Error creating offer:', error);
       this.handleError(error, 'create_offer');
     }
   }
@@ -424,6 +461,18 @@ class WebRTCService {
       if (!this.peerConnection) return;
 
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+      // Add any pending ICE candidates now that remote description is set
+      if (this.pendingIceCandidates && this.pendingIceCandidates.length > 0) {
+        for (const candidate of this.pendingIceCandidates) {
+          try {
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (error) {
+            console.error('Error adding pending ICE candidate:', error);
+          }
+        }
+        this.pendingIceCandidates = [];
+      }
 
       const answer = await this.peerConnection.createAnswer();
       await this.peerConnection.setLocalDescription(answer);
@@ -444,6 +493,18 @@ class WebRTCService {
       if (!this.peerConnection) return;
 
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+
+      // Add any pending ICE candidates now that remote description is set
+      if (this.pendingIceCandidates && this.pendingIceCandidates.length > 0) {
+        for (const candidate of this.pendingIceCandidates) {
+          try {
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (error) {
+            console.error('Error adding pending ICE candidate:', error);
+          }
+        }
+        this.pendingIceCandidates = [];
+      }
     } catch (error) {
       this.handleError(error, 'handle_answer');
     }
@@ -881,6 +942,7 @@ class WebRTCService {
     this.callStartTime = null;
     this.connectionRetryCount = 0;
     this.useTurnServer = false;
+    this.pendingIceCandidates = [];
     
     // Reset retry counts
     webrtcErrorHandler.resetRetryCount('connection');

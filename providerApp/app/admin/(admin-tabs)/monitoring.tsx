@@ -70,6 +70,8 @@ export default function MonitoringScreen() {
       const token = await tokenManager.getValidToken();
       if (!token) {
         console.error('No authentication token found');
+        setLoading(false);
+        setRefreshing(false);
         return;
       }
 
@@ -80,23 +82,59 @@ export default function MonitoringScreen() {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
+        }).catch(error => {
+          console.error('Error fetching monitoring status:', error);
+          return { ok: false, status: 500, text: () => Promise.resolve('Network error') };
         }),
         fetch(`${API_BASE_URL}/api/monitoring/alerts?limit=10`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
+        }).catch(error => {
+          console.error('Error fetching alerts:', error);
+          return { ok: false, status: 500, json: () => Promise.resolve({ status: 'error', data: { alerts: [] } }) };
         })
       ]);
 
       if (statusResponse.ok) {
         const statusData = await statusResponse.json();
-        setMonitoringData(statusData.data);
+        
+        // Validate and set monitoring data with defaults
+        if (statusData && statusData.status === 'success' && statusData.data) {
+          const data = statusData.data;
+          setMonitoringData({
+            status: data.status || 'unknown',
+            score: data.score ?? 0,
+            uptime: data.uptime ?? 0,
+            requests: {
+              total: data.requests?.total ?? 0,
+              errors: data.requests?.errors ?? 0,
+              errorRate: data.requests?.errorRate ?? '0.00'
+            },
+            performance: {
+              averageResponseTime: data.performance?.averageResponseTime ?? '0',
+              p95ResponseTime: data.performance?.p95ResponseTime ?? '0'
+            },
+            system: {
+              memoryUsage: data.system?.memoryUsage ?? '0.00',
+              databasePoolUsage: data.system?.databasePoolUsage ?? '0.00'
+            }
+          });
+        } else {
+          console.error('Invalid monitoring data structure:', statusData);
+        }
+      } else {
+        const errorText = await statusResponse.text().catch(() => 'Unknown error');
+        console.error('Failed to fetch monitoring status:', statusResponse.status, errorText);
       }
 
       if (alertsResponse.ok) {
         const alertsData = await alertsResponse.json();
-        setAlerts(alertsData.data.alerts || []);
+        setAlerts(alertsData.data?.alerts || []);
+      } else {
+        // Alerts are optional, don't log error if it fails
+        setAlerts([]);
       }
     } catch (error) {
       console.error('Error fetching monitoring data:', error);

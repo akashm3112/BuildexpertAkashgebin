@@ -607,6 +607,9 @@ export default {
     phoneNumber: 'ఫోన్ నంబర్',
     phonePlaceholder: 'మీ ఫోన్ నంబర్‌ని నమోదు చేయండి',
     phoneDisabled: 'మొబైల్ నంబర్‌ని మార్చలేము',
+    nameChangesRemaining: '{count} మార్పు మిగిలి ఉంది',
+    nameChangeLimitReached: 'పేరు మార్పు పరిమితి చేరింది (2/2)',
+    nameChangeLimitMessage: 'మీరు అన్ని 2 పేరు మార్పులను ఉపయోగించారు. మీరు మీ పేరును మళ్లీ మార్చలేరు.',
   },
   termsPrivacy: {
     title: 'నిబంధనలు మరియు గోప్యత',

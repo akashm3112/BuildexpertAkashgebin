@@ -227,13 +227,22 @@ io.on('connection', (socket) => {
   socketManager.registerConnection(socket);
   
   // Join user's personal room
-  socket.on('join', (userId) => {
+  socket.on('join', (userId, ack) => {
     if (userId) {
       socket.join(userId);
       socket.userId = userId;
       // Update existing socket registration with userId (don't register again)
       // The registerConnection method should handle updating existing registrations
       socketManager.registerConnection(socket, userId);
+      
+      // Acknowledge join if callback provided
+      if (typeof ack === 'function') {
+        ack({ status: 'success', userId });
+      }
+    } else {
+      if (typeof ack === 'function') {
+        ack({ status: 'error', message: 'Invalid userId' });
+      }
     }
   });
 

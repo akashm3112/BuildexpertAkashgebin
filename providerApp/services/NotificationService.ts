@@ -29,11 +29,14 @@ class NotificationService {
   /**
    * Initialize notification service
    * CRITICAL: Order matters - channels must be created before permissions/token
+   * @param forceReRegister - Force re-registration of token even if already initialized
    */
-  async initialize(): Promise<boolean> {
+  async initialize(forceReRegister: boolean = false): Promise<boolean> {
     try {
-      if (this.isInitialized) {
-        console.log('✅ Notification service already initialized');
+      if (this.isInitialized && !forceReRegister) {
+        console.log('✅ Notification service already initialized, re-registering token...');
+        // Even if initialized, ensure token is registered with backend
+        await this.ensureTokenRegistered();
         return true;
       }
 
@@ -64,27 +67,17 @@ class NotificationService {
 
       // STEP 4: Register token with backend (with retry logic)
       // CRITICAL: Token must be registered before marking as initialized
-      let registered = false;
-      let retryCount = 0;
-      const maxRetries = 3;
-      
-      while (!registered && retryCount < maxRetries) {
-        registered = await this.registerTokenWithBackend(token);
-        if (registered) {
-          console.log('✅ Push token registered with backend');
-          break;
-        } else {
-          retryCount++;
-          if (retryCount < maxRetries) {
-            console.log(`⚠️ Token registration failed, retrying (${retryCount}/${maxRetries})...`);
-            await new Promise(resolve => setTimeout(resolve, 2000 * retryCount)); // Exponential backoff
-          }
-        }
-      }
+      const registered = await this.registerTokenWithBackendWithRetry(token);
 
       if (!registered) {
         console.warn('⚠️ Failed to register token with backend after retries, but token obtained');
         // Still mark as initialized if token was obtained - backend registration can happen later
+        // Schedule a retry in the background
+        setTimeout(() => {
+          this.ensureTokenRegistered().catch(err => {
+            console.error('❌ Background token registration retry failed:', err);
+          });
+        }, 10000); // Retry after 10 seconds
       }
 
       // Mark as initialized only after token is obtained
@@ -92,6 +85,63 @@ class NotificationService {
       return true;
     } catch (error: any) {
       console.error('❌ Error initializing notification service:', error.message || error);
+      return false;
+    }
+  }
+
+  /**
+   * Register token with backend with retry logic
+   */
+  private async registerTokenWithBackendWithRetry(token: string): Promise<boolean> {
+    let registered = false;
+    let retryCount = 0;
+    const maxRetries = 5; // Increased retries
+    
+    while (!registered && retryCount < maxRetries) {
+      registered = await this.registerTokenWithBackend(token);
+      if (registered) {
+        console.log('✅ Push token registered with backend');
+        break;
+      } else {
+        retryCount++;
+        if (retryCount < maxRetries) {
+          const delay = 2000 * retryCount; // Exponential backoff: 2s, 4s, 6s, 8s, 10s
+          console.log(`⚠️ Token registration failed, retrying (${retryCount}/${maxRetries}) in ${delay/1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    return registered;
+  }
+
+  /**
+   * Ensure token is registered with backend (called periodically and on app start)
+   */
+  async ensureTokenRegistered(): Promise<boolean> {
+    try {
+      if (!this.pushToken) {
+        // Try to get token from storage or generate new one
+        const token = await this.getPushToken();
+        if (!token) {
+          console.warn('⚠️ No push token available to register');
+          return false;
+        }
+        this.pushToken = token;
+      }
+
+      console.log('🔄 Ensuring push token is registered with backend...');
+      const registered = await this.registerTokenWithBackendWithRetry(this.pushToken);
+      
+      if (registered) {
+        console.log('✅ Push token confirmed registered with backend');
+      } else {
+        console.warn('⚠️ Failed to register push token with backend');
+      }
+      
+      return registered;
+    } catch (error: any) {
+      console.error('❌ Error ensuring token registration:', error.message || error);
       return false;
     }
   }
@@ -272,9 +322,28 @@ class NotificationService {
   private async registerTokenWithBackend(token: string): Promise<boolean> {
     try {
       const { tokenManager } = await import('../utils/tokenManager');
-      const authToken = await tokenManager.getValidToken();
+      
+      // Try to get valid token, with retry if needed
+      let authToken = await tokenManager.getValidToken();
       if (!authToken) {
-        console.warn('⚠️ No auth token found, cannot register push token with backend');
+        // Wait a bit and try refreshing token
+        console.log('⚠️ No auth token found, attempting to refresh...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        authToken = await tokenManager.getValidToken();
+        
+        if (!authToken) {
+          // Try force refresh
+          try {
+            await tokenManager.forceRefreshToken();
+            authToken = await tokenManager.getValidToken();
+          } catch (refreshError) {
+            console.warn('⚠️ Token refresh failed, cannot register push token:', refreshError);
+          }
+        }
+      }
+      
+      if (!authToken) {
+        console.warn('⚠️ No auth token found after retries, cannot register push token with backend');
         return false;
       }
 
@@ -301,15 +370,35 @@ class NotificationService {
       });
 
       if (response.ok) {
-        console.log('✅ Push token registered with backend successfully');
+        const responseData = await response.json().catch(() => ({}));
+        console.log('✅ Push token registered with backend successfully', {
+          tokenPrefix: token.substring(0, 20) + '...',
+          responseStatus: responseData.status
+        });
         return true;
       } else {
         const data = await response.json().catch(() => ({}));
-        console.error('❌ Failed to register token with backend:', response.status, data.message || data);
+        const errorText = await response.text().catch(() => '');
+        console.error('❌ Failed to register token with backend:', {
+          status: response.status,
+          statusText: response.statusText,
+          message: data.message || data.error || errorText,
+          tokenPrefix: token.substring(0, 20) + '...'
+        });
+        
+        // If 401, token might be expired - don't retry immediately
+        if (response.status === 401) {
+          console.warn('⚠️ Authentication failed, token may be expired');
+        }
+        
         return false;
       }
     } catch (error: any) {
-      console.error('❌ Error registering token with backend:', error.message || error);
+      console.error('❌ Error registering token with backend:', {
+        message: error.message || error,
+        stack: error.stack,
+        tokenPrefix: token ? token.substring(0, 20) + '...' : 'null'
+      });
       return false;
     }
   }
@@ -466,6 +555,10 @@ class NotificationService {
       const storedToken = await AsyncStorage.getItem('expo_push_token');
       if (storedToken) {
         this.pushToken = storedToken;
+        // Ensure it's registered with backend
+        this.ensureTokenRegistered().catch(err => {
+          console.error('❌ Error ensuring stored token is registered:', err);
+        });
         return storedToken;
       }
 
@@ -473,7 +566,10 @@ class NotificationService {
       const token = await this.registerForPushNotifications();
       if (token) {
         this.pushToken = token;
-        await this.registerTokenWithBackend(token);
+        // Register with backend (with retry)
+        this.registerTokenWithBackendWithRetry(token).catch(err => {
+          console.error('❌ Error registering new token:', err);
+        });
       }
 
       return token;

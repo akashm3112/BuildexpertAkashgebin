@@ -40,6 +40,7 @@ export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
   const { t, currentLanguageName, currentLanguage } = useLanguage();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   
   // Helper function to get array translations
   const getArrayTranslation = (key: string): string[] => {

@@ -169,14 +169,32 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
     });
   }
 
-  // Optimized query - only fetch essential fields for home screen checkmark
+  // Fetch all required fields for service management (view/edit/delete)
   const registeredServices = await getRows(`
     SELECT 
+      ps.id as provider_service_id,
+      ps.service_id,
       sm.name as service_name,
-      ps.payment_status
+      ps.payment_status,
+      ps.payment_start_date,
+      ps.payment_end_date,
+      ps.working_proof_urls,
+      pp.years_of_experience,
+      pp.service_description,
+      pp.is_engineering_provider,
+      pp.engineering_certificate_url,
+      a.state,
+      a.city,
+      a.full_address,
+      CASE 
+        WHEN ps.payment_end_date IS NOT NULL 
+        THEN EXTRACT(EPOCH FROM (ps.payment_end_date - NOW())) / 86400
+        ELSE NULL
+      END as days_until_expiry
     FROM provider_services ps
     JOIN services_master sm ON ps.service_id = sm.id
     JOIN provider_profiles pp ON ps.provider_id = pp.id
+    LEFT JOIN addresses a ON a.user_id = pp.user_id AND a.type = 'home'
     WHERE pp.user_id = $1
     ORDER BY ps.created_at DESC
   `, [req.user.id]);

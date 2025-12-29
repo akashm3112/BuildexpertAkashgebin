@@ -135,10 +135,11 @@ export default function BookingsScreen() {
     isLargeDevice = width >= 414;
   }, [width]);
 
-  const { fetchUnreadCount, unreadCount: bookingUnreadCount } = useBookings();
+  const { fetchUnreadCount, unreadCount: bookingUnreadCount, refreshTrigger } = useBookings();
   const markAllViewedInProgressRef = useRef(false);
   const lastMarkAllViewedTimeRef = useRef(0);
   const MARK_ALL_VIEWED_THROTTLE_MS = 2000; // Prevent duplicate calls within 2 seconds
+  const lastRefreshTriggerRef = useRef(0); // Track last processed refresh trigger
 
   // Mark all bookings as viewed when user opens the bookings tab
   useFocusEffect(
@@ -198,6 +199,15 @@ export default function BookingsScreen() {
       setLoading(false);
     }
   }, [user?.id, authLoading]);
+
+  // Listen to refresh trigger from BookingContext (triggered by socket events)
+  useEffect(() => {
+    if (refreshTrigger > lastRefreshTriggerRef.current && user?.id && !authLoading) {
+      lastRefreshTriggerRef.current = refreshTrigger;
+      // Refresh booking list when socket event is received
+      fetchBookings(false); // Don't show spinner for socket-triggered refreshes
+    }
+  }, [refreshTrigger, user?.id, authLoading]);
 
   const fetchBookings = async (showSpinner = false) => {
     if (showSpinner) setLoading(true);

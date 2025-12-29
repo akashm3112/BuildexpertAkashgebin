@@ -677,6 +677,9 @@ export default {
     phoneNumber: 'ഫോൺ നമ്പർ',
     phonePlaceholder: 'നിങ്ങളുടെ ഫോൺ നമ്പർ നൽകുക',
     phoneDisabled: 'മൊബൈൽ നമ്പർ മാറ്റാൻ കഴിയില്ല',
+    nameChangesRemaining: '{count} മാറ്റം ശേഷിക്കുന്നു',
+    nameChangeLimitReached: 'പേര് മാറ്റ പരിധി എത്തി (2/2)',
+    nameChangeLimitMessage: 'നിങ്ങൾ എല്ലാ 2 പേര് മാറ്റങ്ങളും ഉപയോഗിച്ചു. നിങ്ങൾക്ക് നിങ്ങളുടെ പേര് വീണ്ടും മാറ്റാൻ കഴിയില്ല.',
   },
   termsPrivacy: {
     title: 'നിബന്ധനകളും സ്വകാര്യതയും',

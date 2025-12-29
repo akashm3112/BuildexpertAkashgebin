@@ -9,6 +9,7 @@ interface BookingContextType {
   fetchUnreadCount: () => Promise<void>;
   refreshBookings: () => void;
   resetBookingState: () => void;
+  refreshTrigger: number; // Trigger counter for booking list refresh
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -16,6 +17,7 @@ const BookingContext = createContext<BookingContextType | undefined>(undefined);
 export function BookingProvider({ children }: { children: React.ReactNode }) {
   const { user, logout, isLoading: authLoading } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // Trigger counter for booking list refresh
   const appState = useRef(AppState.currentState);
   const socketRef = useRef<Socket | null>(null);
 
@@ -52,8 +54,11 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Refresh bookings (placeholder for future use)
+  // Refresh bookings - triggers booking list refresh in screens
   const refreshBookings = () => {
+    // Increment trigger counter to notify booking screens to refresh
+    setRefreshTrigger(prev => prev + 1);
+    // Also update unread count
     fetchUnreadCount().catch((error) => {
       // Errors are already handled in fetchUnreadCount
       const isSessionExpired = error?.message === 'Session expired' || 
@@ -131,19 +136,16 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
       socket.emit('join', user.id);
     });
 
+    // Listen for booking creation (new booking for user)
+    socket.on('booking_created', () => {
+      // Trigger booking list refresh
+      refreshBookings();
+    });
+
     // Listen for booking status updates (accepted, cancelled, completed)
     socket.on('booking_updated', () => {
-      fetchUnreadCount().catch((error) => {
-        // Errors are already handled in fetchUnreadCount, but catch here to prevent unhandled rejections
-        const isSessionExpired = error?.message === 'Session expired' || 
-                                 error?.status === 401 && error?.message?.includes('Session expired');
-        const isServerError = error?.status === 500 || 
-                             error?.isServerError === true ||
-                             error?.message?.includes('Database operation failed') ||
-                             error?.message?.includes('Service temporarily unavailable');
-        
-        // Errors are handled silently
-      });
+      // Trigger booking list refresh
+      refreshBookings();
     });
 
     // Listen for unread count update events (more efficient than listening to all booking_updated events)
@@ -218,7 +220,8 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
         unreadCount,
         fetchUnreadCount,
         refreshBookings,
-        resetBookingState
+        resetBookingState,
+        refreshTrigger // Expose trigger for screens to watch
       }}
     >
       {children}

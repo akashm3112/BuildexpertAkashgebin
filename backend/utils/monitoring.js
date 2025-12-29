@@ -136,10 +136,19 @@ class MetricsCollector {
    * Update percentiles from incremental calculator
    */
   updatePercentiles() {
-    const stats = this.responseTimePercentiles.getPercentiles();
-    this.metrics.performance.averageResponseTime = Math.round(stats.average);
-    this.metrics.performance.p95ResponseTime = Math.round(stats.p95);
-    this.metrics.performance.p99ResponseTime = Math.round(stats.p99);
+    try {
+      const stats = this.responseTimePercentiles.getPercentiles();
+      // Ensure all values are valid numbers, default to 0 if undefined/null/NaN
+      this.metrics.performance.averageResponseTime = isNaN(stats?.average) ? 0 : Math.round(stats.average);
+      this.metrics.performance.p95ResponseTime = isNaN(stats?.p95) ? 0 : Math.round(stats.p95);
+      this.metrics.performance.p99ResponseTime = isNaN(stats?.p99) ? 0 : Math.round(stats.p99);
+    } catch (error) {
+      // If percentile calculation fails, set defaults
+      logger.warn('Error updating percentiles, using defaults', { error: error.message });
+      this.metrics.performance.averageResponseTime = 0;
+      this.metrics.performance.p95ResponseTime = 0;
+      this.metrics.performance.p99ResponseTime = 0;
+    }
   }
 
   /**
@@ -217,31 +226,42 @@ class MetricsCollector {
       const totalMem = os.totalmem();
       const usedMem = totalMem - os.freemem();
       
+      // Ensure valid memory percentage calculation
+      const heapTotal = memUsage.heapTotal || 1; // Avoid division by zero
+      const memoryPercentage = (memUsage.heapUsed / heapTotal) * 100;
+      
       this.metrics.system.memory = {
-        used: memUsage.heapUsed,
-        total: memUsage.heapTotal,
-        rss: memUsage.rss,
-        external: memUsage.external,
-        systemUsed: usedMem,
-        systemTotal: totalMem,
-        percentage: (memUsage.heapUsed / memUsage.heapTotal) * 100
+        used: memUsage.heapUsed || 0,
+        total: memUsage.heapTotal || 0,
+        rss: memUsage.rss || 0,
+        external: memUsage.external || 0,
+        systemUsed: usedMem || 0,
+        systemTotal: totalMem || 0,
+        percentage: isNaN(memoryPercentage) ? 0 : memoryPercentage
       };
       
       // CPU metrics
       this.metrics.system.cpu = {
-        loadAverage: os.loadavg(),
-        cores: os.cpus().length
+        loadAverage: os.loadavg() || [0, 0, 0],
+        cores: os.cpus()?.length || 0
       };
       
       // Uptime
-      this.metrics.system.uptime = process.uptime();
+      const uptime = process.uptime();
+      this.metrics.system.uptime = isNaN(uptime) ? 0 : uptime;
       
       // Database pool metrics
       if (pool && pool.totalCount !== undefined) {
         this.metrics.database.poolSize = pool.totalCount || 0;
         this.metrics.database.idleConnections = pool.idleCount || 0;
-        this.metrics.database.activeConnections = (pool.totalCount || 0) - (pool.idleCount || 0);
+        this.metrics.database.activeConnections = Math.max(0, (pool.totalCount || 0) - (pool.idleCount || 0));
         this.metrics.database.waitingConnections = pool.waitingCount || 0;
+      } else {
+        // Initialize with defaults if pool is not available
+        this.metrics.database.poolSize = 0;
+        this.metrics.database.idleConnections = 0;
+        this.metrics.database.activeConnections = 0;
+        this.metrics.database.waitingConnections = 0;
       }
       
       // Update percentiles periodically
@@ -250,6 +270,17 @@ class MetricsCollector {
       this.metrics.lastUpdated = Date.now();
     } catch (error) {
       logger.error('Error updating system metrics', { error: error.message });
+      // Set safe defaults on error
+      this.metrics.system.memory = this.metrics.system.memory || {
+        used: 0,
+        total: 0,
+        rss: 0,
+        external: 0,
+        systemUsed: 0,
+        systemTotal: 0,
+        percentage: 0
+      };
+      this.metrics.system.uptime = this.metrics.system.uptime || 0;
     }
   }
 

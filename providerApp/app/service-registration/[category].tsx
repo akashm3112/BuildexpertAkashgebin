@@ -124,23 +124,63 @@ export default function ServiceRegistration() {
     try {
       setIsLoadingData(true);
       const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
+      let token = await tokenManager.getValidToken();
 
       if (!token) {
-        showAlert(t('alerts.error'), t('alerts.noAuthTokenAvailable'), 'error');
+        showAlert(t('alerts.error'), t('alerts.noAuthTokenAvailable'), 'error', [
+          { text: 'OK', onPress: () => {
+            setShowAlertModal(false);
+            router.back();
+          }, style: 'primary' }
+        ]);
         setIsLoadingData(false);
         return;
       }
 
       // Fetch the specific service data from backend
-      const response = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
+      let response = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
 
+      // If 401, try to refresh token and retry
+      if (response.status === 401) {
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          response = await fetch(`${API_BASE_URL}/api/services/my-registrations`, {
+            headers: {
+              'Authorization': `Bearer ${refreshedToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } else {
+          showAlert(t('alerts.error'), t('alerts.sessionExpired'), 'error', [
+            { text: 'OK', onPress: () => {
+              setShowAlertModal(false);
+              router.back();
+            }, style: 'primary' }
+          ]);
+          setIsLoadingData(false);
+          return;
+        }
+      }
+
       if (response.ok) {
         const data = await response.json();
+        
+        // Validate response structure
+        if (!data || data.status !== 'success' || !data.data || !data.data.registeredServices) {
+          showAlert(t('alerts.error'), t('alerts.invalidResponseFormat'), 'error', [
+            { text: 'OK', onPress: () => {
+              setShowAlertModal(false);
+              router.back();
+            }, style: 'primary' }
+          ]);
+          setIsLoadingData(false);
+          return;
+        }
         
         const serviceData = data.data.registeredServices.find(
           (s: any) => s.provider_service_id === serviceId
@@ -247,16 +287,31 @@ export default function ServiceRegistration() {
           });
           
         } else {
-          showAlert(t('alerts.error'), t('alerts.serviceDataNotFound'), 'error');
-          router.back();
+          showAlert(t('alerts.error'), t('alerts.serviceDataNotFound'), 'error', [
+            { text: 'OK', onPress: () => {
+              setShowAlertModal(false);
+              router.back();
+            }, style: 'primary' }
+          ]);
         }
       } else {
-        showAlert(t('alerts.error'), t('alerts.failedToLoadServiceData'), 'error');
-        router.back();
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error('Failed to load service data:', response.status, errorText);
+        showAlert(t('alerts.error'), t('alerts.failedToLoadServiceData'), 'error', [
+          { text: 'OK', onPress: () => {
+            setShowAlertModal(false);
+            router.back();
+          }, style: 'primary' }
+        ]);
       }
-    } catch (error) {
-      showAlert(t('alerts.error'), t('alerts.failedToLoadServiceData'), 'error');
-      router.back();
+    } catch (error: any) {
+      console.error('Error loading service data:', error);
+      showAlert(t('alerts.error'), t('alerts.failedToLoadServiceData'), 'error', [
+        { text: 'OK', onPress: () => {
+          setShowAlertModal(false);
+          router.back();
+        }, style: 'primary' }
+      ]);
     } finally {
       setIsLoadingData(false);
     }
@@ -734,7 +789,7 @@ export default function ServiceRegistration() {
       };
       
       const method = isEditMode ? 'PUT' : 'POST';
-      const response = await fetch(`${API_BASE_URL}/api/services/${category}/providers`, {
+      let response = await fetch(`${API_BASE_URL}/api/services/${category}/providers`, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -742,6 +797,27 @@ export default function ServiceRegistration() {
         },
         body: JSON.stringify(payload)
       });
+
+      // If 401, try to refresh token and retry
+      if (response.status === 401) {
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          response = await fetch(`${API_BASE_URL}/api/services/${category}/providers`, {
+            method,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${refreshedToken}`
+            },
+            body: JSON.stringify(payload)
+          });
+        } else {
+          setIsLoading(false);
+          showAlert(t('alerts.error'), t('alerts.sessionExpired'), 'error', [
+            { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+          ]);
+          return;
+        }
+      }
       
       let data;
       try {

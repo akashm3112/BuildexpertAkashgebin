@@ -294,6 +294,9 @@ export default {
     phoneDisabled: 'మొబైల్ నంబర్‌ని మార్చలేము',
     location: 'స్థానం',
     locationPlaceholder: 'మీ స్థానాన్ని నమోదు చేయండి',
+    nameChangesRemaining: '{count} మార్పు మిగిలి ఉంది',
+    nameChangeLimitReached: 'పేరు మార్పు పరిమితి చేరింది (2/2)',
+    nameChangeLimitMessage: 'మీరు అన్ని 2 పేరు మార్పులను ఉపయోగించారు. మీరు మీ పేరును మళ్లీ మార్చలేరు.',
   },
 
   // Privacy & Security Modal

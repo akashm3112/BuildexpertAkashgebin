@@ -78,32 +78,71 @@ router.get('/alerts', auth, requireRole(['admin']), asyncHandler(async (req, res
  * @access  Public (for status pages)
  */
 router.get('/status', asyncHandler(async (req, res) => {
-  const metrics = metricsCollector.getMetrics();
-  const health = metricsCollector.calculateHealthStatus();
-  
-  res.json({
-    status: 'success',
-    data: {
-      status: health.status,
-      score: health.score,
-      uptime: metrics.system.uptime,
-      requests: {
-        total: metrics.requests.total,
-        errors: metrics.requests.errors,
-        errorRate: metricsCollector.calculateErrorRate().toFixed(2)
-      },
-      performance: {
-        averageResponseTime: metrics.performance.averageResponseTime.toFixed(0),
-        p95ResponseTime: metrics.performance.p95ResponseTime.toFixed(0)
-      },
-      system: {
-        memoryUsage: metrics.system.memory.percentage.toFixed(2),
-        databasePoolUsage: metrics.database.poolSize > 0
-          ? ((metrics.database.activeConnections / metrics.database.poolSize) * 100).toFixed(2)
-          : 0
+  try {
+    const metrics = metricsCollector.getMetrics();
+    const health = metricsCollector.calculateHealthStatus();
+    
+    // Safely extract and format values with defaults
+    const errorRate = metricsCollector.calculateErrorRate();
+    const avgResponseTime = metrics.performance?.averageResponseTime ?? 0;
+    const p95ResponseTime = metrics.performance?.p95ResponseTime ?? 0;
+    const memoryPercentage = metrics.system?.memory?.percentage ?? 0;
+    const poolSize = metrics.database?.poolSize ?? 0;
+    const activeConnections = metrics.database?.activeConnections ?? 0;
+    const uptime = metrics.system?.uptime ?? 0;
+    const totalRequests = metrics.requests?.total ?? 0;
+    const errorCount = metrics.requests?.errors ?? 0;
+    
+    // Calculate database pool usage safely
+    const databasePoolUsage = poolSize > 0 
+      ? ((activeConnections / poolSize) * 100)
+      : 0;
+    
+    res.json({
+      status: 'success',
+      data: {
+        status: health?.status || 'unknown',
+        score: health?.score ?? 0,
+        uptime: Math.floor(uptime),
+        requests: {
+          total: totalRequests,
+          errors: errorCount,
+          errorRate: (isNaN(errorRate) ? 0 : errorRate).toFixed(2)
+        },
+        performance: {
+          averageResponseTime: (isNaN(avgResponseTime) ? 0 : avgResponseTime).toFixed(0),
+          p95ResponseTime: (isNaN(p95ResponseTime) ? 0 : p95ResponseTime).toFixed(0)
+        },
+        system: {
+          memoryUsage: (isNaN(memoryPercentage) ? 0 : memoryPercentage).toFixed(2),
+          databasePoolUsage: (isNaN(databasePoolUsage) ? 0 : databasePoolUsage).toFixed(2)
+        }
       }
-    }
-  });
+    });
+  } catch (error) {
+    // Return safe defaults on error
+    res.json({
+      status: 'success',
+      data: {
+        status: 'unknown',
+        score: 0,
+        uptime: 0,
+        requests: {
+          total: 0,
+          errors: 0,
+          errorRate: '0.00'
+        },
+        performance: {
+          averageResponseTime: '0',
+          p95ResponseTime: '0'
+        },
+        system: {
+          memoryUsage: '0.00',
+          databasePoolUsage: '0.00'
+        }
+      }
+    });
+  }
 }));
 
 /**

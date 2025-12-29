@@ -277,6 +277,23 @@ export default {
   },
 
   // Terms & Privacy Modal
+  editProfile: {
+    title: 'പ്രൊഫൈൽ എഡിറ്റ് ചെയ്യുക',
+    save: 'സേവ് ചെയ്യുക',
+    fullName: 'പൂർണ്ണ നാമം',
+    fullNamePlaceholder: 'നിങ്ങളുടെ പൂർണ്ണ നാമം നൽകുക',
+    email: 'ഇമെയിൽ',
+    emailPlaceholder: 'നിങ്ങളുടെ ഇമെയിൽ നൽകുക',
+    phoneNumber: 'ഫോൺ നമ്പർ',
+    phonePlaceholder: 'നിങ്ങളുടെ ഫോൺ നമ്പർ നൽകുക',
+    phoneDisabled: 'മൊബൈൽ നമ്പർ മാറ്റാൻ കഴിയില്ല',
+    location: 'സ്ഥാനം',
+    locationPlaceholder: 'നിങ്ങളുടെ സ്ഥാനം നൽകുക',
+    nameChangesRemaining: '{count} മാറ്റം ശേഷിക്കുന്നു',
+    nameChangeLimitReached: 'പേര് മാറ്റ പരിധി എത്തി (2/2)',
+    nameChangeLimitMessage: 'നിങ്ങൾ എല്ലാ 2 പേര് മാറ്റങ്ങളും ഉപയോഗിച്ചു. നിങ്ങൾക്ക് നിങ്ങളുടെ പേര് വീണ്ടും മാറ്റാൻ കഴിയില്ല.',
+  },
+
   termsPrivacy: {
     title: 'നിബന്ധനകൾ & സ്വകാര്യത',
     termsOfService: 'സേവന നിബന്ധനകൾ',

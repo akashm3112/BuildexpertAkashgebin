@@ -294,6 +294,9 @@ export default {
     phoneDisabled: 'मोबाइल नंबर नहीं बदला जा सकता',
     location: 'स्थान',
     locationPlaceholder: 'अपना स्थान दर्ज करें',
+    nameChangesRemaining: '{count} परिवर्तन शेष',
+    nameChangeLimitReached: 'नाम परिवर्तन सीमा पहुंच गई (2/2)',
+    nameChangeLimitMessage: 'आपने सभी 2 नाम परिवर्तन का उपयोग कर लिया है। आप अपना नाम फिर से नहीं बदल सकते।',
   },
 
   // Privacy & Security Modal

@@ -271,9 +271,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   // Handle app state changes
-  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-      // App has come to foreground, refresh notifications
+      // App has come to foreground, refresh notifications and ensure token is registered
       fetchUnreadCount().catch((error: any) => {
         // Mark as handled to prevent unhandled rejection warnings
         if (!error?._handled) {
@@ -288,6 +288,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           (error as any)._suppressUnhandled = true;
         }
       });
+      
+      // Ensure push token is registered when app comes to foreground
+      if (user?.id) {
+        try {
+          const { notificationService } = await import('@/services/NotificationService');
+          await notificationService.ensureTokenRegistered().catch((error) => {
+            console.error('Failed to ensure token registration on app foreground:', error);
+          });
+        } catch (error) {
+          console.error('Error ensuring token registration:', error);
+        }
+      }
     }
     appState.current = nextAppState;
   };
@@ -298,19 +310,42 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return;
     }
 
+    let registrationInterval: NodeJS.Timeout | null = null;
+
     // Initialize push notifications in the background
     const initPushNotifications = async () => {
       try {
         const { notificationService } = await import('@/services/NotificationService');
-        await notificationService.initialize().catch((error) => {
+        
+        // Wait a bit for auth token to be ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Initialize with force re-register to ensure token is always registered
+        await notificationService.initialize(true).catch((error) => {
           console.error('Failed to initialize push notifications:', error);
         });
+        
+        // Also ensure token is registered periodically (every 5 minutes)
+        registrationInterval = setInterval(async () => {
+          try {
+            await notificationService.ensureTokenRegistered();
+          } catch (error) {
+            console.error('Periodic token registration check failed:', error);
+          }
+        }, 5 * 60 * 1000); // Every 5 minutes
       } catch (error) {
         console.error('Error loading notification service:', error);
       }
     };
     
     initPushNotifications();
+    
+    // Cleanup on unmount
+    return () => {
+      if (registrationInterval) {
+        clearInterval(registrationInterval);
+      }
+    };
   }, [user?.id, authLoading]);
 
   // Set up real-time notifications via socket.io - wait for auth to finish loading

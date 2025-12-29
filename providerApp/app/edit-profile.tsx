@@ -205,7 +205,9 @@ export default function EditProfileScreen() {
       if (source === 'camera') {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
         if (permissionResult.granted === false) {
-          Alert.alert('Error', t('profile.cameraPermissionDenied'));
+          showAlert('Error', t('profile.cameraPermissionDenied'), 'error', [
+            { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+          ]);
           return;
         }
         result = await ImagePicker.launchCameraAsync({
@@ -217,7 +219,9 @@ export default function EditProfileScreen() {
       } else {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (permissionResult.granted === false) {
-          Alert.alert('Error', t('profile.galleryPermissionDenied'));
+          showAlert('Error', t('profile.galleryPermissionDenied'), 'error', [
+            { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+          ]);
           return;
         }
         result = await ImagePicker.launchImageLibraryAsync({
@@ -234,7 +238,9 @@ export default function EditProfileScreen() {
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', t('profile.imagePickerError'));
+      showAlert('Error', t('profile.imagePickerError'), 'error', [
+        { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+      ]);
     } finally {
       setImageLoading(false);
     }
@@ -274,18 +280,21 @@ export default function EditProfileScreen() {
     // Get valid token using token manager
     const token = await tokenManager.getValidToken();
     if (!token) {
-      Alert.alert(
+      showAlert(
         'Session Expired', 
         'Your session has expired. Please login again.',
+        'error',
         [
           {
             text: 'OK',
             onPress: () => {
+              setShowAlertModal(false);
               // Clear user data and redirect to login
               AsyncStorage.removeItem('token');
               AsyncStorage.removeItem('user');
               router.replace('/auth');
-            }
+            },
+            style: 'primary'
           }
         ]
       );
@@ -294,21 +303,27 @@ export default function EditProfileScreen() {
 
     // Validation
     if (!formData.fullName.trim()) {
-      Alert.alert('Error', t('profile.nameRequired'));
+      showAlert('Error', t('profile.nameRequired'), 'error', [
+        { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+      ]);
       return;
     }
 
     if (!formData.email.trim()) {
-      Alert.alert('Error', t('profile.emailRequired'));
+      showAlert('Error', t('profile.emailRequired'), 'error', [
+        { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+      ]);
       return;
     }
 
     // Check name change limit before submitting
     const isNameChanging = formData.fullName.trim() !== originalName.trim();
     if (isNameChanging && nameChangeCount >= 2) {
-      Alert.alert(
+      showAlert(
         'Name Change Limit Reached',
-        'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.'
+        'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+        'error',
+        [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
       );
       return;
     }
@@ -368,13 +383,18 @@ export default function EditProfileScreen() {
           setOriginalName(formData.fullName.trim());
         }
 
-        Alert.alert(
+        showAlert(
           'Success',
           t('profile.profileUpdatedSuccessfully'),
+          'success',
           [
             {
               text: 'OK',
-              onPress: () => router.back(),
+              onPress: () => {
+                setShowAlertModal(false);
+                router.back();
+              },
+              style: 'primary',
             },
           ]
         );
@@ -389,24 +409,30 @@ export default function EditProfileScreen() {
         
         // Handle specific error cases
         if (errorData.message && errorData.message.includes('name change limit')) {
-          Alert.alert(
+          showAlert(
             'Name Change Limit Reached',
             'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
-            [{ text: 'OK' }]
+            'error',
+            [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
           );
         } else if (errorData.message && errorData.message.includes('Email already taken')) {
-          Alert.alert(
+          showAlert(
             'Error', 
             'This email address is already in use by another account. Please use a different email address.',
-            [{ text: 'OK' }]
+            'error',
+            [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
           );
         } else {
-          Alert.alert('Error', errorData.message || t('profile.updateFailed'));
+          showAlert('Error', errorData.message || t('profile.updateFailed'), 'error', [
+            { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+          ]);
         }
       }
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', t('profile.updateFailed'));
+      showAlert('Error', t('profile.updateFailed'), 'error', [
+        { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -573,7 +599,16 @@ export default function EditProfileScreen() {
               )}
               {nameChangeCount < 2 && formData.fullName.trim() !== originalName.trim() && (
                 <Text style={styles.infoText}>
-                  {2 - nameChangeCount} change{2 - nameChangeCount > 1 ? 's' : ''} remaining
+                  {(() => {
+                    const remaining = 2 - nameChangeCount;
+                    const translation = t('editProfile.nameChangesRemaining', { count: remaining.toString() });
+                    // If translation key not found, use fallback
+                    if (translation === 'editProfile.nameChangesRemaining' || translation.includes('{count}')) {
+                      return `${remaining} change${remaining > 1 ? 's' : ''} remaining`;
+                    }
+                    // Replace {count} with actual count
+                    return translation.replace('{count}', remaining.toString());
+                  })()}
                 </Text>
               )}
             </View>
@@ -586,9 +621,11 @@ export default function EditProfileScreen() {
               onChangeText={(value) => {
                 // Prevent changes if limit reached and name is different from original
                 if (nameChangeCount >= 2 && originalName.trim() !== '' && value.trim() !== originalName.trim()) {
-                  Alert.alert(
+                  showAlert(
                     'Name Change Limit Reached',
-                    'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.'
+                    'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+                    'error',
+                    [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
                   );
                   return;
                 }
@@ -600,7 +637,7 @@ export default function EditProfileScreen() {
             />
             {nameChangeCount >= 2 && (
               <Text style={styles.limitReachedText}>
-                You have used all 2 name changes. You cannot change your name again.
+                {t('editProfile.nameChangeLimitMessage') || 'You have used all 2 name changes. You cannot change your name again.'}
               </Text>
             )}
           </View>

@@ -705,6 +705,9 @@ export default {
     phoneNumber: 'Phone Number',
     phonePlaceholder: 'Enter your phone number',
     phoneDisabled: 'Mobile number cannot be changed',
+    nameChangesRemaining: '{count} change remaining',
+    nameChangeLimitReached: 'Name change limit reached (2/2)',
+    nameChangeLimitMessage: 'You have used all 2 name changes. You cannot change your name again.',
   },
   termsPrivacy: {
     title: 'Terms & Privacy',

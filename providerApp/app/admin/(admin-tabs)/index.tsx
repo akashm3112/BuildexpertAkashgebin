@@ -114,7 +114,21 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        setStats(data.data);
+        
+        // Validate response structure
+        if (data && data.status === 'success' && data.data) {
+          // Ensure all required fields are present with defaults
+          setStats({
+            totalUsers: data.data.totalUsers ?? 0,
+            totalProviders: data.data.totalProviders ?? 0,
+            totalBookings: data.data.totalBookings ?? 0,
+            totalRevenue: data.data.totalRevenue ?? 0,
+            pendingReports: data.data.pendingReports ?? 0
+          });
+        } else {
+          console.error('Invalid response structure from admin stats API:', data);
+          // Keep existing stats (don't reset to 0 on invalid response)
+        }
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error('Failed to fetch dashboard stats:', response.status, errorData.message || '');
@@ -122,6 +136,7 @@ export default function AdminDashboard() {
         if (response.status === 403) {
           console.error('Access denied: User does not have admin role. Please log out and log in again.');
         }
+        // Don't reset stats on error - keep existing values
       }
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);

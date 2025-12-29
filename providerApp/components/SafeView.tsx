@@ -10,6 +10,9 @@ interface SafeViewProps {
   excludeBottom?: boolean;
 }
 
+// Export hook for components that need safe area insets
+export { useSafeAreaInsets };
+
 export function SafeView({ children, style, backgroundColor = '#FFFFFF', excludeBottom = false }: SafeViewProps) {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = Dimensions.get('window');
@@ -37,7 +40,7 @@ export function SafeView({ children, style, backgroundColor = '#FFFFFF', exclude
       <StatusBar 
         barStyle="dark-content" 
         backgroundColor={backgroundColor}
-        translucent={false}
+        translucent={Platform.OS === 'android' ? false : true}
       />
       <View style={[styles.content, { backgroundColor }, excludeBottom && { paddingBottom: getResponsivePadding() }]}> 
         {children}

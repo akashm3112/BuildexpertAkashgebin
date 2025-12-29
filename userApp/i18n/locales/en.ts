@@ -294,6 +294,9 @@ export default {
     phoneDisabled: 'Mobile number cannot be changed',
     location: 'Location',
     locationPlaceholder: 'Enter your location',
+    nameChangesRemaining: '{count} change remaining',
+    nameChangeLimitReached: 'Name change limit reached (2/2)',
+    nameChangeLimitMessage: 'You have used all 2 name changes. You cannot change your name again.',
   },
 
   // Privacy & Security Modal

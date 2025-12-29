@@ -4,7 +4,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { SERVICE_CATEGORIES } from '@/constants/serviceCategories';
-import { SafeView } from '@/components/SafeView';
+import { SafeView, useSafeAreaInsets } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import { Edit, Eye, Clock, CheckCircle, XCircle, Trash2, AlertTriangle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -68,6 +68,7 @@ export default function ServicesScreen() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [registeredServices, setRegisteredServices] = useState<RegisteredService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -259,12 +260,38 @@ export default function ServicesScreen() {
                 return;
               }
 
-              const response = await fetch(`${API_BASE_URL}/api/services/my-registrations/${serviceId}`, {
+              let response = await fetch(`${API_BASE_URL}/api/services/my-registrations/${serviceId}`, {
                 method: 'DELETE',
                 headers: {
-                  'Authorization': `Bearer ${token}`
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
                 }
               });
+
+              // If 401, try to refresh token and retry
+              if (response.status === 401) {
+                const refreshedToken = await tokenManager.forceRefreshToken();
+                if (refreshedToken) {
+                  response = await fetch(`${API_BASE_URL}/api/services/my-registrations/${serviceId}`, {
+                    method: 'DELETE',
+                    headers: {
+                      'Authorization': `Bearer ${refreshedToken}`,
+                      'Content-Type': 'application/json'
+                    }
+                  });
+                } else {
+                  showAlert(t('alerts.error'), t('alerts.sessionExpired'), 'error', [
+                    { 
+                      text: 'OK', 
+                      onPress: () => {
+                        setShowAlertModal(false);
+                      }, 
+                      style: 'primary' 
+                    }
+                  ]);
+                  return;
+                }
+              }
 
               if (response.ok) {
                 showAlert(t('alerts.success'), t('alerts.serviceRegistrationCancelled'), 'success', [
@@ -367,7 +394,7 @@ export default function ServicesScreen() {
   return (
     <SafeView backgroundColor="#FFFFFF">
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, getResponsiveSpacing(16, 20, 24)) }]}>
         <Text style={styles.title}>{t('services.title')}</Text>
         <Text style={styles.subtitle}>{t('services.subtitle')}</Text>
       </View>
@@ -558,7 +585,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   header: {
-    padding: getResponsiveSpacing(16, 20, 24),
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
     paddingBottom: getResponsiveSpacing(12, 14, 16),
   },
   title: {

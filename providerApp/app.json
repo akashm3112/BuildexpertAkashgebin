@@ -15,7 +15,9 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSExceptionDomains": {
@@ -68,7 +70,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "2fb313e8-0bf7-487a-a1d8-b635057bc01b"
+        "projectId": "3e1fd75a-05c6-42ac-a033-6166086114c3"
       }
     },
     "updates": {

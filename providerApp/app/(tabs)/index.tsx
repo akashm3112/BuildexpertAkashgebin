@@ -25,7 +25,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/constants/api';
-import { SafeView } from '@/components/SafeView';
+import { SafeView, useSafeAreaInsets } from '@/components/SafeView';
 import { Modal } from '@/components/common/Modal';
 import io from 'socket.io-client';
 import { globalErrorHandler } from '@/utils/globalErrorHandler';
@@ -97,6 +97,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const [search, setSearch] = useState('');
   
@@ -362,8 +363,10 @@ export default function HomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (user?.id) {
-        // Only fetch registered services on focus, earnings are handled by sockets
-        fetchRegisteredServices().catch((error: any) => {
+        // Fetch both registered services and earnings on focus
+        // Earnings are also updated via sockets, but we fetch on focus to ensure data is fresh
+        Promise.all([
+          fetchRegisteredServices().catch((error: any) => {
           // Mark NO_TOKEN errors as handled to prevent unhandled rejection warnings
           if (error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required')) {
             if (!error?._handled) {
@@ -383,6 +386,13 @@ export default function HomeScreen() {
           if (!isSessionExpired && !isServerError && !isAuthError) {
             globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
           }
+        }),
+          fetchEarnings().catch((error: any) => {
+            // Silently handle earnings fetch errors - they're not critical
+            // Earnings will be updated via socket events when bookings change
+          })
+        ]).catch(() => {
+          // Silently fail - these are not critical errors
         });
       }
       // Reload location preferences when screen comes into focus
@@ -640,52 +650,69 @@ export default function HomeScreen() {
     try {
       setIsLoadingEarnings(true);
       const { tokenManager } = await import('@/utils/tokenManager');
-      const token = await tokenManager.getValidToken();
+      let token = await tokenManager.getValidToken();
       
       if (!token) {
+        setIsLoadingEarnings(false);
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/earnings`, {
+      let response = await fetch(`${API_BASE_URL}/api/earnings`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
+
+      // If 401, try to refresh token and retry
+      if (response.status === 401) {
+        const refreshedToken = await tokenManager.forceRefreshToken();
+        if (refreshedToken) {
+          response = await fetch(`${API_BASE_URL}/api/earnings`, {
+            headers: {
+              'Authorization': `Bearer ${refreshedToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } else {
+          // Token refresh failed, can't fetch earnings
+          setIsLoadingEarnings(false);
+          return;
+        }
+      }
 
       if (response.ok) {
         const data = await response.json();
         
-        if (data.status === 'success' && data.data.earnings) {
+        // Validate response structure
+        if (data && data.status === 'success' && data.data && data.data.earnings) {
           // Format earnings with Indian number formatting
           const { formatIndianNumber } = await import('@/utils/numberFormatter');
           
           // Extract numeric values from formatted strings (e.g., "₹1,000" -> 1000)
           const extractNumber = (formatted: string): number => {
+            if (!formatted || typeof formatted !== 'string') return 0;
             const cleaned = formatted.replace(/[₹,]/g, '');
             return parseFloat(cleaned) || 0;
           };
           
           setEarnings({
-            thisMonth: formatIndianNumber(extractNumber(data.data.earnings.thisMonth)),
-            today: formatIndianNumber(extractNumber(data.data.earnings.today)),
-            pending: formatIndianNumber(extractNumber(data.data.earnings.pending)),
+            thisMonth: formatIndianNumber(extractNumber(data.data.earnings.thisMonth || '₹0')),
+            today: formatIndianNumber(extractNumber(data.data.earnings.today || '₹0')),
+            pending: formatIndianNumber(extractNumber(data.data.earnings.pending || '₹0')),
           });
+        } else {
+          console.error('Invalid earnings response structure:', data);
+          // Keep existing earnings on invalid response (don't reset to 0)
         }
       } else {
-        // Set default values if API fails
-        setEarnings({
-          thisMonth: '₹0',
-          today: '₹0',
-          pending: '₹0',
-        });
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error('Failed to fetch earnings:', response.status, errorText);
+        // Don't reset earnings on error - keep existing values
       }
     } catch (error) {
-      // Set default values if there's an error
-      setEarnings({
-        thisMonth: '₹0',
-        today: '₹0',
-        pending: '₹0',
-      });
+      console.error('Error fetching earnings:', error);
+      // Don't reset earnings on error - keep existing values
     } finally {
       setIsLoadingEarnings(false);
     }
@@ -829,7 +856,7 @@ export default function HomeScreen() {
         }
       >
         {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, getResponsiveSpacing(8, 10, 12)) }]}>
         <View style={styles.headerLeft}>
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
             {(() => {
@@ -1141,7 +1168,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: getResponsiveSpacing(12, 14, 16),
-    paddingTop: getResponsiveSpacing(8, 10, 12),
     paddingBottom: getResponsiveSpacing(4, 5, 6),
   },
   headerLeft: {

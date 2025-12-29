@@ -14,23 +14,40 @@ class AdminService {
    * Get dashboard statistics
    */
   static async getDashboardStats() {
-    const stats = await AdminRepository.getDashboardStats();
-    const reportsStats = await AdminRepository.getReportStats(stats.tableChecks);
+    try {
+      const stats = await AdminRepository.getDashboardStats();
+      const reportsStats = await AdminRepository.getReportStats(stats.tableChecks || {});
 
-    // Parse user/provider counts
-    const countsByRole = {};
-    stats.userProviderCounts.forEach(row => {
-      countsByRole[row.role] = parseInt(row.count);
-    });
+      // Parse user/provider counts - handle empty arrays
+      const countsByRole = {};
+      if (stats.userProviderCounts && Array.isArray(stats.userProviderCounts)) {
+        stats.userProviderCounts.forEach(row => {
+          if (row && row.role) {
+            countsByRole[row.role] = parseInt(row.count) || 0;
+          }
+        });
+      }
 
-    return {
-      totalUsers: countsByRole.user || 0,
-      totalProviders: countsByRole.provider || 0,
-      totalBookings: stats.bookingsCount,
-      totalRevenue: stats.revenue,
-      pendingReports: reportsStats.open,
-      reportsStats
-    };
+      return {
+        totalUsers: countsByRole.user || 0,
+        totalProviders: countsByRole.provider || 0,
+        totalBookings: parseInt(stats.bookingsCount) || 0,
+        totalRevenue: parseFloat(stats.revenue) || 0,
+        pendingReports: parseInt(reportsStats?.open) || 0,
+        reportsStats: reportsStats || { total: 0, open: 0, resolved: 0, closed: 0 }
+      };
+    } catch (error) {
+      logger.error('Error fetching admin dashboard stats', { error: error.message, stack: error.stack });
+      // Return default values on error to prevent frontend from breaking
+      return {
+        totalUsers: 0,
+        totalProviders: 0,
+        totalBookings: 0,
+        totalRevenue: 0,
+        pendingReports: 0,
+        reportsStats: { total: 0, open: 0, resolved: 0, closed: 0 }
+      };
+    }
   }
 
   /**

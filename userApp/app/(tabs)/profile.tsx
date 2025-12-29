@@ -706,16 +706,28 @@ export default function ProfileScreen() {
     try {
       setIsLoading(true);
       
-      // Get token
-      let token = user?.token;
-      if (!token) {
-        const storedToken = await AsyncStorage.getItem('token');
-        token = storedToken || undefined;
-      }
+      // Get valid token using token manager (handles refresh automatically)
+      const { tokenManager } = await import('@/utils/tokenManager');
+      const token = await tokenManager.getValidToken();
       
       if (!token) {
         setIsLoading(false);
-        showAlert('Error', t('alerts.error.noToken'), 'error');
+        showAlert(
+          'Session Expired',
+          'Your session has expired. Please login again.',
+          'error',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setShowAlertModal(false);
+                logout();
+                router.replace('/(auth)/login');
+              },
+              style: 'primary'
+            }
+          ]
+        );
         return;
       }
 
@@ -813,6 +825,28 @@ export default function ProfileScreen() {
           { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
         ]);
       } else {
+        // Handle 401 Unauthorized - token expired
+        if (response.status === 401) {
+          setIsLoading(false);
+          showAlert(
+            'Session Expired',
+            'Your session has expired. Please login again.',
+            'error',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  setShowAlertModal(false);
+                  logout();
+                  router.replace('/(auth)/login');
+                },
+                style: 'primary'
+              }
+            ]
+          );
+          return;
+        }
+        
         // Handle specific error cases
         if (responseData.message && responseData.message.includes('name change limit')) {
           showAlert(
@@ -847,20 +881,56 @@ export default function ProfileScreen() {
             setShowAlertModal(false);
             setDeleteLoading(true);
             try {
-              let token = user?.token;
-              if (!token) {
-                const storedToken = await AsyncStorage.getItem('token');
-                token = storedToken || undefined;
-              }
+              // Get valid token using token manager (handles refresh automatically)
+              const { tokenManager } = await import('@/utils/tokenManager');
+              const token = await tokenManager.getValidToken();
+              
               if (!token) {
                 setDeleteLoading(false);
-                showAlert('Error', t('alerts.error.noToken'), 'error');
+                showAlert(
+                  'Session Expired',
+                  'Your session has expired. Please login again.',
+                  'error',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        setShowAlertModal(false);
+                        logout();
+                        router.replace('/(auth)/login');
+                      },
+                      style: 'primary'
+                    }
+                  ]
+                );
                 return;
               }
               const response = await fetch(`${API_BASE_URL}/api/users/delete-account`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
               });
+              
+              if (response.status === 401) {
+                setDeleteLoading(false);
+                showAlert(
+                  'Session Expired',
+                  'Your session has expired. Please login again.',
+                  'error',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        setShowAlertModal(false);
+                        logout();
+                        router.replace('/(auth)/login');
+                      },
+                      style: 'primary'
+                    }
+                  ]
+                );
+                return;
+              }
+              
               if (response.ok) {
                 await logout();
                 setDeleteLoading(false);
@@ -1402,7 +1472,16 @@ export default function ProfileScreen() {
                 )}
                 {nameChangeCount < 2 && userProfile.name.trim() !== originalName.trim() && (
                   <Text style={styles.infoText}>
-                    {t('editProfile.nameChangesRemaining') || `${2 - nameChangeCount} change${2 - nameChangeCount > 1 ? 's' : ''} remaining`}
+                    {(() => {
+                      const remaining = 2 - nameChangeCount;
+                      const translation = t('editProfile.nameChangesRemaining', { count: remaining.toString() });
+                      // If translation key not found, use fallback
+                      if (translation === 'editProfile.nameChangesRemaining' || translation.includes('{count}')) {
+                        return `${remaining} change${remaining > 1 ? 's' : ''} remaining`;
+                      }
+                      // Replace {count} with actual count
+                      return translation.replace('{count}', remaining.toString());
+                    })()}
                   </Text>
                 )}
               </View>

@@ -24,7 +24,7 @@ import {
 } from 'lucide-react-native';
 import { useNotifications } from '@/context/NotificationContext';
 import { useLanguage } from '@/context/LanguageContext';
-import { SafeView } from '@/components/SafeView';
+import { SafeView, useSafeAreaInsets } from '@/components/SafeView';
 import { format } from 'date-fns';
 
 // Responsive design utilities
@@ -179,6 +179,7 @@ declare interface Notification {
 export default function NotificationsScreen() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, refreshNotifications } = useNotifications();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [expandedNotifications, setExpandedNotifications] = useState<Set<string>>(new Set());
 
@@ -187,7 +188,7 @@ export default function NotificationsScreen() {
     header: {
       ...styles.header,
       paddingHorizontal: getResponsiveSpacing(16, 20, 24),
-      paddingVertical: getResponsiveSpacing(12, 16, 20),
+      paddingBottom: getResponsiveSpacing(12, 16, 20),
       minHeight: getResponsiveSpacing(56, 60, 64),
     },
     headerTitle: {
@@ -353,7 +354,7 @@ export default function NotificationsScreen() {
   return (
     <SafeView backgroundColor="#F8FAFC">
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <View style={responsiveStyles.header}>
+      <View style={[responsiveStyles.header, { paddingTop: Math.max(insets.top, getResponsiveSpacing(12, 16, 20)) }]}>
         <Text style={responsiveStyles.headerTitle} numberOfLines={1} ellipsizeMode="tail">{t('notifications.title')}</Text>
         {notifications.length > 0 && (
           <TouchableOpacity onPress={handleMarkAllAsRead} style={styles.markAllButton}>

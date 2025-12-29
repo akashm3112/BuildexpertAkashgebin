@@ -607,6 +607,9 @@ export default {
     phoneNumber: 'தொலைபேசி எண்',
     phonePlaceholder: 'உங்கள் தொலைபேசி எண்ணை உள்ளிடவும்',
     phoneDisabled: 'மொபைல் எண்ணை மாற்ற முடியாது',
+    nameChangesRemaining: '{count} மாற்றம் மீதமுள்ளது',
+    nameChangeLimitReached: 'பெயர் மாற்ற வரம்பு அடைந்தது (2/2)',
+    nameChangeLimitMessage: 'நீங்கள் அனைத்து 2 பெயர் மாற்றங்களையும் பயன்படுத்தியுள்ளீர்கள். நீங்கள் உங்கள் பெயரை மீண்டும் மாற்ற முடியாது.',
   },
   termsPrivacy: {
     title: 'விதிமுறைகள் மற்றும் தனியுரிமை',
