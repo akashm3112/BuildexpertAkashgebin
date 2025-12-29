@@ -155,7 +155,6 @@ class NotificationService {
       // Configure how notifications are handled when app is in foreground
       await Notifications.setNotificationHandler({
         handleNotification: async () => ({
-          shouldShowAlert: true,
           shouldPlaySound: true,
           shouldSetBadge: true,
           shouldShowBanner: true,
@@ -503,9 +502,9 @@ class NotificationService {
    */
   private handleNotificationReceived(notification: Notifications.Notification) {
     try {
-      // Update badge count
+      // Update badge count (only if it's a valid number)
       const badgeCount = notification.request.content.badge;
-      if (badgeCount !== undefined) {
+      if (badgeCount !== undefined && badgeCount !== null && typeof badgeCount === 'number' && badgeCount >= 0) {
         Notifications.setBadgeCountAsync(badgeCount).catch((error) => {
           console.error('❌ Error updating badge count:', error);
         });
@@ -523,9 +522,9 @@ class NotificationService {
     try {
       console.log('🔄 Processing background notification:', notification.request.content.title);
       
-      // Update badge count
+      // Update badge count (only if it's a valid number)
       const badgeCount = notification.request.content.badge;
-      if (badgeCount !== undefined) {
+      if (badgeCount !== undefined && badgeCount !== null && typeof badgeCount === 'number' && badgeCount >= 0) {
         await Notifications.setBadgeCountAsync(badgeCount);
       }
 

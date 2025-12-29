@@ -407,13 +407,13 @@ export default function ServicesScreen() {
         }
       >
         <View style={styles.servicesList}>
-          {registeredServices.map((service) => {
+          {registeredServices.map((service, index) => {
             const categoryInfo = getServiceCategoryInfo(service.service_name);
             const statusInfo = getStatusInfo(service.payment_status);
             const StatusIcon = statusInfo.icon;
 
             return (
-              <View key={service.provider_service_id} style={styles.serviceCard}>
+              <View key={service.provider_service_id || `service-${index}`} style={styles.serviceCard}>
                 {/* Header with icon, service info, and status */}
                 <View style={styles.serviceHeader}>
                   <View style={styles.serviceMainInfo}>
