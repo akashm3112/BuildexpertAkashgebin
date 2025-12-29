@@ -550,7 +550,7 @@ export default function ProfileScreen() {
         const userData = profileData.data?.user || profileData.data || {};
         const profilePicUrl = userData.profilePicUrl || userData.profile_pic_url || '';
         const fullName = userData.fullName || userData.full_name || '';
-        const changeCount = userData.nameChangeCount || 0;
+        const changeCount = userData.nameChangeCount !== undefined ? userData.nameChangeCount : 0;
         
         
         setUserProfile((prev) => ({
@@ -740,14 +740,47 @@ export default function ProfileScreen() {
 
       // Check name change limit before submitting
       const isNameChanging = userProfile.name.trim() !== originalName.trim();
-      if (isNameChanging && nameChangeCount >= 2) {
-        setIsLoading(false);
-        showAlert(
-          'Name Change Limit Reached',
-          'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
-          'error'
-        );
-        return;
+      if (isNameChanging) {
+        // Fetch latest name change count from backend to ensure accuracy
+        try {
+          const { tokenManager } = await import('@/utils/tokenManager');
+          const currentToken = await tokenManager.getValidToken();
+          if (currentToken) {
+            const profileResponse = await fetch(`${API_BASE_URL}/api/users/profile`, {
+              headers: { 'Authorization': `Bearer ${currentToken}` },
+            });
+            if (profileResponse.ok) {
+              const profileData = await profileResponse.json();
+              if (profileData.status === 'success' && profileData.data?.user) {
+                const currentCount = profileData.data.user.nameChangeCount || 0;
+                setNameChangeCount(currentCount);
+                
+                // Check limit with fresh count from backend
+                if (currentCount >= 2) {
+                  setIsLoading(false);
+                  showAlert(
+                    'Name Change Limit Reached',
+                    'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+                    'error'
+                  );
+                  return;
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching current name change count:', error);
+          // Fallback to local count if fetch fails
+          if (nameChangeCount >= 2) {
+            setIsLoading(false);
+            showAlert(
+              'Name Change Limit Reached',
+              'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+              'error'
+            );
+            return;
+          }
+        }
       }
 
       if (!userProfile.email.trim()) {
@@ -799,7 +832,12 @@ export default function ProfileScreen() {
       if (response.ok && responseData.status === 'success') {
         // Update local user data
         const updatedUserData = responseData.data?.user || {};
-        const updatedNameChangeCount = updatedUserData.nameChangeCount || nameChangeCount;
+        
+        // Get the updated name change count from backend response
+        // Backend returns the actual updated count after incrementing
+        const updatedNameChangeCount = updatedUserData.nameChangeCount !== undefined 
+          ? updatedUserData.nameChangeCount 
+          : (userProfile.name.trim() !== originalName.trim() ? nameChangeCount + 1 : nameChangeCount);
         
         const updatedUser = {
           ...user,
@@ -814,10 +852,15 @@ export default function ProfileScreen() {
         await updateUser(updatedUser);
         await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
 
-        // Update name change tracking
+        // Update name change tracking - always update if name changed
         if (userProfile.name.trim() !== originalName.trim()) {
           setNameChangeCount(updatedNameChangeCount);
           setOriginalName(userProfile.name.trim());
+        } else {
+          // Name didn't change, but still update count from backend in case it was fetched
+          if (updatedUserData.nameChangeCount !== undefined) {
+            setNameChangeCount(updatedUserData.nameChangeCount);
+          }
         }
 
         setEditModalVisible(false);
@@ -1465,25 +1508,25 @@ export default function ProfileScreen() {
             <View style={styles.formGroup}>
               <View style={styles.labelRow}>
                 <Text style={styles.formLabel}>{t('editProfile.fullName')}</Text>
-                {nameChangeCount >= 2 && userProfile.name.trim() !== originalName.trim() && (
-                  <Text style={styles.warningText}>
-                    {t('editProfile.nameChangeLimitReached') || 'Name change limit reached (2/2)'}
-                  </Text>
-                )}
-                {nameChangeCount < 2 && userProfile.name.trim() !== originalName.trim() && (
-                  <Text style={styles.infoText}>
-                    {(() => {
-                      const remaining = 2 - nameChangeCount;
-                      const translation = t('editProfile.nameChangesRemaining', { count: remaining.toString() });
-                      // If translation key not found, use fallback
-                      if (translation === 'editProfile.nameChangesRemaining' || translation.includes('{count}')) {
-                        return `${remaining} change${remaining > 1 ? 's' : ''} remaining`;
-                      }
-                      // Replace {count} with actual count
-                      return translation.replace('{count}', remaining.toString());
-                    })()}
-                  </Text>
-                )}
+                {(() => {
+                  const isNameChanging = userProfile.name.trim() !== originalName.trim();
+                  const remaining = Math.max(0, 2 - nameChangeCount);
+                  
+                  if (nameChangeCount >= 2 && isNameChanging) {
+                    return (
+                      <Text style={styles.warningText}>
+                        {t('editProfile.nameChangeLimitReached') || 'Name change limit reached (2/2)'}
+                      </Text>
+                    );
+                  } else if (nameChangeCount < 2 && isNameChanging) {
+                    return (
+                      <Text style={styles.infoText}>
+                        {t('editProfile.nameChangesRemaining', { count: remaining })}
+                      </Text>
+                    );
+                  }
+                  return null;
+                })()}
               </View>
               <TextInput
                 style={[
@@ -1493,11 +1536,22 @@ export default function ProfileScreen() {
                 value={userProfile.name}
                 onChangeText={(text) => {
                   // Prevent changes if limit reached and name is different from original
-                  if (nameChangeCount >= 2 && originalName.trim() !== '' && text.trim() !== originalName.trim()) {
+                  const isChanging = text.trim() !== originalName.trim();
+                  if (nameChangeCount >= 2 && originalName.trim() !== '' && isChanging) {
+                    // Reset to original name if trying to change beyond limit
                     showAlert(
                       'Name Change Limit Reached',
-                      'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
-                      'error'
+                      t('editProfile.nameChangeLimitMessage') || 'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+                      'error',
+                      [
+                        {
+                          text: 'OK',
+                          onPress: () => {
+                            // Reset to original name
+                            setUserProfile(prev => ({ ...prev, name: originalName }));
+                          }
+                        }
+                      ]
                     );
                     return;
                   }

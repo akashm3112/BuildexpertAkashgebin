@@ -267,14 +267,21 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
         }
       });
 
+      // Format appointment date for push notification
+      const { formatDate } = require('../utils/timezone');
+      const formattedAppointmentDate = formatDate(new Date(appointmentDate));
+      
       // Send push notification to provider
       const providerNotification = {
         ...NotificationTemplates.NEW_BOOKING_REQUEST,
-        body: `New booking request for ${providerService.service_name} on ${appointmentDate}`,
+        body: `New booking request for ${providerService.service_name} on ${formattedAppointmentDate}`,
         data: {
           type: 'booking_request',
           bookingId: newBooking.id,
-          screen: 'bookings'
+          screen: 'bookings',
+          scheduledDate: formattedAppointmentDate,
+          appointmentDate: appointmentDate,
+          appointmentTime: appointmentTime
         }
       };
       
@@ -297,14 +304,20 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
       }
     });
 
+    // Format appointment date for user notification
+    const formattedUserAppointmentDate = formatDate(new Date(appointmentDate));
+    
     // Send push notification to user confirming booking creation
     const userNotification = {
       ...NotificationTemplates.BOOKING_CREATED,
-      body: `Your booking request for ${providerService.service_name} on ${appointmentDate} has been submitted. Waiting for provider confirmation.`,
+      body: `Your booking request for ${providerService.service_name} on ${formattedUserAppointmentDate} has been submitted. Waiting for provider confirmation.`,
       data: {
         type: 'booking_created',
         bookingId: newBooking.id,
-        screen: 'bookings'
+        screen: 'bookings',
+        scheduledDate: formattedUserAppointmentDate,
+        appointmentDate: appointmentDate,
+        appointmentTime: appointmentTime
       }
     };
     
@@ -369,8 +382,8 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
       req.user.id,
       'Booking Confirmed',
       `Your booking for ${providerService.service_name} on ${formattedDate} at ${formattedTime} has been confirmed.`,
-    'user'
-  );
+      'user'
+    );
 
   res.status(201).json({
     status: 'success',

@@ -244,7 +244,11 @@ export default function BookingsScreen() {
 
       if (response.ok && response.data && response.data.status === 'success') {
         const bookingsData = response.data.data.bookings || [];
-        setBookings(bookingsData);
+        // Deduplicate bookings by ID to prevent duplicate key errors
+        const uniqueBookings = bookingsData.filter((booking, index, self) => 
+          index === self.findIndex(b => b.id === booking.id)
+        );
+        setBookings(uniqueBookings);
       } else {
         if (response.status === 403) {
           setErrorKey('accessDenied');
@@ -794,7 +798,7 @@ export default function BookingsScreen() {
   return (
     <SafeView backgroundColor="#F8FAFC">
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, getResponsiveSpacing(16, 20, 24)) }]}>
+      <View style={styles.header}>
         <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{t('bookings.title')}</Text>
         <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">{t('bookings.subtitle')}</Text>
       </View>
@@ -816,7 +820,7 @@ export default function BookingsScreen() {
       <FlatList
         data={filteredBookings}
         renderItem={renderBooking}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id || `booking-${item.created_at || Date.now()}`}
         style={styles.bookingsList}
         contentContainerStyle={styles.bookingsListContent}
         showsVerticalScrollIndicator={false}
@@ -1056,6 +1060,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    paddingTop: getResponsiveSpacing(12, 14, 16),
     paddingBottom: getResponsiveSpacing(12, 14, 16),
     backgroundColor: '#FFFFFF', // Header background white
     borderBottomWidth: 1,
@@ -1130,7 +1135,7 @@ const styles = StyleSheet.create({
   bookingsListContent: {
     flexGrow: 1,
     paddingTop: getResponsiveSpacing(6, 8, 10), // Space at the top to separate from filters
-    paddingBottom: getResponsiveSpacing(20, 24, 28), // Add padding at bottom to prevent blank space and account for tab bar
+    paddingBottom: getResponsiveSpacing(8, 10, 12), // Minimal padding for scroll end
   },
   bookingCard: {
     backgroundColor: '#FFFFFF',

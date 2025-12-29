@@ -688,11 +688,14 @@ router.put('/bookings/:id/status', [
         // Send push notification (async)
         const pushNotification = {
           ...NotificationTemplates.BOOKING_CONFIRMED,
-          body: `Your ${bookingDetails.service_name} booking has been confirmed for ${bookingDetails.appointment_date}`,
+          body: `Your ${bookingDetails.service_name} booking has been confirmed for ${formattedDate}${timeDisplay}`,
           data: {
             type: 'booking_confirmed',
             bookingId: id,
-            screen: 'bookings'
+            screen: 'bookings',
+            scheduledDate: formattedDate + (timeDisplay || ''),
+            appointmentDate: bookingDetails.appointment_date,
+            appointmentTime: bookingDetails.appointment_time
           }
         };
         pushNotificationService.sendToUser(bookingDetails.user_id, pushNotification)

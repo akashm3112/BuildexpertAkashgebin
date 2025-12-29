@@ -124,9 +124,11 @@ class WebRTCService {
       });
 
       const connectionTimeout = setTimeout(() => {
-        this.socket?.disconnect();
-        reject(new Error('Socket connection timed out. Please check your internet connection.'));
-      }, 10000); // 10 seconds timeout for connection
+        if (!this.socket?.connected) {
+          this.socket?.disconnect();
+          reject(new Error('Socket connection timed out. Please check your internet connection.'));
+        }
+      }, 20000); // 20 seconds timeout for connection (increased for slower networks)
 
       this.socket.on('connect', () => {
         clearTimeout(connectionTimeout);

@@ -178,6 +178,31 @@ class BookingNotificationService {
   }
 
   /**
+   * Format date for display in notifications
+   */
+  private formatDateForDisplay(date: string | Date | null | undefined): string {
+    if (!date) return '';
+    
+    try {
+      const dateObj = typeof date === 'string' ? new Date(date) : date;
+      
+      if (isNaN(dateObj.getTime())) {
+        return String(date);
+      }
+      
+      // Format as "MMM d, yyyy" (e.g., "Dec 30, 2025")
+      return dateObj.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      // If formatting fails, return the original value as string
+      return String(date);
+    }
+  }
+
+  /**
    * Handle booking confirmed notification
    */
   public async notifyBookingConfirmed(providerName: string, serviceName: string, scheduledDate: string) {
@@ -188,10 +213,13 @@ class BookingNotificationService {
     // Default sound
     await this.triggerSound('default');
 
+    // Format the scheduled date properly
+    const formattedDate = this.formatDateForDisplay(scheduledDate);
+
     // Show notification
     await this.showNotification({
       title: '✅ Booking Confirmed',
-      body: `Your ${serviceName} with ${providerName} is confirmed for ${scheduledDate}`,
+      body: `Your ${serviceName} with ${providerName} is confirmed for ${formattedDate}`,
       data: { type: 'booking_confirmed' }
     });
   }

@@ -188,6 +188,7 @@ export default function NotificationsScreen() {
     header: {
       ...styles.header,
       paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+      paddingTop: getResponsiveSpacing(12, 16, 20),
       paddingBottom: getResponsiveSpacing(12, 16, 20),
       minHeight: getResponsiveSpacing(56, 60, 64),
     },
@@ -354,7 +355,7 @@ export default function NotificationsScreen() {
   return (
     <SafeView backgroundColor="#F8FAFC">
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <View style={[responsiveStyles.header, { paddingTop: Math.max(insets.top, getResponsiveSpacing(12, 16, 20)) }]}>
+      <View style={responsiveStyles.header}>
         <Text style={responsiveStyles.headerTitle} numberOfLines={1} ellipsizeMode="tail">{t('notifications.title')}</Text>
         {notifications.length > 0 && (
           <TouchableOpacity onPress={handleMarkAllAsRead} style={styles.markAllButton}>
@@ -500,7 +501,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: getResponsiveSpacing(12, 12, 12),
     paddingTop: getResponsiveSpacing(12, 16, 20),
-    paddingBottom: getResponsiveSpacing(20, 24, 28), // Add padding at bottom to prevent blank space and account for tab bar
+    paddingBottom: getResponsiveSpacing(8, 10, 12), // Minimal padding for scroll end
   },
   notificationCard: {
     flexDirection: 'row',

@@ -106,16 +106,25 @@ export default function EditProfileScreen() {
             const data = await response.json();
             if (data.status === 'success' && data.data?.user) {
               const profileData = data.data.user;
-              setNameChangeCount(profileData.nameChangeCount || 0);
+              const fetchedCount = profileData.nameChangeCount !== undefined ? profileData.nameChangeCount : 0;
+              setNameChangeCount(fetchedCount);
+              
+              // Update original name if different
               if (profileData.fullName && profileData.fullName !== initialData.fullName) {
                 setOriginalName(profileData.fullName);
                 setFormData(prev => ({ ...prev, fullName: profileData.fullName }));
+              } else if (profileData.fullName) {
+                // Ensure originalName is set even if it matches
+                setOriginalName(profileData.fullName);
               }
             }
           }
         } catch (error) {
           console.error('Failed to fetch profile:', error);
           // Use user context data as fallback
+          if (user?.nameChangeCount !== undefined) {
+            setNameChangeCount(user.nameChangeCount);
+          }
         }
       };
       
@@ -318,14 +327,47 @@ export default function EditProfileScreen() {
 
     // Check name change limit before submitting
     const isNameChanging = formData.fullName.trim() !== originalName.trim();
-    if (isNameChanging && nameChangeCount >= 2) {
-      showAlert(
-        'Name Change Limit Reached',
-        'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
-        'error',
-        [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
-      );
-      return;
+    if (isNameChanging) {
+      // Fetch latest name change count from backend to ensure accuracy
+      try {
+        const { tokenManager } = await import('@/utils/tokenManager');
+        const currentToken = await tokenManager.getValidToken();
+        if (currentToken) {
+          const profileResponse = await fetch(`${API_BASE_URL}/api/users/profile`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` },
+          });
+          if (profileResponse.ok) {
+            const profileData = await profileResponse.json();
+            if (profileData.status === 'success' && profileData.data?.user) {
+              const currentCount = profileData.data.user.nameChangeCount || 0;
+              setNameChangeCount(currentCount);
+              
+              // Check limit with fresh count from backend
+              if (currentCount >= 2) {
+                showAlert(
+                  'Name Change Limit Reached',
+                  'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+                  'error',
+                  [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+                );
+                return;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching current name change count:', error);
+        // Fallback to local count if fetch fails
+        if (nameChangeCount >= 2) {
+          showAlert(
+            'Name Change Limit Reached',
+            'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+            'error',
+            [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+          );
+          return;
+        }
+      }
     }
 
 
@@ -361,7 +403,12 @@ export default function EditProfileScreen() {
       if (response.ok) {
         const responseData = JSON.parse(responseText);
         const updatedUserData = responseData.data?.user || {};
-        const updatedNameChangeCount = updatedUserData.nameChangeCount || nameChangeCount;
+        
+        // Get the updated name change count from backend response
+        // Backend returns the actual updated count after incrementing
+        const updatedNameChangeCount = updatedUserData.nameChangeCount !== undefined 
+          ? updatedUserData.nameChangeCount 
+          : (formData.fullName.trim() !== originalName.trim() ? nameChangeCount + 1 : nameChangeCount);
 
         // Update local user data
         const updatedUser = {
@@ -377,10 +424,15 @@ export default function EditProfileScreen() {
         await updateUser(updatedUser);
         await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
 
-        // Update name change tracking
+        // Update name change tracking - always update if name changed
         if (formData.fullName.trim() !== originalName.trim()) {
           setNameChangeCount(updatedNameChangeCount);
           setOriginalName(formData.fullName.trim());
+        } else {
+          // Name didn't change, but still update count from backend in case it was fetched
+          if (updatedUserData.nameChangeCount !== undefined) {
+            setNameChangeCount(updatedUserData.nameChangeCount);
+          }
         }
 
         showAlert(
@@ -591,26 +643,26 @@ export default function EditProfileScreen() {
           {/* Full Name */}
           <View style={styles.inputGroup}>
             <View style={styles.labelRow}>
-              <Text style={styles.inputLabel}>{t('profile.fullName')} *</Text>
-              {nameChangeCount >= 2 && formData.fullName.trim() !== originalName.trim() && (
-                <Text style={styles.warningText}>
-                  Limit reached (2/2)
-                </Text>
-              )}
-              {nameChangeCount < 2 && formData.fullName.trim() !== originalName.trim() && (
-                <Text style={styles.infoText}>
-                  {(() => {
-                    const remaining = 2 - nameChangeCount;
-                    const translation = t('editProfile.nameChangesRemaining', { count: remaining.toString() });
-                    // If translation key not found, use fallback
-                    if (translation === 'editProfile.nameChangesRemaining' || translation.includes('{count}')) {
-                      return `${remaining} change${remaining > 1 ? 's' : ''} remaining`;
-                    }
-                    // Replace {count} with actual count
-                    return translation.replace('{count}', remaining.toString());
-                  })()}
-                </Text>
-              )}
+              <Text style={styles.inputLabel}>{t('editProfile.fullName')} *</Text>
+              {(() => {
+                const isNameChanging = formData.fullName.trim() !== originalName.trim();
+                const remaining = Math.max(0, 2 - nameChangeCount);
+                
+                if (nameChangeCount >= 2 && isNameChanging) {
+                  return (
+                    <Text style={styles.warningText}>
+                      Limit reached (2/2)
+                    </Text>
+                  );
+                } else if (nameChangeCount < 2 && isNameChanging) {
+                  return (
+                    <Text style={styles.infoText}>
+                      {t('editProfile.nameChangesRemaining', { count: remaining })}
+                    </Text>
+                  );
+                }
+                return null;
+              })()}
             </View>
             <TextInput
               style={[
@@ -620,18 +672,28 @@ export default function EditProfileScreen() {
               value={formData.fullName}
               onChangeText={(value) => {
                 // Prevent changes if limit reached and name is different from original
-                if (nameChangeCount >= 2 && originalName.trim() !== '' && value.trim() !== originalName.trim()) {
+                const isChanging = value.trim() !== originalName.trim();
+                if (nameChangeCount >= 2 && originalName.trim() !== '' && isChanging) {
+                  // Reset to original name if trying to change beyond limit
                   showAlert(
                     'Name Change Limit Reached',
-                    'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
+                    t('editProfile.nameChangeLimitMessage') || 'You have reached the maximum limit of 2 name changes. Name changes are limited to prevent abuse.',
                     'error',
-                    [{ text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }]
+                    [{ 
+                      text: 'OK', 
+                      onPress: () => {
+                        setShowAlertModal(false);
+                        // Reset to original name
+                        handleInputChange('fullName', originalName);
+                      }, 
+                      style: 'primary' 
+                    }]
                   );
                   return;
                 }
                 handleInputChange('fullName', value);
               }}
-              placeholder={t('profile.enterFullName')}
+              placeholder={t('editProfile.fullNamePlaceholder')}
               placeholderTextColor="#9CA3AF"
               editable={!(nameChangeCount >= 2 && formData.fullName.trim() !== originalName.trim())}
             />
@@ -644,12 +706,12 @@ export default function EditProfileScreen() {
 
           {/* Email */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t('profile.email')} *</Text>
+            <Text style={styles.inputLabel}>{t('editProfile.email')} *</Text>
             <TextInput
               style={styles.textInput}
               value={formData.email}
               onChangeText={(value) => handleInputChange('email', value)}
-              placeholder={t('profile.enterEmail')}
+              placeholder={t('editProfile.emailPlaceholder')}
               placeholderTextColor="#9CA3AF"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -658,11 +720,11 @@ export default function EditProfileScreen() {
 
           {/* Read-only Phone Display */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t('profile.phoneNumber')}</Text>
+            <Text style={styles.inputLabel}>{t('editProfile.phoneNumber')}</Text>
             <View style={[styles.textInput, styles.readOnlyInput]}>
               <Text style={styles.readOnlyText}>{user?.phone || 'N/A'}</Text>
             </View>
-            <Text style={styles.readOnlyNote}>{t('profile.phoneReadOnly')}</Text>
+            <Text style={styles.readOnlyNote}>{t('editProfile.phoneDisabled')}</Text>
           </View>
 
           {/* Delete Account Section */}

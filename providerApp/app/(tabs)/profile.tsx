@@ -10,7 +10,7 @@ import teTranslations from '@/i18n/locales/te';
 import mlTranslations from '@/i18n/locales/ml';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { User, Phone, MapPin, LogOut, CreditCard as Edit, Bell, Shield, Globe, Volume2, CircleHelp as HelpCircle, FileText, Star, Settings, CreditCard, TriangleAlert as AlertTriangle, Trash2, Camera, X, Gift, Mail, MessageCircle, Instagram, ExternalLink, ChevronRight, Share2 } from 'lucide-react-native';
-import { SafeView } from '@/components/SafeView';
+import { SafeView, useSafeAreaInsets } from '@/components/SafeView';
 import { LanguageModal } from '@/components/common/LanguageModal';
 import { Modal } from '@/components/common/Modal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -214,9 +214,18 @@ export default function ProfileScreen() {
       });
       if (serviceRes.ok) {
         const data = await serviceRes.json();
-        setServiceCount(data.data.registeredServices.length);
+        // Validate response structure and ensure registeredServices is an array
+        if (data && data.data && Array.isArray(data.data.registeredServices)) {
+          setServiceCount(data.data.registeredServices.length);
+        } else {
+          // If response structure is unexpected, default to 0
+          console.warn('Unexpected response structure from my-registrations:', data);
+          setServiceCount(0);
+        }
       } else {
         const errorText = await serviceRes.text();
+        console.error('Failed to fetch service count:', errorText);
+        setServiceCount(0);
       }
 
       // Fetch completed bookings for jobs done
@@ -1701,7 +1710,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: getResponsiveSpacing(20, 24, 28), // Add padding at bottom to prevent content from being cut off by tab bar
+    paddingBottom: getResponsiveSpacing(8, 10, 12), // Minimal padding for scroll end
   },
   profileHeader: {
     alignItems: 'center',

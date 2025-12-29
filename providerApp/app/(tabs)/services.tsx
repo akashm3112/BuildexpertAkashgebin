@@ -135,7 +135,17 @@ export default function ServicesScreen() {
         const response = await apiGet<{ status: string; data: { registeredServices: RegisteredService[] } }>('/api/services/my-registrations');
         
         if (response.data.status === 'success' && response.data.data.registeredServices) {
-          setRegisteredServices(response.data.data.registeredServices);
+          const servicesData = response.data.data.registeredServices || [];
+          // Deduplicate services by provider_service_id to prevent duplicate key errors
+          // Use a Map to ensure true uniqueness and preserve the first occurrence
+          const servicesMap = new Map<string, RegisteredService>();
+          servicesData.forEach((service) => {
+            if (service.provider_service_id && !servicesMap.has(service.provider_service_id)) {
+              servicesMap.set(service.provider_service_id, service);
+            }
+          });
+          const uniqueServices = Array.from(servicesMap.values());
+          setRegisteredServices(uniqueServices);
         } else {
           setError('Invalid response format from server');
         }
@@ -394,7 +404,7 @@ export default function ServicesScreen() {
   return (
     <SafeView backgroundColor="#FFFFFF">
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, getResponsiveSpacing(16, 20, 24)) }]}>
+      <View style={styles.header}>
         <Text style={styles.title}>{t('services.title')}</Text>
         <Text style={styles.subtitle}>{t('services.subtitle')}</Text>
       </View>
@@ -412,8 +422,14 @@ export default function ServicesScreen() {
             const statusInfo = getStatusInfo(service.payment_status);
             const StatusIcon = statusInfo.icon;
 
+            // Ensure unique key - provider_service_id should be unique after deduplication
+            // Use index as additional safeguard
+            const uniqueKey = service.provider_service_id 
+              ? `service-${service.provider_service_id}-${index}` 
+              : `service-${index}-${Date.now()}-${service.service_name || 'unknown'}`;
+
             return (
-              <View key={service.provider_service_id || `service-${index}`} style={styles.serviceCard}>
+              <View key={uniqueKey} style={styles.serviceCard}>
                 {/* Header with icon, service info, and status */}
                 <View style={styles.serviceHeader}>
                   <View style={styles.serviceMainInfo}>
@@ -586,6 +602,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    paddingTop: getResponsiveSpacing(12, 14, 16),
     paddingBottom: getResponsiveSpacing(12, 14, 16),
   },
   title: {
@@ -605,7 +622,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: getResponsiveSpacing(20, 24, 28), // Add padding at bottom to prevent blank space and account for tab bar
+    paddingBottom: getResponsiveSpacing(8, 10, 12), // Minimal padding for scroll end
   },
   servicesList: {
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),

@@ -379,10 +379,23 @@ router.put('/profile', [profileUpdateLimiter, ...validateUpdateProfile], asyncHa
 
   updateValues.push(req.user.id);
   
-  // Build RETURNING clause - only include name_change_count if we're updating it
+  // Build RETURNING clause - always include name_change_count to return current value
   const returningFields = ['id', 'full_name', 'email', 'phone', 'role', 'is_verified', 'profile_pic_url', 'created_at'];
-  const hasNameChangeCountInUpdate = updateFields.some(field => field.includes('name_change_count'));
-  if (hasNameChangeCountInUpdate) {
+  // Always include name_change_count in RETURNING to ensure frontend gets updated count
+  // Check if column exists by trying to include it
+  let includeNameChangeCount = true;
+  try {
+    // Test if column exists by checking if we can query it
+    const testResult = await getRow('SELECT name_change_count FROM users WHERE id = $1 LIMIT 1', [req.user.id]);
+    includeNameChangeCount = true;
+  } catch (testError) {
+    // Column doesn't exist, don't include it
+    if (testError.code === '42703' || testError.message?.includes('name_change_count')) {
+      includeNameChangeCount = false;
+    }
+  }
+  
+  if (includeNameChangeCount) {
     returningFields.push('name_change_count');
   }
   

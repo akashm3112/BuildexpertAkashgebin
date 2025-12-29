@@ -34,48 +34,39 @@ class NotificationService {
   async initialize(forceReRegister: boolean = false): Promise<boolean> {
     try {
       if (this.isInitialized && !forceReRegister) {
-        console.log('✅ Notification service already initialized, re-registering token...');
         // Even if initialized, ensure token is registered with backend
         await this.ensureTokenRegistered();
         return true;
       }
 
-      console.log('🔄 Initializing notification service...');
-
       // STEP 1: Configure notification behavior and channels FIRST (synchronously)
       // This ensures channels exist before any notifications can arrive
       await this.configureNotifications();
-      console.log('✅ Notification behavior and channels configured');
 
       // STEP 2: Request permissions (after channels are ready)
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
-        console.warn('⚠️ Notification permissions not granted');
         return false;
       }
-      console.log('✅ Notification permissions granted');
 
       // STEP 3: Register for push notifications and get token
       const token = await this.registerForPushNotifications();
       if (!token) {
-        console.error('❌ Failed to obtain push token');
         return false;
       }
 
       this.pushToken = token;
-      console.log('✅ Push token obtained');
 
       // STEP 4: Register token with backend (with retry logic)
       // CRITICAL: Token must be registered before marking as initialized
       const registered = await this.registerTokenWithBackendWithRetry(token);
 
       if (!registered) {
-        console.warn('⚠️ Failed to register token with backend after retries, but token obtained');
         // Still mark as initialized if token was obtained - backend registration can happen later
         // Schedule a retry in the background
         setTimeout(() => {
-          this.ensureTokenRegistered().catch(err => {
-            console.error('❌ Background token registration retry failed:', err);
+          this.ensureTokenRegistered().catch(() => {
+            // Silent retry failure
           });
         }, 10000); // Retry after 10 seconds
       }
@@ -84,7 +75,6 @@ class NotificationService {
       this.isInitialized = true;
       return true;
     } catch (error: any) {
-      console.error('❌ Error initializing notification service:', error.message || error);
       return false;
     }
   }
@@ -100,13 +90,11 @@ class NotificationService {
     while (!registered && retryCount < maxRetries) {
       registered = await this.registerTokenWithBackend(token);
       if (registered) {
-        console.log('✅ Push token registered with backend');
         break;
       } else {
         retryCount++;
         if (retryCount < maxRetries) {
           const delay = 2000 * retryCount; // Exponential backoff: 2s, 4s, 6s, 8s, 10s
-          console.log(`⚠️ Token registration failed, retrying (${retryCount}/${maxRetries}) in ${delay/1000}s...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
@@ -124,24 +112,14 @@ class NotificationService {
         // Try to get token from storage or generate new one
         const token = await this.getPushToken();
         if (!token) {
-          console.warn('⚠️ No push token available to register');
           return false;
         }
         this.pushToken = token;
       }
 
-      console.log('🔄 Ensuring push token is registered with backend...');
       const registered = await this.registerTokenWithBackendWithRetry(this.pushToken);
-      
-      if (registered) {
-        console.log('✅ Push token confirmed registered with backend');
-      } else {
-        console.warn('⚠️ Failed to register push token with backend');
-      }
-      
       return registered;
     } catch (error: any) {
-      console.error('❌ Error ensuring token registration:', error.message || error);
       return false;
     }
   }
@@ -236,19 +214,15 @@ class NotificationService {
               enableVibrate: channel.enableVibrate,
               showBadge: channel.showBadge,
             });
-            console.log(`✅ Notification channel created: ${channel.id}`);
           } catch (error: any) {
-            console.error(`❌ Failed to create notification channel ${channel.id}:`, error.message || error);
             // Continue with other channels even if one fails
           }
         });
 
         // Wait for all channels to be created before proceeding
         await Promise.all(channelPromises);
-        console.log('✅ All notification channels configured');
       }
     } catch (error: any) {
-      console.error('❌ Error configuring notifications:', error.message || error);
       throw error; // Re-throw to prevent initialization from continuing with broken config
     }
   }
@@ -278,11 +252,9 @@ class NotificationService {
             }
           );
           if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            console.warn('⚠️ POST_NOTIFICATIONS permission denied on Android 13+');
             return false;
           }
         } catch (androidError: any) {
-          console.error('❌ Error requesting Android POST_NOTIFICATIONS permission:', androidError);
           // Fall through to Expo permission request as fallback
         }
       }
@@ -303,13 +275,11 @@ class NotificationService {
       }
 
       if (finalStatus !== 'granted') {
-        console.warn('⚠️ Notification permissions not granted');
         return false;
       }
 
       return true;
     } catch (error: any) {
-      console.error('❌ Error requesting notification permissions:', error.message || error);
       return false;
     }
   }
@@ -320,13 +290,11 @@ class NotificationService {
   private async registerForPushNotifications(): Promise<string | null> {
     try {
       if (!Device.isDevice) {
-        console.log('⚠️ Not a physical device, skipping push notification registration');
         return null;
       }
 
       const projectId = Constants.expoConfig?.extra?.eas?.projectId;
       if (!projectId) {
-        console.error('❌ Project ID not found in app config. Push notifications will not work.');
         return null;
       }
 
@@ -336,15 +304,12 @@ class NotificationService {
       });
 
       const token = tokenData.data;
-      console.log('✅ Push token obtained:', token.substring(0, 20) + '...');
-      console.log('📱 FULL PUSH TOKEN (for testing):', token); // Temporary: Full token for testing
 
       // Store token locally
       await AsyncStorage.setItem('expo_push_token', token);
 
       return token;
     } catch (error: any) {
-      console.error('❌ Error getting push token:', error.message || error);
       return null;
     }
   }
@@ -367,7 +332,6 @@ class NotificationService {
       
       if (!authToken) {
         // Wait a bit and try refreshing token
-        console.log('⚠️ No auth token found, attempting to refresh...');
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         try {
@@ -380,7 +344,7 @@ class NotificationService {
               await tokenManager.forceRefreshToken();
               authToken = await tokenManager.getValidToken();
             } catch (refreshError) {
-              console.warn('⚠️ Token refresh failed, cannot register push token:', refreshError);
+              // Silent token refresh failure
             }
           }
         } catch (tokenManagerError) {
@@ -390,7 +354,6 @@ class NotificationService {
       }
       
       if (!authToken) {
-        console.warn('⚠️ No auth token found after retries, cannot register push token with backend');
         return false;
       }
 
@@ -417,35 +380,11 @@ class NotificationService {
       });
 
       if (response.ok) {
-        const responseData = await response.json().catch(() => ({}));
-        console.log('✅ Push token registered with backend successfully', {
-          tokenPrefix: token.substring(0, 20) + '...',
-          responseStatus: responseData.status
-        });
         return true;
       } else {
-        const data = await response.json().catch(() => ({}));
-        const errorText = await response.text().catch(() => '');
-        console.error('❌ Failed to register token with backend:', {
-          status: response.status,
-          statusText: response.statusText,
-          message: data.message || data.error || errorText,
-          tokenPrefix: token.substring(0, 20) + '...'
-        });
-        
-        // If 401, token might be expired - don't retry immediately
-        if (response.status === 401) {
-          console.warn('⚠️ Authentication failed, token may be expired');
-        }
-        
         return false;
       }
     } catch (error: any) {
-      console.error('❌ Error registering token with backend:', {
-        message: error.message || error,
-        stack: error.stack,
-        tokenPrefix: token ? token.substring(0, 20) + '...' : 'null'
-      });
       return false;
     }
   }
@@ -462,17 +401,14 @@ class NotificationService {
       const isForeground = appState === 'active';
       
       if (isForeground) {
-        console.log('📬 Notification received (foreground):', notification.request.content.title);
         this.handleNotificationReceived(notification);
       } else {
-        console.log('📬 Notification received (background/closed):', notification.request.content.title);
         await this.handleBackgroundNotification(notification);
       }
     });
 
     // Handle notification tapped/opened (works in both foreground and background)
     Notifications.addNotificationResponseReceivedListener((response) => {
-      console.log('👆 Notification tapped:', response.notification.request.content.title);
       this.handleNotificationTap(response.notification);
     });
 
@@ -488,12 +424,8 @@ class NotificationService {
         buttonTitle: 'Dismiss',
         options: {},
       },
-    ], {
-      intentIdentifiers: [],
-      hiddenPreviewsBodyPlaceholder: '',
-      categorySummaryFormat: '%u more notifications',
-    }).catch((error) => {
-      console.error('❌ Error setting notification category:', error);
+    ]).catch(() => {
+      // Silent error handling
     });
   }
 
@@ -505,12 +437,12 @@ class NotificationService {
       // Update badge count (only if it's a valid number)
       const badgeCount = notification.request.content.badge;
       if (badgeCount !== undefined && badgeCount !== null && typeof badgeCount === 'number' && badgeCount >= 0) {
-        Notifications.setBadgeCountAsync(badgeCount).catch((error) => {
-          console.error('❌ Error updating badge count:', error);
+        Notifications.setBadgeCountAsync(badgeCount).catch(() => {
+          // Silent error handling
         });
       }
     } catch (error: any) {
-      console.error('❌ Error handling notification received:', error.message || error);
+      // Silent error handling
     }
   }
 
@@ -520,8 +452,6 @@ class NotificationService {
    */
   private async handleBackgroundNotification(notification: Notifications.Notification): Promise<void> {
     try {
-      console.log('🔄 Processing background notification:', notification.request.content.title);
-      
       // Update badge count (only if it's a valid number)
       const badgeCount = notification.request.content.badge;
       if (badgeCount !== undefined && badgeCount !== null && typeof badgeCount === 'number' && badgeCount >= 0) {
@@ -545,12 +475,10 @@ class NotificationService {
         const trimmed = notifications.slice(0, 50);
         await AsyncStorage.setItem('background_notifications', JSON.stringify(trimmed));
       } catch (storageError) {
-        console.error('❌ Error storing background notification:', storageError);
+        // Silent error handling
       }
-
-      console.log('✅ Background notification processed');
     } catch (error: any) {
-      console.error('❌ Error handling background notification:', error.message || error);
+      // Silent error handling
     }
   }
 
@@ -581,7 +509,7 @@ class NotificationService {
         }
       }
     } catch (error) {
-      // Error handling notification tap
+      // Silent error handling
     }
   }
 
@@ -599,8 +527,8 @@ class NotificationService {
       if (storedToken) {
         this.pushToken = storedToken;
         // Ensure it's registered with backend
-        this.ensureTokenRegistered().catch(err => {
-          console.error('❌ Error ensuring stored token is registered:', err);
+        this.ensureTokenRegistered().catch(() => {
+          // Silent error handling
         });
         return storedToken;
       }
@@ -610,14 +538,13 @@ class NotificationService {
       if (token) {
         this.pushToken = token;
         // Register with backend (with retry)
-        this.registerTokenWithBackendWithRetry(token).catch(err => {
-          console.error('❌ Error registering new token:', err);
+        this.registerTokenWithBackendWithRetry(token).catch(() => {
+          // Silent error handling
         });
       }
 
       return token;
     } catch (error) {
-      console.error('❌ Error getting push token:', error);
       return null;
     }
   }

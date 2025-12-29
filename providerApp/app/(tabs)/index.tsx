@@ -856,7 +856,7 @@ export default function HomeScreen() {
         }
       >
         {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, getResponsiveSpacing(8, 10, 12)) }]}>
+      <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
             {(() => {
@@ -1161,7 +1161,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: getResponsiveSpacing(20, 24, 28), // Add padding at bottom to prevent blank space and account for tab bar
+    paddingBottom: getResponsiveSpacing(8, 10, 12), // Minimal padding for scroll end
   },
   header: {
     flexDirection: 'row',
