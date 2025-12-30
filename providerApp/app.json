@@ -61,13 +61,20 @@
       ],
       "package": "com.builtxpert.provider",
       "appName": "BuildXpert Provider",
+      "label": "BuildXpert Provider",
       "usesCleartextTraffic": false,
       "networkSecurityConfig": {
         "cleartextTrafficPermitted": false
       },
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#F8FAFC"
+        "backgroundColor": "#F8FAFC",
+        "monochromeImage": "./assets/images/icon.png"
+      },
+      "notification": {
+        "icon": "./assets/images/icon.png",
+        "color": "#3B82F6",
+        "sound": "default"
       }
     },
     "experiments": {

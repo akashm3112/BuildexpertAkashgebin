@@ -4,12 +4,43 @@ const logger = require('../utils/logger');
 const { sleep } = require('../utils/retryLogic');
 
 // Enhanced database configuration for production readiness
+// PRODUCTION SCALABILITY: Pool size is configurable via environment variable
+// For 3-4k concurrent users: Recommended pool size = 50-100
+// Formula: pool_size = (expected_concurrent_users * avg_request_time_ms) / (1000 * target_throughput_rps)
+// Example: (4000 * 300ms) / (1000 * 50rps) = 24, but we use 50-100 for headroom
+const DEFAULT_POOL_MAX = 20;
+const DEFAULT_POOL_MIN = 2;
+const POOL_MAX = parseInt(process.env.DB_POOL_MAX || DEFAULT_POOL_MAX, 10);
+const POOL_MIN = parseInt(process.env.DB_POOL_MIN || DEFAULT_POOL_MIN, 10);
+
+// Validate pool size (prevent misconfiguration)
+const validatedPoolMax = Math.max(10, Math.min(POOL_MAX, 200)); // Min 10, Max 200
+const validatedPoolMin = Math.max(2, Math.min(POOL_MIN, validatedPoolMax / 2)); // Min 2, Max half of max
+
+if (POOL_MAX !== validatedPoolMax) {
+  logger.warn('Database pool max size adjusted', {
+    requested: POOL_MAX,
+    actual: validatedPoolMax,
+    reason: 'Pool size must be between 10 and 200'
+  });
+}
+
+if (config.isProduction()) {
+  logger.info('Database connection pool configured', {
+    max: validatedPoolMax,
+    min: validatedPoolMin,
+    configured: POOL_MAX,
+    note: 'For 3-4k concurrent users, recommended pool size is 50-100',
+    recommendation: validatedPoolMax < 50 ? 'Consider increasing DB_POOL_MAX to 50-100 for high concurrency' : 'Pool size is optimized for high concurrency'
+  });
+}
+
 const pool = new Pool({
   connectionString: config.get('database.url'),
   ssl: { rejectUnauthorized: false },
-  // Connection pool settings
-  max: 20, // Maximum number of clients in the pool
-  min: 2, // Keep minimum connections alive (prevents cold starts)
+  // Connection pool settings - SCALABLE for high concurrency
+  max: validatedPoolMax, // Configurable via DB_POOL_MAX env var (default: 20, recommended for 3-4k users: 50-100)
+  min: validatedPoolMin, // Configurable via DB_POOL_MIN env var (default: 2, recommended: 5-10)
   idleTimeoutMillis: 60000, // Close idle clients after 60 seconds (increased for cloud DBs)
   connectionTimeoutMillis: 15000, // Return an error after 15 seconds if connection could not be established (increased for reliability)
   // Set timezone to IST (India Standard Time)
@@ -362,16 +393,48 @@ if (config.isProduction() || config.get('database.enableHealthCheck') !== false)
   startConnectionHealthCheck();
 }
 
-// Cleanup on process exit
-process.on('SIGINT', () => {
-  stopConnectionHealthCheck();
-  pool.end();
-});
+// Track if pool is already closed to prevent multiple close calls
+let poolClosed = false;
 
-process.on('SIGTERM', () => {
-  stopConnectionHealthCheck();
-  pool.end();
-});
+// Safe pool cleanup function - prevents "Called end on pool more than once" error
+const closePool = async () => {
+  // Prevent multiple calls to pool.end()
+  if (poolClosed) {
+    logger.info('Database pool already closed, skipping');
+    return;
+  }
+  
+  // Check if pool is already ending/ended
+  if (pool.ending || pool.ended) {
+    poolClosed = true;
+    logger.info('Database pool already ending/ended, skipping');
+    return;
+  }
+  
+  try {
+    // Stop health check first
+    stopConnectionHealthCheck();
+    
+    // Mark as closed before calling end() to prevent race conditions
+    poolClosed = true;
+    
+    // Close the pool gracefully
+    await pool.end();
+    logger.info('Database pool closed successfully');
+  } catch (error) {
+    // If pool is already closed, this is expected - don't log as error
+    if (error.message && error.message.includes('Called end on pool more than once')) {
+      logger.info('Database pool was already closed');
+    } else {
+      logger.error('Error closing database pool', {
+        error: error.message,
+        code: error.code
+      });
+    }
+    // Mark as closed even if there was an error
+    poolClosed = true;
+  }
+};
 
 module.exports = {
   pool,
@@ -381,5 +444,6 @@ module.exports = {
   withTransaction,
   isRetryableDatabaseError,
   startConnectionHealthCheck,
-  stopConnectionHealthCheck
+  stopConnectionHealthCheck,
+  closePool
 }; 

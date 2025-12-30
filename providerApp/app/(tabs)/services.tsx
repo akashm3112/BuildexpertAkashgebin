@@ -346,6 +346,59 @@ export default function ServicesScreen() {
               }
 
               if (response.ok) {
+                // PRODUCTION FIX: Update cache immediately to remove deleted service
+                // This ensures home screen green tick disappears instantly
+                try {
+                  // Find the service being deleted to get its service_name
+                  const serviceToDelete = registeredServices.find(s => s.provider_service_id === serviceId);
+                  if (serviceToDelete) {
+                    // Map backend service_name to frontend category ID
+                    const serviceNameToCategoryMap: { [key: string]: string } = {
+                      'labors': 'labor',
+                      'plumber': 'plumber',
+                      'mason-mastri': 'mason-mastri',
+                      'painting-cleaning': 'painting',
+                      'painting': 'painting',
+                      'cleaning': 'cleaning',
+                      'granite-tiles': 'granite-tiles',
+                      'engineer-interior': 'engineer-interior',
+                      'electrician': 'electrician',
+                      'carpenter': 'carpenter',
+                      'painter': 'painting',
+                      'interiors-building': 'interiors-building',
+                      'stainless-steel': 'stainless-steel',
+                      'contact-building': 'contact-building',
+                      'glass-mirror': 'glass-mirror',
+                      'borewell': 'borewell'
+                    };
+                    
+                    const categoryId = serviceNameToCategoryMap[serviceToDelete.service_name];
+                    
+                    if (categoryId) {
+                      // Get current cache
+                      const cachedServices = await AsyncStorage.getItem('cached_registered_services');
+                      if (cachedServices) {
+                        try {
+                          const cachedArray = JSON.parse(cachedServices);
+                          if (Array.isArray(cachedArray)) {
+                            // Remove the deleted service's category ID from cache
+                            const updatedCache = cachedArray.filter((id: string) => id !== categoryId);
+                            // Update cache immediately
+                            await AsyncStorage.setItem('cached_registered_services', JSON.stringify(updatedCache));
+                          }
+                        } catch (parseError) {
+                          // Invalid cache, will be refreshed from API
+                        }
+                      }
+                      
+                      // Set refresh trigger so home screen updates immediately
+                      await AsyncStorage.setItem('services_refresh_trigger', 'true');
+                    }
+                  }
+                } catch (cacheError) {
+                  // Silently fail - cache update is not critical
+                }
+                
                 showAlert(t('alerts.success'), t('alerts.serviceRegistrationCancelled'), 'success', [
                   { 
                     text: 'OK', 

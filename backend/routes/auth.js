@@ -920,23 +920,26 @@ router.post('/login', [loginLimiter, ...validateLogin], asyncHandler(async (req,
     throw new ValidationError('Invalid phone number provided.');
   }
 
+  // PRODUCTION PERFORMANCE FIX: Parallelize security checks to reduce response time
+  // Run IP blocking check, phone blocking check, and user lookup in parallel
+  const [ipBlocked, phoneFailedAttempts, user] = await Promise.all([
+    shouldBlockIP(ipAddress, 15, 30),
+    getRecentFailedAttempts(phone, 30),
+    getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role])
+  ]);
+
   // Check if IP should be blocked due to too many failed attempts
   // All users including admins must follow security rules
-  const ipBlocked = await shouldBlockIP(ipAddress, 15, 30);
   if (ipBlocked) {
     await logLoginAttempt(phone, ipAddress, 'blocked', 'ip_blocked', userAgent);
     throw new ValidationError('Too many failed login attempts from this IP. Please try again in 30 minutes.');
   }
 
   // Check for too many failed attempts from this phone number
-  const phoneFailedAttempts = await getRecentFailedAttempts(phone, 30);
   if (phoneFailedAttempts >= 10) {
     await logLoginAttempt(phone, ipAddress, 'blocked', 'phone_blocked', userAgent);
     throw new ValidationError('Too many failed login attempts for this account. Please try again in 30 minutes or use forgot password.');
   }
-
-  // Get user with matching phone and role
-  let user = await getRow('SELECT * FROM users WHERE phone = $1 AND role = $2', [phone, role]);
 
   // Remove auto-creation of admin account - admins must be created manually
   // This prevents unauthorized admin account creation
@@ -946,6 +949,7 @@ router.post('/login', [loginLimiter, ...validateLogin], asyncHandler(async (req,
   }
 
   // Check if account is blocked (admins must follow same rules)
+  // This check runs after user lookup since we need user.email
   const blockedAccount = await isAnyIdentifierBlocked({
     phone,
     email: user.email,
@@ -994,16 +998,26 @@ router.post('/login', [loginLimiter, ...validateLogin], asyncHandler(async (req,
       userAgent
     );
 
-    // Log successful login
-    await logLoginAttempt(phone, ipAddress, 'success', null, userAgent, user.id);
-    await logSecurityEvent(
-      user.id,
-      'login',
-      `User logged in from ${ipAddress}`,
-      ipAddress,
-      userAgent,
-      'info'
-    );
+    // PRODUCTION PERFORMANCE FIX: Make logging operations asynchronous (fire and forget)
+    // This reduces response time by not waiting for logging to complete
+    // Logging is important but not critical for the response
+    Promise.all([
+      logLoginAttempt(phone, ipAddress, 'success', null, userAgent, user.id),
+      logSecurityEvent(
+        user.id,
+        'login',
+        `User logged in from ${ipAddress}`,
+        ipAddress,
+        userAgent,
+        'info'
+      )
+    ]).catch((error) => {
+      // Log errors but don't fail the request
+      logger.error('Failed to log successful login', {
+        error: error.message,
+        userId: user.id
+      });
+    });
 
     res.json({
       status: 'success',

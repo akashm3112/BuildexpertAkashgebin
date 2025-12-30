@@ -213,6 +213,7 @@ class AdminService {
       await client.query('DELETE FROM user_reports_providers WHERE reported_provider_id = $1 OR reported_by_user_id = $1', [providerId]);
       
       // Delete bookings first (to avoid foreign key constraint)
+      // Note: Admin deletion of provider removes all bookings (different from customer account deletion)
       if (providerProfile) {
         await client.query(`
           DELETE FROM bookings 

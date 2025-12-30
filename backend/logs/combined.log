@@ -1,0 +1,27 @@
+{"level":"warn","message":"⚠️  Running in development mode. Set NODE_ENV=production for production deployment.","service":"buildxpert-api","timestamp":"2025-12-30 13:14:55"}
+{"level":"warn","message":"⚠️  Using placeholder Paytm credentials. Update PAYTM_MID and PAYTM_MERCHANT_KEY for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:14:55"}
+{"level":"warn","message":"⚠️  Using placeholder Cloudinary credentials. Update CLOUDINARY_* variables for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:14:55"}
+{"level":"info","message":"Configuration loaded successfully","nodeEnv":"development","port":"5000","service":"buildxpert-api","timestamp":"2025-12-30 13:14:55"}
+{"level":"info","message":"Database connection pool initialized successfully","service":"buildxpert-api","timestamp":"2025-12-30 13:14:56"}
+{"attempts":1,"failureCategory":"logic","level":"error","message":"migration.function is not a function","service":"buildxpert-api","timestamp":"2025-12-30 13:15:09"}
+{"attempts":1,"failureCategory":"logic","level":"error","message":"migration.function is not a function","service":"buildxpert-api","timestamp":"2025-12-30 13:15:12"}
+{"level":"warn","message":"⚠️  Running in development mode. Set NODE_ENV=production for production deployment.","service":"buildxpert-api","timestamp":"2025-12-30 13:16:43"}
+{"level":"warn","message":"⚠️  Using placeholder Paytm credentials. Update PAYTM_MID and PAYTM_MERCHANT_KEY for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:16:43"}
+{"level":"warn","message":"⚠️  Using placeholder Cloudinary credentials. Update CLOUDINARY_* variables for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:16:43"}
+{"level":"info","message":"Configuration loaded successfully","nodeEnv":"development","port":"5000","service":"buildxpert-api","timestamp":"2025-12-30 13:16:43"}
+{"level":"info","message":"Database connection pool initialized successfully","service":"buildxpert-api","timestamp":"2025-12-30 13:16:44"}
+{"level":"warn","message":"⚠️  Running in development mode. Set NODE_ENV=production for production deployment.","service":"buildxpert-api","timestamp":"2025-12-30 13:49:54"}
+{"level":"warn","message":"⚠️  Using placeholder Paytm credentials. Update PAYTM_MID and PAYTM_MERCHANT_KEY for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:49:54"}
+{"level":"warn","message":"⚠️  Using placeholder Cloudinary credentials. Update CLOUDINARY_* variables for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:49:54"}
+{"level":"info","message":"Configuration loaded successfully","nodeEnv":"development","port":"5000","service":"buildxpert-api","timestamp":"2025-12-30 13:49:54"}
+{"level":"info","message":"Database connection pool initialized successfully","service":"buildxpert-api","timestamp":"2025-12-30 13:49:56"}
+{"level":"warn","message":"⚠️  Running in development mode. Set NODE_ENV=production for production deployment.","service":"buildxpert-api","timestamp":"2025-12-30 13:50:07"}
+{"level":"warn","message":"⚠️  Using placeholder Paytm credentials. Update PAYTM_MID and PAYTM_MERCHANT_KEY for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:50:07"}
+{"level":"warn","message":"⚠️  Using placeholder Cloudinary credentials. Update CLOUDINARY_* variables for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:50:07"}
+{"level":"info","message":"Configuration loaded successfully","nodeEnv":"development","port":"5000","service":"buildxpert-api","timestamp":"2025-12-30 13:50:07"}
+{"level":"info","message":"Database connection pool initialized successfully","service":"buildxpert-api","timestamp":"2025-12-30 13:50:09"}
+{"level":"warn","message":"⚠️  Running in development mode. Set NODE_ENV=production for production deployment.","service":"buildxpert-api","timestamp":"2025-12-30 13:58:09"}
+{"level":"warn","message":"⚠️  Using placeholder Paytm credentials. Update PAYTM_MID and PAYTM_MERCHANT_KEY for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:58:09"}
+{"level":"warn","message":"⚠️  Using placeholder Cloudinary credentials. Update CLOUDINARY_* variables for production.","service":"buildxpert-api","timestamp":"2025-12-30 13:58:09"}
+{"level":"info","message":"Configuration loaded successfully","nodeEnv":"development","port":"5000","service":"buildxpert-api","timestamp":"2025-12-30 13:58:09"}
+{"level":"info","message":"Database connection pool initialized successfully","service":"buildxpert-api","timestamp":"2025-12-30 13:58:11"}

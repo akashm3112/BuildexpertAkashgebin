@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { query, getRow, getRows } = require('../database/connection');
+const { query, getRow, getRows, withTransaction } = require('../database/connection');
 const { auth, requireRole } = require('../middleware/auth');
 const { formatNotificationTimestamp } = require('../utils/timezone');
 const { sendNotification, sendAutoNotification } = require('../utils/notifications');
@@ -132,8 +132,15 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
     const { providerServiceId, selectedService, selectedServices, appointmentDate, appointmentTime } = req.body;
 
     // Check if provider service exists and is active
+    // PRODUCTION ROOT FIX: Fetch provider details (name, phone, profile pic) to store in booking
     const providerService = await getRow(`
-      SELECT ps.*, sm.name as service_name, u.full_name as provider_name, u.id as provider_user_id
+      SELECT 
+        ps.*, 
+        sm.name as service_name, 
+        u.full_name as provider_name, 
+        u.phone as provider_phone,
+        u.profile_pic_url as provider_profile_pic_url,
+        u.id as provider_user_id
       FROM provider_services ps
       JOIN services_master sm ON ps.service_id = sm.id
       JOIN provider_profiles pp ON ps.provider_id = pp.id
@@ -158,87 +165,7 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
     throw new ValidationError('Invalid appointment time format');
   }
 
-  // PRODUCTION FIX: Check for duplicate booking with improved validation
-  // Only check for pending or accepted bookings (rejected, completed, cancelled are allowed)
-  // Exclude past bookings - if appointment date/time has passed, it's not a duplicate
-  // Use explicit date casting to avoid timezone/format issues
-  const potentialDuplicates = await getRows(`
-    SELECT b.id, b.status, b.appointment_date, b.appointment_time, b.provider_service_id
-    FROM bookings b
-    WHERE b.user_id = $1
-      AND b.provider_service_id = $2
-      AND DATE(b.appointment_date) = DATE($3::date)
-      AND b.status IN ('pending', 'accepted')
-      AND (b.appointment_date > CURRENT_DATE 
-           OR (b.appointment_date = CURRENT_DATE 
-               AND b.appointment_time IS NOT NULL 
-               AND b.appointment_time != '' 
-               AND b.appointment_time != '00:00:00'))
-  `, [req.user.id, providerServiceId, appointmentDate]);
-
-  // Normalize and compare times - only consider valid normalized times
-  let existingBooking = null;
-  if (potentialDuplicates && potentialDuplicates.length > 0) {
-    for (const booking of potentialDuplicates) {
-      // Verify provider_service_id matches (defensive check)
-      if (booking.provider_service_id !== providerServiceId) {
-        logger.warn('Booking found with mismatched provider_service_id', {
-          bookingId: booking.id,
-          expectedProviderServiceId: providerServiceId,
-          actualProviderServiceId: booking.provider_service_id
-        });
-        continue;
-      }
-      
-      // Skip if booking time is null or invalid
-      if (!booking.appointment_time || booking.appointment_time.trim() === '') {
-        logger.warn('Booking found with invalid appointment_time', {
-          bookingId: booking.id,
-          appointmentTime: booking.appointment_time
-        });
-        continue;
-      }
-      
-      const normalizedStoredTime = normalizeAppointmentTime(booking.appointment_time);
-      
-      // Only compare if both times are successfully normalized
-      // If stored time can't be normalized, skip it (might be corrupted data)
-      if (!normalizedStoredTime) {
-        logger.warn('Could not normalize stored appointment time', {
-          bookingId: booking.id,
-          storedTime: booking.appointment_time
-        });
-        continue;
-      }
-      
-      if (normalizedStoredTime === normalizedAppointmentTime) {
-        existingBooking = booking;
-        break;
-      }
-    }
-  }
-
-  if (existingBooking) {
-    logger.warn('Duplicate booking attempt blocked', {
-      userId: req.user.id,
-      providerServiceId,
-      appointmentDate,
-      appointmentTime: normalizedAppointmentTime,
-      existingBookingId: existingBooking.id,
-      existingStatus: existingBooking.status,
-      existingTime: existingBooking.appointment_time,
-      totalPotentialDuplicates: potentialDuplicates.length
-    });
-    throw new ValidationError('You already have a booking with this provider at the same date and time. Please choose a different time or wait for the current booking to be completed or cancelled.');
-  }
-
-  // Create booking (store normalized time for consistency)
-  // Mark as unread for provider (new booking notification)
-  // Store service_charge_value and provider_id to persist earnings even if service is deleted
-  // Calculate service charge from sub-services based on selected_service(s)
-  const timeToStore = normalizedAppointmentTime;
-  const providerId = providerService.provider_id;
-  
+  // PRODUCTION ROOT FIX: Calculate service charge BEFORE transaction to avoid long transaction
   // Get service charge from sub-services
   // Support both single selectedService (backward compatibility) and multiple selectedServices
   let serviceChargeValue = 0;
@@ -251,24 +178,19 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
   if (servicesToProcess.length > 0) {
     try {
       // Use sub-service IDs directly (frontend identifiers like 'room-painting', etc.)
-      // No need to map to database service names anymore
-      if (servicesToProcess.length > 0) {
-        // Batch fetch all sub-service prices in a single query using sub_service_id
-        const { getRows } = require('../database/connection');
-        const subServiceRecords = await getRows(`
-          SELECT pss.price
-          FROM provider_sub_services pss
-          WHERE pss.provider_service_id = $1
-            AND pss.sub_service_id = ANY($2::text[])
-        `, [providerServiceId, servicesToProcess]);
-        
-        // Sum all prices for multiple services
-        if (subServiceRecords && subServiceRecords.length > 0) {
-          serviceChargeValue = subServiceRecords.reduce((total, record) => {
-            const price = parseFloat(record.price) || 0;
-            return total + price;
-          }, 0);
-        }
+      const subServiceRecords = await getRows(`
+        SELECT pss.price
+        FROM provider_sub_services pss
+        WHERE pss.provider_service_id = $1
+          AND pss.sub_service_id = ANY($2::text[])
+      `, [providerServiceId, servicesToProcess]);
+      
+      // Sum all prices for multiple services
+      if (subServiceRecords && subServiceRecords.length > 0) {
+        serviceChargeValue = subServiceRecords.reduce((total, record) => {
+          const price = parseFloat(record.price) || 0;
+          return total + price;
+        }, 0);
       }
     } catch (error) {
       logger.warn('Could not find sub-service prices, using 0', {
@@ -279,20 +201,169 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
       serviceChargeValue = 0;
     }
   }
-  
+
   // Store selected services as comma-separated string for backward compatibility
-  // Use selectedServices array if available, otherwise fall back to selectedService
   const selectedServiceToStore = selectedServices && Array.isArray(selectedServices) && selectedServices.length > 0
     ? selectedServices.join(',')
     : selectedService || '';
-  
-  const result = await query(`
-      INSERT INTO bookings (user_id, provider_service_id, provider_id, selected_service, appointment_date, appointment_time, service_charge_value, is_viewed_by_provider)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE)
-      RETURNING *
-    `, [req.user.id, providerServiceId, providerId, selectedServiceToStore, appointmentDate, timeToStore, serviceChargeValue]);
 
-  const newBooking = result.rows[0];
+  // Extract provider ID for booking creation
+  const providerId = providerService.provider_id;
+
+  // PRODUCTION ROOT FIX: Fetch customer details to store in booking
+  // This ensures customer information persists even after account deletion
+  const customerUser = await getRow('SELECT full_name, phone FROM users WHERE id = $1', [req.user.id]);
+
+  // PRODUCTION ROOT FIX: Use transaction with row-level locking to prevent race conditions
+  // This ensures atomic duplicate check + booking creation, preventing false duplicates
+  // The transaction ensures that if two requests come in simultaneously, only one succeeds
+  const bookingResult = await withTransaction(async (client) => {
+    // CRITICAL: Use FOR UPDATE to lock rows and prevent race conditions
+    // This ensures that concurrent requests wait for each other
+    // PRODUCTION FIX: Simplified date comparison to avoid timezone issues
+    // Compare dates as strings (YYYY-MM-DD) to ensure exact match regardless of timezone
+    const appointmentDateStr = appointmentDate; // Already in YYYY-MM-DD format from frontend
+    const potentialDuplicates = await client.query(`
+      SELECT b.id, b.status, b.appointment_date, b.appointment_time, b.provider_service_id
+      FROM bookings b
+      WHERE b.user_id = $1
+        AND b.provider_service_id = $2
+        AND b.appointment_date::date = $3::date
+        AND b.status IN ('pending', 'accepted')
+        AND b.appointment_date::date >= CURRENT_DATE
+        AND b.appointment_time IS NOT NULL 
+        AND b.appointment_time::text != '' 
+        AND b.appointment_time::text != '00:00:00'
+      FOR UPDATE
+    `, [req.user.id, providerServiceId, appointmentDateStr]);
+
+    // Normalize and compare times - only consider valid normalized times
+    let existingBooking = null;
+    if (potentialDuplicates.rows && potentialDuplicates.rows.length > 0) {
+      logger.info('Potential duplicates found, checking time matches', {
+        userId: req.user.id,
+        providerServiceId,
+        appointmentDate,
+        appointmentTime: normalizedAppointmentTime,
+        potentialDuplicatesCount: potentialDuplicates.rows.length,
+        potentialDuplicates: potentialDuplicates.rows.map(b => ({
+          id: b.id,
+          status: b.status,
+          appointment_date: b.appointment_date,
+          appointment_time: b.appointment_time,
+          provider_service_id: b.provider_service_id
+        }))
+      });
+
+      for (const booking of potentialDuplicates.rows) {
+        // Verify provider_service_id matches (defensive check)
+        if (booking.provider_service_id !== providerServiceId) {
+          logger.info('Skipping booking with mismatched provider_service_id', {
+            bookingId: booking.id,
+            expected: providerServiceId,
+            actual: booking.provider_service_id
+          });
+          continue;
+        }
+        
+        // Skip if booking time is null or invalid
+        const bookingTimeStr = String(booking.appointment_time || '').trim();
+        if (!bookingTimeStr || bookingTimeStr === '' || bookingTimeStr === '00:00:00') {
+          logger.info('Skipping booking with invalid appointment_time', {
+            bookingId: booking.id,
+            appointmentTime: booking.appointment_time
+          });
+          continue;
+        }
+        
+        const normalizedStoredTime = normalizeAppointmentTime(bookingTimeStr);
+        
+        // Only compare if both times are successfully normalized
+        if (!normalizedStoredTime) {
+          logger.info('Skipping booking with unnormalizable appointment_time', {
+            bookingId: booking.id,
+            appointmentTime: booking.appointment_time
+          });
+          continue;
+        }
+        
+        logger.info('Comparing normalized times', {
+          bookingId: booking.id,
+          storedNormalizedTime: normalizedStoredTime,
+          requestedNormalizedTime: normalizedAppointmentTime,
+          match: normalizedStoredTime === normalizedAppointmentTime
+        });
+        
+        if (normalizedStoredTime === normalizedAppointmentTime) {
+          existingBooking = booking;
+          break;
+        }
+      }
+    } else {
+      logger.info('No potential duplicates found', {
+        userId: req.user.id,
+        providerServiceId,
+        appointmentDate,
+        appointmentTime: normalizedAppointmentTime
+      });
+    }
+
+    if (existingBooking) {
+      logger.warn('Duplicate booking attempt blocked (within transaction)', {
+        userId: req.user.id,
+        providerServiceId,
+        appointmentDate,
+        appointmentTime: normalizedAppointmentTime,
+        existingBookingId: existingBooking.id,
+        existingStatus: existingBooking.status,
+        existingTime: existingBooking.appointment_time,
+        existingDate: existingBooking.appointment_date
+      });
+      throw new ValidationError('You already have a booking with this provider at the same date and time. Please choose a different time or wait for the current booking to be completed or cancelled.');
+    }
+
+    // All duplicate checks passed - create booking within the same transaction
+    // This ensures atomicity: either the duplicate check AND booking creation both succeed, or both fail
+    // PRODUCTION ROOT FIX: Store provider and customer details directly in bookings table
+    // This ensures information persists even if provider/customer deletes service/account
+    const insertResult = await client.query(`
+      INSERT INTO bookings (
+        user_id, 
+        provider_service_id, 
+        provider_id, 
+        selected_service, 
+        appointment_date, 
+        appointment_time, 
+        service_charge_value, 
+        is_viewed_by_provider,
+        provider_name,
+        provider_phone,
+        provider_profile_pic_url,
+        customer_name,
+        customer_phone
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, $8, $9, $10, $11, $12)
+      RETURNING *
+    `, [
+      req.user.id, 
+      providerServiceId, 
+      providerId, 
+      selectedServiceToStore, 
+      appointmentDate, 
+      normalizedAppointmentTime, 
+      serviceChargeValue,
+      providerService.provider_name || null,
+      providerService.provider_phone || null,
+      providerService.provider_profile_pic_url || null,
+      customerUser?.full_name || null,
+      customerUser?.phone || null
+    ]);
+
+    return { newBooking: insertResult.rows[0] };
+  }, { name: 'booking-creation', retries: 1 });
+
+  // Extract booking from transaction result
+  const newBooking = bookingResult.newBooking;
 
   // Emit real-time event to both the provider's and customer's userId rooms
   const providerUserId = providerService.provider_user_id;
@@ -488,13 +559,14 @@ router.get('/', auth, asyncHandler(async (req, res) => {
 router.get('/:id', auth, asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  // PRODUCTION FIX: Use LEFT JOIN to ensure bookings remain visible even after service deletion
+  // PRODUCTION ROOT FIX: Use stored provider details as primary source, JOIN as fallback
+  // This ensures provider information persists even after service/account deletion
   const booking = await getRow(`
       SELECT 
         b.*,
-        COALESCE(u.full_name, 'Provider') as provider_name,
-        COALESCE(u.phone, '') as provider_phone,
-        u.profile_pic_url as provider_profile_pic_url,
+        COALESCE(b.provider_name, u.full_name, 'Provider') as provider_name,
+        COALESCE(b.provider_phone, u.phone, '') as provider_phone,
+        COALESCE(b.provider_profile_pic_url, u.profile_pic_url) as provider_profile_pic_url,
         COALESCE(sm.name, b.selected_service, 'Service') as service_name,
         ps.working_proof_urls
       FROM bookings b
@@ -521,15 +593,24 @@ router.get('/:id', auth, asyncHandler(async (req, res) => {
     getIO().to(req.user.id).emit('booking_viewed', { bookingId: id });
   }
 
-  // Get rating if exists
-  const rating = await getRow('SELECT * FROM ratings WHERE booking_id = $1', [id]);
+  // PRODUCTION FIX: Get rating if exists - ensure it belongs to this specific booking
+  // Add explicit validation to prevent rating from other bookings being returned
+  const rating = await getRow(`
+    SELECT r.* 
+    FROM ratings r
+    WHERE r.booking_id = $1
+    LIMIT 1
+  `, [id]);
+
+  // PRODUCTION FIX: Validate rating belongs to this booking (defensive check)
+  const validatedRating = rating && rating.booking_id === id ? rating : null;
 
   res.json({
     status: 'success',
     data: {
       booking: {
         ...booking,
-        rating: rating || null
+        rating: validatedRating || null
       }
     }
   });
@@ -747,20 +828,78 @@ router.post('/:id/rate', auth, [
     throw new ValidationError('Can only rate completed bookings');
   }
 
-  // Check if already rated
-  const existingRating = await getRow('SELECT * FROM ratings WHERE booking_id = $1', [id]);
+  // PRODUCTION ROOT FIX: Check if already rated with explicit validation
+  // Ensure we're checking the correct booking_id and that rating belongs to this booking
+  const existingRating = await getRow(`
+    SELECT r.* 
+    FROM ratings r
+    WHERE r.booking_id = $1
+    LIMIT 1
+  `, [id]);
+  
   if (existingRating) {
-    throw new ValidationError('Booking already rated');
+    // PRODUCTION FIX: Double-check that rating belongs to this booking (defensive validation)
+    if (existingRating.booking_id !== id) {
+      logger.error('Rating booking_id mismatch detected', {
+        ratingId: existingRating.id,
+        expectedBookingId: id,
+        actualBookingId: existingRating.booking_id,
+        userId: req.user.id
+      });
+      throw new ValidationError('Rating data inconsistency detected. Please contact support.');
+    }
+    
+    logger.warn('Booking already rated - update not supported', {
+      bookingId: id,
+      ratingId: existingRating.id,
+      userId: req.user.id,
+      existingRating: existingRating.rating
+    });
+    throw new ValidationError('This booking has already been rated. Each booking can only be rated once.');
   }
 
-  // Create rating
-  const result = await query(`
-    INSERT INTO ratings (booking_id, rating, review)
-    VALUES ($1, $2, $3)
-    RETURNING *
-  `, [id, rating, review]);
+  // PRODUCTION ROOT FIX: Use transaction to ensure atomic rating creation
+  // This prevents race conditions where multiple ratings might be created for the same booking
+  const { withTransaction } = require('../database/connection');
+  const ratingResult = await withTransaction(async (client) => {
+    // Re-check rating existence within transaction (prevent race condition)
+    const recheckRating = await client.query(`
+      SELECT r.* 
+      FROM ratings r
+      WHERE r.booking_id = $1
+      FOR UPDATE
+      LIMIT 1
+    `, [id]);
+    
+    if (recheckRating.rows.length > 0) {
+      const existing = recheckRating.rows[0];
+      if (existing.booking_id === id) {
+        throw new ValidationError('This booking has already been rated. Each booking can only be rated once.');
+      }
+    }
+    
+    // Create rating within transaction
+    const result = await client.query(`
+      INSERT INTO ratings (booking_id, rating, review, created_at)
+      VALUES ($1, $2, $3, NOW())
+      RETURNING *
+    `, [id, rating, review || null]);
+    
+    return result.rows[0];
+  }, { name: 'rating-creation', retries: 1 });
 
-  const newRating = result.rows[0];
+  const newRating = ratingResult;
+
+  // PRODUCTION FIX: Validate that the created rating belongs to the correct booking
+  if (newRating.booking_id !== id) {
+    logger.error('CRITICAL: Created rating has wrong booking_id', {
+      ratingId: newRating.id,
+      expectedBookingId: id,
+      actualBookingId: newRating.booking_id,
+      userId: req.user.id
+    });
+    throw new ValidationError('Rating creation error. Please try again.');
+  }
 
   // Fetch provider user_id and service_name (use LEFT JOIN to handle deleted services)
   const ratingBooking = await getRow(`

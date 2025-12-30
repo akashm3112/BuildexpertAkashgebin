@@ -183,14 +183,34 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 const server = http.createServer(app);
+// PRODUCTION: Optimized Socket.IO configuration for 3-4k concurrent users
+// Key optimizations:
+// - pingTimeout: 60s (default 20s) - allows for slower networks
+// - pingInterval: 25s (default 25s) - standard heartbeat
+// - maxHttpBufferSize: 1MB (default 1MB) - limit message size
+// - transports: websocket first (more efficient), polling fallback
+// - allowEIO3: true - backward compatibility
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins, // Use same origins as Express CORS configuration
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   },
-  transports: ['websocket', 'polling'],
-  allowEIO3: true
+  transports: ['websocket', 'polling'], // WebSocket first (more efficient), polling fallback
+  allowEIO3: true, // Backward compatibility
+  // Performance optimizations for high concurrency
+  pingTimeout: 60000, // 60 seconds (increased from default 20s for slower networks)
+  pingInterval: 25000, // 25 seconds (standard heartbeat)
+  maxHttpBufferSize: 1e6, // 1MB max message size (prevents memory issues)
+  // Connection management
+  connectTimeout: 45000, // 45 seconds to establish connection
+  // Upgrade timeout
+  upgradeTimeout: 10000, // 10 seconds for transport upgrade
+  // Allow more concurrent connections
+  allowRequest: (req, callback) => {
+    // Allow all connections (rate limiting handled elsewhere)
+    callback(null, true);
+  }
 });
 
 // Store active calls with automatic cleanup
@@ -371,8 +391,21 @@ io.on('connection', (socket) => {
 
   // WebRTC Offer
   socket.on('call:offer', ({ bookingId, offer, to }) => {
-    // WebRTC signaling logging removed for production
-    io.to(to).emit('call:offer', {
+    // PRODUCTION FIX: Use active call to verify receiver and route correctly
+    const call = activeCalls.get(bookingId);
+    if (!call) {
+      logger.warn('Call offer received for non-existent call', { bookingId, from: socket.userId, to });
+      return;
+    }
+    
+    // Verify the call is active and receiver matches
+    const receiverId = call.receiverId;
+    if (receiverId !== to) {
+      logger.warn('Call offer receiver mismatch', { bookingId, expected: receiverId, received: to });
+    }
+    
+    // Route offer to receiver's room (userId)
+    io.to(receiverId).emit('call:offer', {
       bookingId,
       offer,
       from: socket.userId
@@ -381,8 +414,16 @@ io.on('connection', (socket) => {
 
   // WebRTC Answer
   socket.on('call:answer', ({ bookingId, answer, to }) => {
-    // WebRTC answer logging removed for production
-    io.to(to).emit('call:answer', {
+    // PRODUCTION FIX: Use active call to get caller ID and route correctly
+    const call = activeCalls.get(bookingId);
+    if (!call) {
+      logger.warn('Call answer received for non-existent call', { bookingId, from: socket.userId, to });
+      return;
+    }
+    
+    // Route answer to caller's room (userId)
+    const callerId = call.callerId;
+    io.to(callerId).emit('call:answer', {
       bookingId,
       answer,
       from: socket.userId
@@ -391,8 +432,18 @@ io.on('connection', (socket) => {
 
   // ICE Candidate
   socket.on('call:ice-candidate', ({ bookingId, candidate, to }) => {
-    // ICE candidate logging removed for production
-    io.to(to).emit('call:ice-candidate', {
+    // PRODUCTION FIX: Use active call to route ICE candidates correctly
+    const call = activeCalls.get(bookingId);
+    if (!call) {
+      // ICE candidates can arrive after call ends, so this is not critical
+      return;
+    }
+    
+    // Determine target based on who sent the candidate
+    const targetId = socket.userId === call.callerId ? call.receiverId : call.callerId;
+    
+    // Route ICE candidate to the other participant
+    io.to(targetId).emit('call:ice-candidate', {
       bookingId,
       candidate,
       from: socket.userId
@@ -508,6 +559,13 @@ process.on('uncaughtException', (error) => {
 const gracefulShutdown = async (signal) => {
   logger.info(`Received ${signal}, starting graceful shutdown...`);
   
+  // Prevent multiple shutdown attempts
+  if (gracefulShutdown.inProgress) {
+    logger.info('Graceful shutdown already in progress, skipping');
+    return;
+  }
+  gracefulShutdown.inProgress = true;
+  
   // Stop accepting new connections
   server.close(() => {
     logger.info('HTTP server closed');
@@ -518,11 +576,10 @@ const gracefulShutdown = async (signal) => {
     logger.info('Socket.IO closed');
   });
   
-  // Close database pool
+  // Close database pool using centralized cleanup function
   try {
-    const { pool } = require('./database/connection');
-    await pool.end();
-    logger.info('Database connections closed');
+    const { closePool } = require('./database/connection');
+    await closePool();
   } catch (error) {
     logger.error('Error closing database pool', { error: error.message });
   }

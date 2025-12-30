@@ -15,8 +15,11 @@ class DatabaseOptimizer {
       paramCount = 2;
     } else {
       // For providers
+      // PRODUCTION ROOT FIX: Use b.provider_id instead of ps.provider_id
+      // This ensures bookings remain visible even after service deletion
+      // The provider_id is stored directly in bookings table (from migration 025)
       whereClause = `
-        WHERE ps.provider_id = (
+        WHERE b.provider_id = (
           SELECT id FROM provider_profiles WHERE user_id = $1
         )
       `;
@@ -44,13 +47,17 @@ class DatabaseOptimizer {
         b.description,
         b.created_at,
         -- User/Provider info
+        -- PRODUCTION ROOT FIX: Use stored provider details as primary source, JOIN as fallback
+        -- This ensures provider information persists even after service/account deletion
         ${userType === 'user' ? `
-          COALESCE(u_provider.full_name, 'Provider') as provider_name,
-          COALESCE(u_provider.phone, '') as provider_phone,
-          u_provider.profile_pic_url as provider_profile_pic_url,
+          COALESCE(b.provider_name, u_provider.full_name, 'Provider') as provider_name,
+          COALESCE(b.provider_phone, u_provider.phone, '') as provider_phone,
+          COALESCE(b.provider_profile_pic_url, u_provider.profile_pic_url) as provider_profile_pic_url,
         ` : `
-          u.full_name as customer_name,
-          u.phone as customer_phone,
+          -- PRODUCTION ROOT FIX: Use stored customer details as primary source, JOIN as fallback
+          -- This ensures customer information persists even after account deletion
+          COALESCE(b.customer_name, u.full_name, 'Customer') as customer_name,
+          COALESCE(b.customer_phone, u.phone, '') as customer_phone,
           a_customer.state as customer_state,
           a_customer.full_address as customer_address,
         `}
@@ -59,10 +66,11 @@ class DatabaseOptimizer {
         ps.id as provider_service_id,
         b.service_charge_value,
         ps.working_proof_urls,
-        -- Rating info (if exists)
+        -- Rating info (if exists) - PRODUCTION FIX: Explicitly ensure rating belongs to this booking
         r.rating as rating_value,
         r.review as rating_review,
-        r.created_at as rating_created_at
+        r.created_at as rating_created_at,
+        r.booking_id as rating_booking_id
       FROM bookings b
       LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
       LEFT JOIN provider_profiles pp ON ps.provider_id = pp.id
@@ -72,6 +80,7 @@ class DatabaseOptimizer {
       ${userType === 'provider' ? `
         LEFT JOIN addresses a_customer ON a_customer.user_id = b.user_id AND a_customer.type = 'home'
       ` : ''}
+      -- PRODUCTION ROOT FIX: Explicitly ensure rating belongs to this specific booking
       LEFT JOIN ratings r ON r.booking_id = b.id
       ${whereClause}
       ORDER BY b.created_at DESC
@@ -79,11 +88,14 @@ class DatabaseOptimizer {
     `, [...queryParams, limit, offset]);
 
     // Get total count efficiently (use LEFT JOIN to include bookings with deleted services)
+    // PRODUCTION ROOT FIX: For providers, use b.provider_id directly (no JOIN needed for count)
     const countResult = await getRow(`
       SELECT COUNT(*) as total
       FROM bookings b
-      LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
-      LEFT JOIN provider_profiles pp ON ps.provider_id = pp.id
+      ${userType === 'provider' ? '' : `
+        LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
+        LEFT JOIN provider_profiles pp ON ps.provider_id = pp.id
+      `}
       ${whereClause}
     `, queryParams);
 
@@ -114,7 +126,9 @@ class DatabaseOptimizer {
         customer_state: b.customer_state,
         customer_address: b.customer_address,
       }),
-      rating: b.rating_value !== null ? {
+      // PRODUCTION ROOT FIX: Validate rating belongs to this booking before including it
+      // This prevents ratings from other bookings being incorrectly associated
+      rating: (b.rating_value !== null && b.rating_booking_id === b.id) ? {
         rating: b.rating_value,
         review: b.rating_review,
         created_at: b.rating_created_at

@@ -13,7 +13,7 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (including devDependencies for potential build tools)
+# Install dependencies (including PM2 for production clustering)
 RUN npm ci --only=production && npm cache clean --force
 
 # Stage 2: Production stage
@@ -55,6 +55,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application
-CMD ["node", "server.js"]
+# Start the application with PM2 for clustering (production-ready)
+# PM2-runtime is designed for Docker/containerized environments
+# It automatically handles clustering, restarts, and signal forwarding
+CMD ["npx", "pm2-runtime", "start", "ecosystem.config.js", "--env", "production"]
 

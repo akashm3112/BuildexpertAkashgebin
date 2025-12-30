@@ -41,6 +41,11 @@ const addSubServicesRemoveServiceCharge = require('./027-add-sub-services-remove
 const addComprehensiveIndexes = require('./028-comprehensive-database-indexes');
 const addMissingProductionIndexes = require('./029-add-missing-production-indexes');
 const addSubServiceIdColumn = require('./030-add-sub-service-id-column');
+const addNameChangeCount = require('./031-add-name-change-count');
+const addLoginPerformanceIndexes = require('./032-add-login-performance-indexes');
+const addProviderDetailsToBookings = require('./033-add-provider-details-to-bookings');
+const preserveBookingsOnUserDeletion = require('./034-preserve-bookings-on-user-deletion');
+const addCustomerDetailsToBookings = require('./035-add-customer-details-to-bookings');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -253,8 +258,43 @@ const migrations = [
     description: 'Adds sub_service_id TEXT column to provider_sub_services table to store frontend sub-service IDs (like room-painting, fancy-wall-painting, etc.) that don\'t exist as separate services in services_master. Makes service_id nullable and updates unique constraint.',
     function: addSubServiceIdColumn,
     required: true // Required for sub-services feature to work correctly
-  }
-];
+  },
+  {
+    id: '031',
+    name: 'Add Name Change Count',
+    description: 'Adds name_change_count column to users table to track and limit name changes',
+    function: addNameChangeCount,
+    required: false
+  },
+  {
+    id: '032',
+    name: 'Add Login Performance Indexes',
+    description: 'Adds composite indexes on login_attempts, users, and blocked_identifiers tables to optimize login endpoint performance',
+    function: addLoginPerformanceIndexes,
+    required: false // Performance optimization, not critical for functionality
+  },
+    {
+      id: '033',
+      name: 'Add Provider Details to Bookings',
+      description: 'Adds provider_name, provider_phone, and provider_profile_pic_url columns to bookings table to preserve provider information even after service/account deletion.',
+      function: addProviderDetailsToBookings,
+      required: true // Required to preserve provider information in historical bookings
+    },
+    {
+      id: '034',
+      name: 'Preserve Bookings on User Deletion',
+      description: 'Changes bookings.user_id foreign key from CASCADE to SET NULL to preserve bookings when customer deletes account. This ensures providers can still see all their past bookings.',
+      function: preserveBookingsOnUserDeletion,
+      required: true // Required to preserve provider booking history
+    },
+    {
+      id: '035',
+      name: 'Add Customer Details to Bookings',
+      description: 'Adds customer_name and customer_phone columns to bookings table to preserve customer information even after account deletion. This ensures provider bookings remain fully visible with customer details.',
+      function: addCustomerDetailsToBookings,
+      required: true // Required to preserve customer information in provider bookings
+    }
+  ];
 
 // Constants
 const ADVISORY_LOCK_ID = 1234567890; // Unique lock ID for migrations

@@ -487,11 +487,12 @@ router.get('/bookings/unread-count', auth, asyncHandler(async (req, res) => {
   }
 
   // Count unread bookings (pending or cancelled) for this provider
+  // PRODUCTION ROOT FIX: Use b.provider_id instead of JOIN with provider_services
+  // This ensures stats remain accurate even after service deletion
   const result = await getRows(
     `SELECT COUNT(*) as count 
      FROM bookings b
-     JOIN provider_services ps ON b.provider_service_id = ps.id
-     WHERE ps.provider_id = $1 
+     WHERE b.provider_id = $1 
        AND b.status IN ('pending', 'cancelled') 
        AND b.is_viewed_by_provider = FALSE`,
     [providerProfile.id]
@@ -569,12 +570,12 @@ router.put('/bookings/mark-all-viewed', auth, asyncHandler(async (req, res) => {
   }
 
   // Mark all unread bookings with tracked statuses as viewed
+  // PRODUCTION ROOT FIX: Use b.provider_id instead of JOIN with provider_services
+  // This ensures updates work even after service deletion
   const result = await query(
     `UPDATE bookings 
      SET is_viewed_by_provider = TRUE 
-     FROM provider_services ps
-     WHERE bookings.provider_service_id = ps.id
-       AND ps.provider_id = $1
+     WHERE bookings.provider_id = $1
        AND bookings.status IN ('pending', 'cancelled') 
        AND bookings.is_viewed_by_provider = FALSE`,
     [providerProfile.id]
@@ -603,12 +604,17 @@ router.put('/bookings/:id/status', [
   const { status, rejectionReason } = req.body;
 
   // Check if booking belongs to provider
+  // PRODUCTION ROOT FIX: Use b.provider_id instead of JOIN with provider_services
+  // This ensures bookings remain accessible even after service deletion
+  const providerProfile = await getRow('SELECT id FROM provider_profiles WHERE user_id = $1', [req.user.id]);
+  if (!providerProfile) {
+    throw new NotFoundError('Provider profile');
+  }
+  
   const booking = await getRow(`
     SELECT b.* FROM bookings b
-    JOIN provider_services ps ON b.provider_service_id = ps.id
-    JOIN provider_profiles pp ON ps.provider_id = pp.id
-    WHERE b.id = $1 AND pp.user_id = $2
-  `, [id, req.user.id]);
+    WHERE b.id = $1 AND b.provider_id = $2
+  `, [id, providerProfile.id]);
 
   if (!booking) {
     throw new NotFoundError('Booking', id);

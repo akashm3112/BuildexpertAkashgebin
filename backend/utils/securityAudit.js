@@ -76,13 +76,14 @@ const logLoginAttempt = async (phone, ipAddress, attemptType, failureReason, use
  */
 const getRecentFailedAttempts = async (phone, minutes = 15) => {
   try {
+    // PRODUCTION FIX: Use parameterized query to prevent SQL injection and improve performance
     const result = await getRow(
       `SELECT COUNT(*) as count 
        FROM login_attempts 
        WHERE phone = $1 
          AND attempt_type = 'failed' 
-         AND attempted_at > CURRENT_TIMESTAMP - INTERVAL '${minutes} minutes'`,
-      [phone]
+         AND attempted_at > CURRENT_TIMESTAMP - ($2 || ' minutes')::INTERVAL`,
+      [phone, minutes.toString()]
     );
     return parseInt(result?.count || 0, 10);
   } catch (error) {
@@ -102,13 +103,14 @@ const getRecentFailedAttempts = async (phone, minutes = 15) => {
  */
 const getRecentFailedAttemptsFromIP = async (ipAddress, minutes = 15) => {
   try {
+    // PRODUCTION FIX: Use parameterized query to prevent SQL injection and improve performance
     const result = await getRow(
       `SELECT COUNT(*) as count 
        FROM login_attempts 
        WHERE ip_address = $1 
          AND attempt_type = 'failed' 
-         AND attempted_at > CURRENT_TIMESTAMP - INTERVAL '${minutes} minutes'`,
-      [ipAddress]
+         AND attempted_at > CURRENT_TIMESTAMP - ($2 || ' minutes')::INTERVAL`,
+      [ipAddress, minutes.toString()]
     );
     return parseInt(result?.count || 0, 10);
   } catch (error) {

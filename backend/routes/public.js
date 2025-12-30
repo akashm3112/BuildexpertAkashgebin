@@ -465,15 +465,52 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
     };
 
     // Get provider's ratings
-    const ratings = await getRows(`
-    SELECT r.rating, r.review, r.created_at, u.full_name as customer_name
-    FROM ratings r
-    JOIN bookings b ON r.booking_id = b.id
-    JOIN users u ON b.user_id = u.id
-    WHERE b.provider_service_id = $1
-    ORDER BY r.created_at DESC
-    LIMIT 10
-  `, [providerId]);
+    // PRODUCTION ROOT FIX: Use b.provider_id instead of b.provider_service_id
+    // This ensures ratings remain visible even after service deletion
+    // First get the provider_id from provider_service_id
+    let providerServiceInfo = await getRow(`
+      SELECT provider_id FROM provider_services WHERE id = $1
+    `, [providerId]);
+    
+    let ratings = [];
+    if (providerServiceInfo && providerServiceInfo.provider_id) {
+      // PRODUCTION ROOT FIX: Use LEFT JOIN and stored customer_name to handle deleted accounts
+      ratings = await getRows(`
+        SELECT 
+          r.rating, 
+          r.review, 
+          r.created_at, 
+          COALESCE(b.customer_name, u.full_name, 'Customer') as customer_name
+        FROM ratings r
+        JOIN bookings b ON r.booking_id = b.id
+        LEFT JOIN users u ON b.user_id = u.id
+        WHERE b.provider_id = $1
+        ORDER BY r.created_at DESC
+        LIMIT 10
+      `, [providerServiceInfo.provider_id]);
+    } else {
+      // If service is deleted, try to get provider_id from bookings table
+      const bookingInfo = await getRow(`
+        SELECT DISTINCT provider_id FROM bookings WHERE provider_service_id = $1 LIMIT 1
+      `, [providerId]);
+      
+      if (bookingInfo && bookingInfo.provider_id) {
+        // PRODUCTION ROOT FIX: Use LEFT JOIN and stored customer_name to handle deleted accounts
+        ratings = await getRows(`
+          SELECT 
+            r.rating, 
+            r.review, 
+            r.created_at, 
+            COALESCE(b.customer_name, u.full_name, 'Customer') as customer_name
+          FROM ratings r
+          JOIN bookings b ON r.booking_id = b.id
+          LEFT JOIN users u ON b.user_id = u.id
+          WHERE b.provider_id = $1
+          ORDER BY r.created_at DESC
+          LIMIT 10
+        `, [bookingInfo.provider_id]);
+      }
+    }
 
     // Calculate average rating
     const avgRating = ratings.length > 0 
@@ -567,24 +604,52 @@ router.get('/featured-providers', asyncHandler(async (req, res) => {
     
     const providerServiceIds = providers.map(p => p.provider_service_id);
     
-    // Single query to get all ratings for all providers using aggregation
-    const ratingsData = await getRows(`
-      SELECT 
-        b.provider_service_id,
-        COUNT(r.rating) as total_reviews,
-        COALESCE(AVG(r.rating), 0) as average_rating
-      FROM bookings b
-      LEFT JOIN ratings r ON r.booking_id = b.id
-      WHERE b.provider_service_id = ANY($1::uuid[])
-      GROUP BY b.provider_service_id
+    // PRODUCTION ROOT FIX: Get provider_id for each provider_service_id
+    // Then calculate ratings based on provider_id instead of provider_service_id
+    // This ensures ratings remain accurate even after service deletion
+    const providerServiceMap = await getRows(`
+      SELECT id, provider_id FROM provider_services WHERE id = ANY($1::uuid[])
     `, [providerServiceIds]);
     
-    // Create a map of ratings by provider_service_id
-    const ratingsMap = {};
+    const providerIds = [...new Set(providerServiceMap.map(ps => ps.provider_id).filter(Boolean))];
+    
+    let ratingsData = [];
+    if (providerIds.length > 0) {
+      ratingsData = await getRows(`
+        SELECT 
+          b.provider_id,
+          COUNT(r.rating) as total_reviews,
+          COALESCE(AVG(r.rating), 0) as average_rating
+        FROM bookings b
+        LEFT JOIN ratings r ON r.booking_id = b.id
+        WHERE b.provider_id = ANY($1::uuid[])
+        GROUP BY b.provider_id
+      `, [providerIds]);
+    }
+    
+    // Create a map from provider_service_id to provider_id
+    const serviceToProviderMap = {};
+    providerServiceMap.forEach(ps => {
+      serviceToProviderMap[ps.id] = ps.provider_id;
+    });
+    
+    // Create a map from provider_id to ratings
+    const providerRatingsMap = {};
     ratingsData.forEach(rating => {
-      ratingsMap[rating.provider_service_id] = {
-        totalReviews: parseInt(rating.total_reviews || 0, 10),
-        averageRating: Math.round(parseFloat(rating.average_rating || 0) * 10) / 10
+      providerRatingsMap[rating.provider_id] = {
+        total_reviews: rating.total_reviews,
+        average_rating: rating.average_rating
+      };
+    });
+    
+    // Map ratings back to provider_service_id for compatibility
+    const ratingsMap = {};
+    providerServiceIds.forEach(serviceId => {
+      const providerId = serviceToProviderMap[serviceId];
+      const ratingData = providerRatingsMap[providerId] || { total_reviews: 0, average_rating: 0 };
+      ratingsMap[serviceId] = {
+        totalReviews: parseInt(ratingData.total_reviews || 0, 10),
+        averageRating: Math.round(parseFloat(ratingData.average_rating || 0) * 10) / 10
       };
     });
     

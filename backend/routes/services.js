@@ -147,26 +147,41 @@ router.use(auth);
 // @desc    Get current provider's registered services
 // @access  Private
 router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(async (req, res) => {
-  logger.info('MY-REGISTRATIONS endpoint called', {
-    userId: req.user.id,
-    role: req.user.role
-  });
+  // PRODUCTION OPTIMIZATION: Check cache FIRST before any database queries
+  // This prevents expensive operations when data hasn't changed (304 Not Modified)
+  const cacheKey = CacheKeys.providerRegistrations(req.user.id);
+  const cache = caches.semiStatic;
+  const cached = cache.get(cacheKey);
   
-  // Authentication and role check handled by middleware (auth + requireRole(['provider']))
+  if (cached !== null) {
+    // Generate ETag from cached data for 304 Not Modified support
+    const crypto = require('crypto');
+    const etag = crypto.createHash('md5').update(JSON.stringify(cached)).digest('hex');
+    res.set('ETag', `"${etag}"`);
+    
+    // Check if client has matching ETag (304 Not Modified) - return immediately
+    if (req.headers['if-none-match'] === `"${etag}"`) {
+      return res.status(304).end();
+    }
+    
+    // Return cached data
+    res.set('X-Cache', 'HIT');
+    return res.json(cached);
+  }
+  
+  res.set('X-Cache', 'MISS');
 
-  // First check if user has a provider profile
-  const providerProfile = await getRow('SELECT * FROM provider_profiles WHERE user_id = $1', [req.user.id]);
-  logger.info('Provider profile lookup', {
-    userId: req.user.id,
-    found: !!providerProfile
-  });
+  // First check if user has a provider profile (optimized - only select id)
+  const providerProfile = await getRow('SELECT id FROM provider_profiles WHERE user_id = $1', [req.user.id]);
 
   if (!providerProfile) {
-    logger.info('No provider profile found', { userId: req.user.id });
-    return res.json({
+    const emptyResult = {
       status: 'success',
       data: { registeredServices: [] }
-    });
+    };
+    // Cache empty result for 5 minutes
+    cache.set(cacheKey, emptyResult, { ttl: 300000 });
+    return res.json(emptyResult);
   }
 
   // Fetch all required fields for service management (view/edit/delete)
@@ -199,19 +214,26 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
     ORDER BY ps.created_at DESC
   `, [req.user.id]);
 
-  // PRODUCTION OPTIMIZATION: Check table existence once instead of in loop
+  // PRODUCTION OPTIMIZATION: Cache table existence check (table structure doesn't change)
+  // Check once per server restart instead of every request
   let tableExists = false;
-  try {
-    const tableCheck = await getRow(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'provider_sub_services'
-      );
-    `);
-    tableExists = tableCheck && tableCheck.exists;
-  } catch (error) {
-    logger.warn('Could not check provider_sub_services table existence', { error: error.message });
+  if (!global._providerSubServicesTableExists) {
+    try {
+      const tableCheck = await getRow(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'provider_sub_services'
+        );
+      `);
+      tableExists = tableCheck && tableCheck.exists;
+      global._providerSubServicesTableExists = tableExists; // Cache globally
+    } catch (error) {
+      // Table check failed - assume it doesn't exist
+      global._providerSubServicesTableExists = false;
+    }
+  } else {
+    tableExists = global._providerSubServicesTableExists;
   }
 
   // PRODUCTION OPTIMIZATION: Batch fetch all sub-services in one query instead of N queries
@@ -288,11 +310,6 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
     };
   });
 
-  logger.info('Found registered services', {
-    userId: req.user.id,
-    count: registeredServices.length
-  });
-
   // PRODUCTION FIX: Ensure working_proof_urls is properly serialized as array
   // PostgreSQL TEXT[] arrays are automatically parsed by pg library, but ensure they're arrays
   const serializedServices = servicesWithSubServices.map(service => ({
@@ -305,14 +322,19 @@ router.get('/my-registrations', auth, requireRole(['provider']), asyncHandler(as
     sub_services: service.sub_services || []
   }));
 
-  // Cache user-specific registrations (semi-static - 5 minutes TTL)
-  const cacheKey = CacheKeys.providerRegistrations(req.user.id);
-  const result = await cacheQuery(cacheKey, async () => {
-    return {
-      status: 'success',
-      data: { registeredServices: serializedServices }
-    };
-  }, { cacheType: 'semiStatic', ttl: 300000 }); // 5 minutes
+  // Build result
+  const result = {
+    status: 'success',
+    data: { registeredServices: serializedServices }
+  };
+
+  // Cache the result for 5 minutes
+  cache.set(cacheKey, result, { ttl: 300000 });
+
+  // Generate ETag for future 304 responses
+  const crypto = require('crypto');
+  const etag = crypto.createHash('md5').update(JSON.stringify(result)).digest('hex');
+  res.set('ETag', `"${etag}"`);
 
   res.json(result);
 }));
@@ -531,15 +553,51 @@ router.get('/:id/providers/:providerId', asyncHandler(async (req, res) => {
   }
 
   // Get provider's ratings
+  // PRODUCTION ROOT FIX: Use b.provider_id instead of b.provider_service_id
+  // This ensures ratings remain visible even after service deletion
+  // First get the provider_id from provider_service_id
+  let providerServiceInfo = await getRow(`
+    SELECT provider_id FROM provider_services WHERE id = $1
+  `, [providerId]);
+  
+  if (!providerServiceInfo) {
+    // If service is deleted, try to get provider_id from bookings table
+    const bookingInfo = await getRow(`
+      SELECT DISTINCT provider_id FROM bookings WHERE provider_service_id = $1 LIMIT 1
+    `, [providerId]);
+    
+    if (!bookingInfo) {
+      return res.json({
+        status: 'success',
+        data: {
+          provider: {
+            ...provider,
+            ratings: [],
+            averageRating: 0,
+            totalReviews: 0
+          }
+        }
+      });
+    }
+    
+    providerServiceInfo.provider_id = bookingInfo.provider_id;
+  }
+  
+  // PRODUCTION ROOT FIX: Use LEFT JOIN and stored customer_name to handle deleted accounts
+  // This ensures ratings remain visible even after customer deletes account
   const ratings = await getRows(`
-    SELECT r.rating, r.review, r.created_at, u.full_name as customer_name
+    SELECT 
+      r.rating, 
+      r.review, 
+      r.created_at, 
+      COALESCE(b.customer_name, u.full_name, 'Customer') as customer_name
     FROM ratings r
     JOIN bookings b ON r.booking_id = b.id
-    JOIN users u ON b.user_id = u.id
-    WHERE b.provider_service_id = $1
+    LEFT JOIN users u ON b.user_id = u.id
+    WHERE b.provider_id = $1
     ORDER BY r.created_at DESC
     LIMIT 10
-  `, [providerId]);
+  `, [providerServiceInfo.provider_id]);
 
   // Calculate average rating
   const avgRating = ratings.length > 0 
@@ -1266,9 +1324,24 @@ router.delete('/my-registrations/:serviceId', auth, requireRole(['provider']), a
     userId: req.user.id
   });
 
-  // Invalidate cache after cancellation
+  // PRODUCTION FIX: Explicitly delete the provider registrations cache key
+  // This ensures immediate cache invalidation, consistent with POST endpoint
+  const registrationsCacheKey = CacheKeys.providerRegistrations(req.user.id);
+  
+  // Clear from semiStatic cache (where it's stored)
+  if (caches.semiStatic && typeof caches.semiStatic.delete === 'function') {
+    caches.semiStatic.delete(registrationsCacheKey);
+  }
+  
+  // Also invalidate using pattern matching (for any other related caches)
   invalidateUserCache(req.user.id);
   invalidateServiceCache(serviceRegistration.service_id);
+  
+  logger.info('Cache invalidated after service deletion', {
+    userId: req.user.id,
+    serviceId: serviceRegistration.service_id,
+    cacheKey: registrationsCacheKey
+  });
 
   res.json({
     status: 'success',

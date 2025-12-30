@@ -462,7 +462,12 @@ class SocketConnectionManager {
     this.io = io;
     this.connections = new Map(); // socketId -> connection data
     this.userSockets = new Map(); // userId -> Set of socketIds
-    this.maxConnectionsPerUser = 5; // Limit connections per user
+    // PRODUCTION: Configurable max connections per user (default: 15 for multi-device support)
+    // Users may have multiple devices (phone, tablet, desktop) and multiple tabs
+    // Warning threshold: 10, Action threshold: 20 (disconnect oldest)
+    this.maxConnectionsPerUser = parseInt(process.env.MAX_SOCKET_CONNECTIONS_PER_USER || '15', 10);
+    this.warningThreshold = Math.max(10, Math.floor(this.maxConnectionsPerUser * 0.67)); // Warn at 67% of max
+    this.actionThreshold = Math.max(20, Math.floor(this.maxConnectionsPerUser * 1.33)); // Take action at 133% of max
     this.connectionTimeout = 24 * 60 * 60 * 1000; // 24 hours
   }
 
@@ -486,10 +491,21 @@ class SocketConnectionManager {
         
         // Check connection limit per user
         const userConnections = this.userSockets.get(userId);
-        if (userConnections.size > this.maxConnectionsPerUser) {
-          logger.warn('User exceeded max connections', {
+        if (userConnections.size >= this.actionThreshold) {
+          // Too many connections - disconnect oldest ones
+          logger.warn('User exceeded action threshold, disconnecting oldest connections', {
             userId,
             count: userConnections.size,
+            threshold: this.actionThreshold,
+            max: this.maxConnectionsPerUser
+          });
+          this.disconnectOldestConnections(userId, userConnections.size - this.maxConnectionsPerUser);
+        } else if (userConnections.size >= this.warningThreshold) {
+          // Warning threshold - just log, don't take action
+          logger.info('User approaching connection limit', {
+            userId,
+            count: userConnections.size,
+            warningThreshold: this.warningThreshold,
             max: this.maxConnectionsPerUser
           });
         }
@@ -525,10 +541,21 @@ class SocketConnectionManager {
 
       // Check connection limit per user
       const userConnections = this.userSockets.get(userId);
-      if (userConnections.size > this.maxConnectionsPerUser) {
-        logger.warn('User exceeded max connections', {
+      if (userConnections.size >= this.actionThreshold) {
+        // Too many connections - disconnect oldest ones
+        logger.warn('User exceeded action threshold, disconnecting oldest connections', {
           userId,
           count: userConnections.size,
+          threshold: this.actionThreshold,
+          max: this.maxConnectionsPerUser
+        });
+        this.disconnectOldestConnections(userId, userConnections.size - this.maxConnectionsPerUser);
+      } else if (userConnections.size >= this.warningThreshold) {
+        // Warning threshold - just log, don't take action
+        logger.info('User approaching connection limit', {
+          userId,
+          count: userConnections.size,
+          warningThreshold: this.warningThreshold,
           max: this.maxConnectionsPerUser
         });
       }
@@ -581,6 +608,46 @@ class SocketConnectionManager {
   }
 
   /**
+   * Disconnect oldest connections for a user
+   * Used when user exceeds action threshold
+   */
+  disconnectOldestConnections(userId, countToDisconnect) {
+    const userConnections = this.userSockets.get(userId);
+    if (!userConnections || userConnections.size === 0) {
+      return;
+    }
+
+    // Get all connections for this user with their connection data
+    const connectionsWithData = Array.from(userConnections)
+      .map(socketId => {
+        const data = this.connections.get(socketId);
+        return data ? { socketId, ...data } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.connectedAt - b.connectedAt); // Sort by connection time (oldest first)
+
+    // Disconnect the oldest connections
+    let disconnected = 0;
+    for (let i = 0; i < Math.min(countToDisconnect, connectionsWithData.length); i++) {
+      const { socketId } = connectionsWithData[i];
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.disconnect(true);
+        this.unregisterConnection({ id: socketId });
+        disconnected++;
+      }
+    }
+
+    if (disconnected > 0) {
+      logger.info('Disconnected oldest connections for user', {
+        userId,
+        disconnected,
+        remaining: userConnections.size - disconnected
+      });
+    }
+  }
+
+  /**
    * Clean up stale connections
    */
   cleanupStaleConnections() {
@@ -620,20 +687,32 @@ class SocketConnectionManager {
       totalUsers: this.userSockets.size,
       averageConnectionsPerUser: this.userSockets.size > 0 ? 
         Math.round((this.connections.size / this.userSockets.size) * 10) / 10 : 0,
-      maxConnectionsPerUser: this.maxConnectionsPerUser
+      maxConnectionsPerUser: this.maxConnectionsPerUser,
+      warningThreshold: this.warningThreshold,
+      actionThreshold: this.actionThreshold
     };
   }
 
   /**
    * Start periodic cleanup
+   * PRODUCTION: More frequent cleanup for high concurrency (3-4k users)
+   * - Cleanup every 15 minutes instead of 1 hour
+   * - This prevents memory buildup with many connections
    */
   startCleanup() {
+    // For 3-4k users, cleanup more frequently to prevent memory buildup
+    const cleanupInterval = parseInt(process.env.SOCKET_CLEANUP_INTERVAL_MS || '900000', 10); // Default: 15 minutes
     this.cleanupTimer = setInterval(() => {
       this.cleanupStaleConnections();
-    }, 3600000); // Every hour
+    }, cleanupInterval);
 
     registry.registerTimer('socket-cleanup', this.cleanupTimer, 'interval');
-    logger.info('Socket cleanup job started');
+    logger.info('Socket cleanup job started', {
+      interval: `${cleanupInterval / 1000}s`,
+      maxConnectionsPerUser: this.maxConnectionsPerUser,
+      warningThreshold: this.warningThreshold,
+      actionThreshold: this.actionThreshold
+    });
   }
 
   /**

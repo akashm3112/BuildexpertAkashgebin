@@ -5,7 +5,7 @@
 
 const { query } = require('../database/connection');
 
-async function up() {
+async function addNameChangeCount() {
   console.log('🔄 Running migration: Add name_change_count to users table...');
   
   try {
@@ -39,35 +39,12 @@ async function up() {
     console.log('  ✅ Added index on users.name_change_count');
 
     console.log('✅ Migration completed: Add name_change_count to users table');
+    return { success: true };
   } catch (error) {
     console.error('❌ Migration failed:', error);
     throw error;
   }
 }
 
-async function down() {
-  console.log('🔄 Rolling back migration: Remove name_change_count from users table...');
-  
-  try {
-    // Remove index first
-    await query(`
-      DROP INDEX IF EXISTS idx_users_name_change_count;
-    `);
-    console.log('  ✅ Removed index on users.name_change_count');
-
-    // Remove column
-    await query(`
-      ALTER TABLE users 
-      DROP COLUMN IF EXISTS name_change_count;
-    `);
-    console.log('  ✅ Removed name_change_count column from users table');
-
-    console.log('✅ Rollback completed: Remove name_change_count from users table');
-  } catch (error) {
-    console.error('❌ Rollback failed:', error);
-    throw error;
-  }
-}
-
-module.exports = { up, down };
+module.exports = addNameChangeCount;
 

@@ -182,7 +182,16 @@ class WebRTCService {
     // Call accepted
     this.socket.on('call:accepted', async ({ receiverId, socketId }) => {
       this.events.onCallAccepted?.();
-      await this.createOffer();
+      
+      // PRODUCTION FIX: Create peer connection after call is accepted
+      // This ensures both caller and receiver are ready before signaling
+      try {
+        await this.createPeerConnection();
+        // Now create and send offer
+        await this.createOffer();
+      } catch (error) {
+        this.handleError(error, 'call_accepted_setup');
+      }
     });
 
     // Call rejected
@@ -253,109 +262,138 @@ class WebRTCService {
       await this.ensureServerCallSetup(callData);
       serverCallInitiated = true;
 
-      // Get local audio stream with error handling
-      try {
-        this.localStream = await mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-          video: false,
-        });
-      } catch (mediaError: any) {
-        if (mediaError.name === 'NotAllowedError') {
-          throw new Error('Microphone access denied. Please allow microphone access to make calls.');
-        } else if (mediaError.name === 'NotFoundError') {
-          throw new Error('No microphone found. Please connect a microphone to make calls.');
-        } else {
-          throw new Error('Failed to access microphone. Please check your audio settings.');
-        }
-      }
-
-      // Create peer connection
-      this.peerConnection = new RTCPeerConnection(RTC_CONFIG);
-
-      // Add local stream
-      this.localStream.getTracks().forEach((track: any) => {
-        this.peerConnection?.addTrack(track, this.localStream);
-      });
-
-      // Handle ICE candidates
-      this.peerConnection!.onicecandidate = (event) => {
-        if (event.candidate && this.peerConnection) {
-          this.socket?.emit('call:ice-candidate', {
-            bookingId: callData.bookingId,
-            candidate: event.candidate,
-            to: callData.receiverId,
-          });
-        }
-      };
-
-      // Handle connection state changes with comprehensive recovery
-      this.peerConnection!.onconnectionstatechange = () => {
-        if (!this.peerConnection) return;
-        
-        const state = this.peerConnection.connectionState;
-        
-        switch (state) {
-          case 'connected':
-            this.callStartTime = Date.now();
-            this.connectionRetryCount = 0;
-            webrtcErrorHandler.resetRetryCount('connection');
-            this.events.onCallConnected?.();
-            this.startCallQualityMonitoring();
-            break;
-            
-          case 'disconnected':
-            this.handleDisconnection();
-            break;
-            
-          case 'failed':
-            this.handleConnectionFailure();
-            break;
-            
-          case 'connecting':
-            // Connection attempt in progress
-            break;
-            
-          case 'closed':
-            this.cleanup();
-            break;
-        }
-      };
-
-      // Handle ICE connection state changes with recovery
-      this.peerConnection!.oniceconnectionstatechange = () => {
-        if (!this.peerConnection) return;
-        
-        const iceState = this.peerConnection.iceConnectionState;
-        
-        switch (iceState) {
-          case 'failed':
-            this.handleICEFailure();
-            break;
-            
-          case 'disconnected':
-            // ICE disconnected but may recover
-            break;
-            
-          case 'connected':
-          case 'completed':
-            // ICE connection successful
-            webrtcErrorHandler.resetRetryCount('ice');
-            break;
-        }
-      };
-
-      // Handle ICE gathering state
-      this.peerConnection!.onicegatheringstatechange = () => {
-        // ICE gathering state changed
-      };
+      // PRODUCTION FIX: Don't create peer connection here - wait for call to be accepted
+      // The peer connection will be created after call:accepted event
+      // This ensures both sides are ready before signaling begins
 
     } catch (error: any) {
       this.handleError(error, 'start_call', { serverCallInitiated });
     }
+  }
+
+  // PRODUCTION FIX: Create peer connection after call is accepted
+  private async createPeerConnection() {
+    if (!this.currentCall) {
+      throw new Error('No active call to create peer connection for');
+    }
+
+    // Get local audio stream with error handling
+    try {
+      this.localStream = await mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+    } catch (mediaError: any) {
+      if (mediaError.name === 'NotAllowedError') {
+        throw new Error('Microphone access denied. Please allow microphone access to make calls.');
+      } else if (mediaError.name === 'NotFoundError') {
+        throw new Error('No microphone found. Please connect a microphone to make calls.');
+      } else {
+        throw new Error('Failed to access microphone. Please check your audio settings.');
+      }
+    }
+
+    // Create peer connection
+    const config = this.useTurnServer ? RTC_CONFIG_WITH_TURN : RTC_CONFIG;
+    this.peerConnection = new RTCPeerConnection(config);
+
+    // PRODUCTION FIX: Add ontrack handler to receive remote audio stream
+    this.peerConnection.ontrack = (event) => {
+      // Remote stream received - React Native WebRTC automatically plays audio
+      // But we need to ensure tracks are enabled
+      if (event.streams && event.streams[0]) {
+        const remoteStream = event.streams[0];
+        remoteStream.getAudioTracks().forEach((track: any) => {
+          track.enabled = true;
+        });
+      }
+      
+      // Also handle individual tracks
+      if (event.track) {
+        event.track.enabled = true;
+      }
+    };
+
+    // Add local stream
+    this.localStream.getTracks().forEach((track: any) => {
+      this.peerConnection?.addTrack(track, this.localStream);
+    });
+
+    // Handle ICE candidates
+    this.peerConnection.onicecandidate = (event) => {
+      if (event.candidate && this.peerConnection && this.currentCall) {
+        this.socket?.emit('call:ice-candidate', {
+          bookingId: this.currentCall.bookingId,
+          candidate: event.candidate,
+          to: this.currentCall.receiverId,
+        });
+      }
+    };
+
+    // Handle connection state changes with comprehensive recovery
+    this.peerConnection.onconnectionstatechange = () => {
+      if (!this.peerConnection) return;
+      
+      const state = this.peerConnection.connectionState;
+      
+      switch (state) {
+        case 'connected':
+          this.callStartTime = Date.now();
+          this.connectionRetryCount = 0;
+          webrtcErrorHandler.resetRetryCount('connection');
+          this.events.onCallConnected?.();
+          this.startCallQualityMonitoring();
+          break;
+          
+        case 'disconnected':
+          this.handleDisconnection();
+          break;
+          
+        case 'failed':
+          this.handleConnectionFailure();
+          break;
+          
+        case 'connecting':
+          // Connection attempt in progress
+          break;
+          
+        case 'closed':
+          this.cleanup();
+          break;
+      }
+    };
+
+    // Handle ICE connection state changes with recovery
+    this.peerConnection.oniceconnectionstatechange = () => {
+      if (!this.peerConnection) return;
+      
+      const iceState = this.peerConnection.iceConnectionState;
+      
+      switch (iceState) {
+        case 'failed':
+          this.handleICEFailure();
+          break;
+          
+        case 'disconnected':
+          // ICE disconnected but may recover
+          break;
+          
+        case 'connected':
+        case 'completed':
+          // ICE connection successful
+          webrtcErrorHandler.resetRetryCount('ice');
+          break;
+      }
+    };
+
+    // Handle ICE gathering state
+    this.peerConnection.onicegatheringstatechange = () => {
+      // ICE gathering state changed
+    };
   }
 
   // Accept incoming call
@@ -389,9 +427,26 @@ class WebRTCService {
         }
       }
 
-      // Create peer connection
+      // PRODUCTION FIX: Create peer connection with remote stream handler
       const config = this.useTurnServer ? RTC_CONFIG_WITH_TURN : RTC_CONFIG;
       this.peerConnection = new RTCPeerConnection(config);
+
+      // PRODUCTION FIX: Add ontrack handler to receive remote audio stream
+      this.peerConnection.ontrack = (event) => {
+        // Remote stream received - React Native WebRTC automatically plays audio
+        // But we need to ensure tracks are enabled
+        if (event.streams && event.streams[0]) {
+          const remoteStream = event.streams[0];
+          remoteStream.getAudioTracks().forEach((track: any) => {
+            track.enabled = true;
+          });
+        }
+        
+        // Also handle individual tracks
+        if (event.track) {
+          event.track.enabled = true;
+        }
+      };
 
       // Add local stream
       this.localStream.getTracks().forEach((track: any) => {
@@ -829,13 +884,28 @@ class WebRTCService {
   private setupPeerConnectionHandlers() {
     if (!this.peerConnection || !this.currentCall) return;
 
+    // PRODUCTION FIX: Ensure ontrack handler is set for remote audio
+    if (!this.peerConnection.ontrack) {
+      this.peerConnection.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          const remoteStream = event.streams[0];
+          remoteStream.getAudioTracks().forEach((track: any) => {
+            track.enabled = true;
+          });
+        }
+        if (event.track) {
+          event.track.enabled = true;
+        }
+      };
+    }
+
     // Handle ICE candidates
     this.peerConnection.onicecandidate = (event) => {
-      if (event.candidate && this.peerConnection) {
+      if (event.candidate && this.peerConnection && this.currentCall) {
         this.socket?.emit('call:ice-candidate', {
-          bookingId: this.currentCall?.bookingId,
+          bookingId: this.currentCall.bookingId,
           candidate: event.candidate,
-          to: this.currentCall?.receiverId,
+          to: this.currentCall.receiverId,
         });
       }
     };

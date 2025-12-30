@@ -100,17 +100,50 @@ router.delete('/delete-account', accountDeletionLimiter, asyncHandler(async (req
     // Forcefully delete all user-related data from all tables
     // Delete from notifications (ensure all notifications for this user are deleted)
     await query('DELETE FROM notifications WHERE user_id = $1', [userId]);
-    // Delete from ratings
-    await query('DELETE FROM ratings WHERE booking_id IN (SELECT id FROM bookings WHERE user_id = $1)', [userId]);
-    // Delete from bookings (as user)
-    await query('DELETE FROM bookings WHERE user_id = $1', [userId]);
+    
+    // PRODUCTION ROOT FIX: Only delete pending/accepted bookings (not completed/cancelled)
+    // This preserves historical booking data for providers (earnings, stats, records)
+    // The CASCADE constraint will set user_id to NULL for remaining bookings
+    await query(`
+      DELETE FROM bookings 
+      WHERE user_id = $1 
+      AND status IN ('pending', 'accepted')
+    `, [userId]);
+    
+    // Delete ratings for deleted bookings only
+    await query(`
+      DELETE FROM ratings 
+      WHERE booking_id IN (
+        SELECT id FROM bookings 
+        WHERE user_id = $1 
+        AND status IN ('pending', 'accepted')
+      )
+    `, [userId]);
+    
+    // Note: Completed and cancelled bookings are preserved (user_id set to NULL by CASCADE)
+    // This ensures providers can still see their booking history and earnings
     // Delete from bookings (as provider)
+    // PRODUCTION ROOT FIX: Only delete pending/accepted bookings (preserve completed/cancelled)
+    // This ensures provider earnings and stats remain accurate even after account deletion
     const providerProfile2 = await getRow('SELECT * FROM provider_profiles WHERE user_id = $1', [userId]);
     if (providerProfile2) {
       const providerServices2 = await getRows('SELECT * FROM provider_services WHERE provider_id = $1', [providerProfile2.id]);
       for (const service of providerServices2) {
-        await query('DELETE FROM ratings WHERE booking_id IN (SELECT id FROM bookings WHERE provider_service_id = $1)', [service.id]);
-        await query('DELETE FROM bookings WHERE provider_service_id = $1', [service.id]);
+        // Only delete ratings for pending/accepted bookings
+        await query(`
+          DELETE FROM ratings 
+          WHERE booking_id IN (
+            SELECT id FROM bookings 
+            WHERE provider_service_id = $1 
+            AND status IN ('pending', 'accepted')
+          )
+        `, [service.id]);
+        // Only delete pending/accepted bookings (preserve completed/cancelled)
+        await query(`
+          DELETE FROM bookings 
+          WHERE provider_service_id = $1 
+          AND status IN ('pending', 'accepted')
+        `, [service.id]);
       }
       await query('DELETE FROM provider_services WHERE provider_id = $1', [providerProfile2.id]);
       await query('DELETE FROM provider_profiles WHERE id = $1', [providerProfile2.id]);
@@ -145,21 +178,41 @@ router.delete('/delete-account', accountDeletionLimiter, asyncHandler(async (req
 // @desc    Get user profile
 // @access  Private
 router.get('/profile', asyncHandler(async (req, res) => {
-  // Try to get name_change_count, but handle if column doesn't exist
+  // Check if name_change_count column exists first
   let user;
   let nameChangeCount = 0;
   
   try {
-    user = await getRow(`
-      SELECT 
-        *,
-        COALESCE(name_change_count, 0) as name_change_count
-      FROM users 
-      WHERE id = $1
-    `, [req.user.id]);
-    nameChangeCount = user.name_change_count || 0;
+    // First check if column exists
+    const columnCheck = await query(`
+      SELECT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users' 
+        AND column_name = 'name_change_count'
+      ) as column_exists;
+    `);
+    
+    const hasColumn = columnCheck.rows[0]?.column_exists || false;
+    
+    if (hasColumn) {
+      // Column exists - query with it
+      user = await getRow(`
+        SELECT 
+          *,
+          COALESCE(name_change_count, 0) as name_change_count
+        FROM users 
+        WHERE id = $1
+      `, [req.user.id]);
+      nameChangeCount = user.name_change_count || 0;
+    } else {
+      // Column doesn't exist - query without it
+      user = await getRow('SELECT * FROM users WHERE id = $1', [req.user.id]);
+      nameChangeCount = 0;
+    }
   } catch (error) {
-    // If column doesn't exist, query without it
+    // Fallback: if check fails, try query without column
     if (error.code === '42703' || error.message?.includes('name_change_count')) {
       user = await getRow('SELECT * FROM users WHERE id = $1', [req.user.id]);
       nameChangeCount = 0;
