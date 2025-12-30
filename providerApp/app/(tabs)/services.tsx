@@ -98,11 +98,53 @@ export default function ServicesScreen() {
     }
   }, [user, authLoading]);
 
+  // PRODUCTION FIX: Listen for service registration refresh trigger
+  useEffect(() => {
+    if (!user?.id || authLoading) return;
+    
+    const checkRefreshTrigger = async () => {
+      try {
+        const trigger = await AsyncStorage.getItem('services_refresh_trigger');
+        if (trigger) {
+          // Clear the trigger immediately to prevent duplicate refreshes
+          await AsyncStorage.removeItem('services_refresh_trigger');
+          // Refresh services immediately
+          fetchRegisteredServices();
+        }
+      } catch (e) {
+        // Silently fail
+      }
+    };
+    
+    // Check immediately on mount and when user/auth changes
+    checkRefreshTrigger();
+    // Check periodically (every 1 second for faster response)
+    const interval = setInterval(checkRefreshTrigger, 1000);
+    
+    return () => clearInterval(interval);
+  }, [user?.id, authLoading]);
+
   useFocusEffect(
     React.useCallback(() => {
       // Wait for auth to finish loading before fetching data
       if (!authLoading && user?.id) {
-        fetchRegisteredServices();
+        // PRODUCTION FIX: Check for refresh trigger immediately when screen comes into focus
+        const checkTriggerAndRefresh = async () => {
+          try {
+            const trigger = await AsyncStorage.getItem('services_refresh_trigger');
+            if (trigger) {
+              // Clear the trigger immediately
+              await AsyncStorage.removeItem('services_refresh_trigger');
+            }
+          } catch (e) {
+            // Silently fail
+          }
+        };
+        
+        // Check trigger first, then fetch from API
+        checkTriggerAndRefresh().then(() => {
+          fetchRegisteredServices();
+        });
       }
     }, [user, authLoading])
   );
@@ -402,8 +444,7 @@ export default function ServicesScreen() {
   }
 
   return (
-    <SafeView backgroundColor="#FFFFFF">
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeView backgroundColor="#FFFFFF" excludeBottom={true}>
       <View style={styles.header}>
         <Text style={styles.title}>{t('services.title')}</Text>
         <Text style={styles.subtitle}>{t('services.subtitle')}</Text>
@@ -602,8 +643,9 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),
-    paddingTop: getResponsiveSpacing(12, 14, 16),
+    paddingTop: 8,
     paddingBottom: getResponsiveSpacing(12, 14, 16),
+    backgroundColor: '#FFFFFF',
   },
   title: {
     fontSize: getResponsiveSpacing(22, 24, 28),

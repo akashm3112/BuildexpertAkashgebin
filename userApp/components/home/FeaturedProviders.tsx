@@ -147,7 +147,13 @@ export default function FeaturedProviders() {
             />
             <View style={styles.providerInfo}>
               <View style={styles.nameRow}>
-                <Text style={styles.providerName}>{provider.name}</Text>
+                <Text 
+                  style={styles.providerName}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {provider.name}
+                </Text>
                 {provider.verified && (
                   <View style={styles.verifiedBadge}>
                     <Text style={styles.verifiedText}>Verified</Text>
@@ -213,19 +219,23 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 4,
+    gap: 6,
   },
   providerName: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
     color: '#1E293B',
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   verifiedBadge: {
     backgroundColor: '#EFF6FF',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    flexShrink: 0,
   },
   verifiedText: {
     fontFamily: 'Inter-Medium',

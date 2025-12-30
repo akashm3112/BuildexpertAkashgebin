@@ -1,6 +1,7 @@
 import { Tabs, useRouter, useSegments, usePathname } from 'expo-router';
 import { Home, User, FileText, Calendar, Bell } from 'lucide-react-native';
 import { View, Text, StyleSheet, BackHandler } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotifications } from '@/context/NotificationContext';
 import { useBookings } from '@/context/BookingContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -41,6 +42,7 @@ function BookingTabIcon({ color, size }: { color: string; size: number }) {
 }
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const router = useRouter();
   const segments = useSegments();
@@ -102,9 +104,10 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#E5E7EB',
+          borderTopWidth: 1,
           paddingTop: 8,
-          paddingBottom: 0,
-          height: 60,
+          paddingBottom: insets.bottom,
+          height: 60 + insets.bottom,
           elevation: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },

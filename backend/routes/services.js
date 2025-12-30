@@ -1102,6 +1102,28 @@ router.post('/:id/providers', auth, requireRole(['provider']), [
     // Don't fail the registration process if notification creation fails
   }
 
+  // PRODUCTION FIX: Invalidate cache after service registration
+  // This ensures the newly registered service appears immediately in API responses
+  // Clear the specific provider registrations cache key
+  const { CacheKeys } = require('../utils/cacheIntegration');
+  const registrationsCacheKey = CacheKeys.providerRegistrations(req.user.id);
+  const { caches } = require('../utils/cacheManager');
+  
+  // Clear from semiStatic cache (where it's stored)
+  if (caches.semiStatic && typeof caches.semiStatic.delete === 'function') {
+    caches.semiStatic.delete(registrationsCacheKey);
+  }
+  
+  // Also invalidate using pattern matching (for any other related caches)
+  invalidateUserCache(req.user.id);
+  invalidateServiceCache(service.id);
+  
+  logger.info('Cache invalidated after service registration', {
+    userId: req.user.id,
+    serviceId: service.id,
+    cacheKey: registrationsCacheKey
+  });
+
   const responseMessage = isLaborService 
       ? 'Successfully registered as labor provider - service activated for free!'
       : 'Successfully registered as provider for this service - payment required to activate';

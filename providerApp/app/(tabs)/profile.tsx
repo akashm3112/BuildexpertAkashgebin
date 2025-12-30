@@ -1102,8 +1102,7 @@ export default function ProfileScreen() {
   }, [currentLanguage, currentLanguageName]);
 
   return (
-    <SafeView backgroundColor="#F8FAFC">
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+    <SafeView backgroundColor="#F8FAFC" excludeBottom={true}>
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}

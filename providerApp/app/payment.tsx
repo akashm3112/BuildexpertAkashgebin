@@ -30,7 +30,13 @@ const getResponsiveFontSize = (small: number, medium: number, large: number) => 
 
 export default function PaymentScreen() {
   const router = useRouter();
-  const { serviceId, serviceName, amount, category, providerServiceId } = useLocalSearchParams();
+  const params = useLocalSearchParams();
+  // PRODUCTION FIX: Handle array params correctly (expo-router can return arrays)
+  const serviceId = Array.isArray(params.serviceId) ? params.serviceId[0] : (params.serviceId as string || '');
+  const serviceName = Array.isArray(params.serviceName) ? params.serviceName[0] : (params.serviceName as string || '');
+  const amount = Array.isArray(params.amount) ? params.amount[0] : (params.amount as string || '');
+  const category = Array.isArray(params.category) ? params.category[0] : (params.category as string || '');
+  const providerServiceId = Array.isArray(params.providerServiceId) ? params.providerServiceId[0] : (params.providerServiceId as string || '');
   const { user, updateUser } = useAuth();
   const { t } = useLanguage();
   const [selectedMethod, setSelectedMethod] = useState<'paytm' | null>(null);
@@ -101,9 +107,11 @@ export default function PaymentScreen() {
       // ============================================================================
       // TODO: Remove this bypass before production release
       const isDevMode = __DEV__ || process.env.NODE_ENV !== 'production';
-      const isPaintingService = category?.toLowerCase() === 'painting' || 
-                                serviceName?.toLowerCase().includes('painting') ||
-                                serviceName?.toLowerCase().includes('paint');
+      const categoryLower = (category || '').toLowerCase();
+      const serviceNameLower = (serviceName || '').toLowerCase();
+      const isPaintingService = categoryLower === 'painting' || 
+                                serviceNameLower.includes('painting') ||
+                                serviceNameLower.includes('paint');
       
       if (isDevMode && isPaintingService) {
         // In dev mode for painter services, skip WebView and directly verify payment
@@ -150,42 +158,28 @@ export default function PaymentScreen() {
       setShowPaymentModal(false);
 
       if (response.ok && data.status === 'success') {
-        // Immediately cache the registration for instant UI update
+        // PRODUCTION FIX: Immediately cache the registration for instant UI update
         try {
-          const { category, serviceId } = router.params || {};
-          const serviceNameToCategoryMap: { [key: string]: string } = {
-            'labors': 'labor',
-            'plumber': 'plumber',
-            'mason-mastri': 'mason-mastri',
-            'painting-cleaning': 'painting',
-            'painting': 'painting',
-            'cleaning': 'cleaning',
-            'granite-tiles': 'granite-tiles',
-            'engineer-interior': 'engineer-interior',
-            'electrician': 'electrician',
-            'carpenter': 'carpenter',
-            'painter': 'painting',
-            'interiors-building': 'interiors-building',
-            'stainless-steel': 'stainless-steel',
-            'contact-building': 'contact-building',
-            'glass-mirror': 'glass-mirror',
-            'borewell': 'borewell'
-          };
+          // Use category directly (it's already the frontend category ID from service registration)
+          // The category parameter is already the correct frontend category ID (e.g., 'labor', 'plumber')
+          const categoryId = category || serviceId || '';
           
-          const categoryId = (category as string) || (serviceId as string) || '';
-          const mappedCategoryId = serviceNameToCategoryMap[categoryId.toLowerCase()] || categoryId;
-          
-          // Store in AsyncStorage for immediate UI update
-          const cachedServices = await AsyncStorage.getItem('cached_registered_services');
-          const servicesArray = cachedServices ? JSON.parse(cachedServices) : [];
-          if (!servicesArray.includes(mappedCategoryId)) {
-            servicesArray.push(mappedCategoryId);
-            await AsyncStorage.setItem('cached_registered_services', JSON.stringify(servicesArray));
+          if (categoryId) {
+            // Store in AsyncStorage for immediate UI update
+            const cachedServices = await AsyncStorage.getItem('cached_registered_services');
+            const servicesArray = cachedServices ? JSON.parse(cachedServices) : [];
+            if (!servicesArray.includes(categoryId)) {
+              servicesArray.push(categoryId);
+              await AsyncStorage.setItem('cached_registered_services', JSON.stringify(servicesArray));
+              // Set refresh trigger immediately
+              await AsyncStorage.setItem('services_refresh_trigger', Date.now().toString());
+            }
           }
         } catch (cacheError) {
           // Silently fail - cache is not critical
         }
         
+        // PRODUCTION FIX: Trigger refresh after payment
         showAlert(
           'Payment Successful!',
           `Your service registration is now active for 30 days. You will receive a reminder 2 days before expiry.`,
@@ -193,8 +187,14 @@ export default function PaymentScreen() {
           [
             {
               text: 'OK',
-              onPress: () => {
+              onPress: async () => {
                 setShowAlertModal(false);
+                // Trigger refresh signal
+                try {
+                  await AsyncStorage.setItem('services_refresh_trigger', Date.now().toString());
+                } catch (e) {
+                  // Silently fail
+                }
                 router.replace('/(tabs)/services');
               },
               style: 'primary'

@@ -13,20 +13,22 @@ interface SafeViewProps {
 // Export hook for components that need safe area insets
 export { useSafeAreaInsets };
 
-export function SafeView({ children, style, backgroundColor = '#FFFFFF', excludeBottom = true }: SafeViewProps) {
+export function SafeView({ children, style, backgroundColor = '#FFFFFF', excludeBottom = false }: SafeViewProps) {
   const insets = useSafeAreaInsets();
   
-  // Always exclude bottom edge to prevent blank space - tab bar handles bottom safe area
-  // Only include top, left, right edges for status bar and notch handling
-  const edges: Edge[] = ['top', 'left', 'right'];
+  // PRODUCTION FIX: Always include top edge to handle status bar/notch on all devices
+  // This ensures proper spacing on MI phones and other devices with custom toolbars
+  // When excludeBottom is true, tab bar handles its own safe area, so no extra padding needed
+  const edges: Edge[] = excludeBottom
+    ? ['top', 'left', 'right']
+    : ['top', 'left', 'right', 'bottom'];
   
   return (
     <SafeAreaView style={[styles.container, { backgroundColor }, style]} edges={edges}>
-      <StatusBar 
-        barStyle="dark-content" 
-        backgroundColor={backgroundColor}
-        translucent={false}
-      />
+      {/* PRODUCTION FIX: Remove StatusBar from SafeView to avoid conflicts with expo-status-bar in _layout.tsx */}
+      {/* StatusBar is handled globally in app/_layout.tsx */}
+      {/* PRODUCTION FIX: SafeAreaView with edges=['top'] automatically handles top padding for status bar/notch */}
+      {/* When excludeBottom=true, tab bar handles its own spacing, so no paddingBottom needed */}
       <View style={[styles.content, { backgroundColor }]}> 
         {children}
       </View>
@@ -40,5 +42,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    marginBottom: 0,
+    paddingBottom: 0,
   },
 });

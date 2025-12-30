@@ -360,39 +360,126 @@ export default function HomeScreen() {
     };
   }, [user]);
 
+  // PRODUCTION FIX: Listen for service registration refresh trigger
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const checkRefreshTrigger = async () => {
+      try {
+        const trigger = await AsyncStorage.getItem('services_refresh_trigger');
+        if (trigger) {
+          // Clear the trigger immediately to prevent duplicate refreshes
+          await AsyncStorage.removeItem('services_refresh_trigger');
+          
+          // PRODUCTION FIX: Update cache immediately for instant UI feedback
+          // Then refresh from API to ensure data is in sync
+          try {
+            const cachedServices = await AsyncStorage.getItem('cached_registered_services');
+            if (cachedServices) {
+              const cachedArray = JSON.parse(cachedServices);
+              // Update state immediately with cached data
+              setRegisteredServices(cachedArray);
+            }
+          } catch (cacheError) {
+            // Silently fail
+          }
+          
+          // Refresh services from API to ensure data is in sync
+          fetchRegisteredServices().catch(() => {
+            // Silently fail
+          });
+        }
+      } catch (e) {
+        // Silently fail
+      }
+    };
+    
+    // Check immediately on mount and when user changes
+    checkRefreshTrigger();
+    // Check periodically (every 1 second for faster response)
+    const interval = setInterval(checkRefreshTrigger, 1000);
+    
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
   useFocusEffect(
     React.useCallback(() => {
       if (user?.id) {
-        // Fetch both registered services and earnings on focus
-        // Earnings are also updated via sockets, but we fetch on focus to ensure data is fresh
-        Promise.all([
-          fetchRegisteredServices().catch((error: any) => {
-          // Mark NO_TOKEN errors as handled to prevent unhandled rejection warnings
-          if (error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required')) {
-            if (!error?._handled) {
-              (error as any)._handled = true;
-              (error as any)._suppressUnhandled = true;
+        // PRODUCTION FIX: ALWAYS check cache first for instant UI feedback, regardless of trigger
+        // This ensures the green tick appears immediately when navigating back to home
+        const loadCacheAndCheckTrigger = async () => {
+          try {
+            // ALWAYS load from cache first for instant UI update
+            const cachedServices = await AsyncStorage.getItem('cached_registered_services');
+            if (cachedServices) {
+              try {
+                const cachedArray = JSON.parse(cachedServices);
+                // Update state immediately with cached data - this makes green tick appear instantly
+                if (Array.isArray(cachedArray) && cachedArray.length > 0) {
+                  setRegisteredServices(cachedArray);
+                }
+              } catch (parseError) {
+                // Invalid cache, will be refreshed from API
+              }
             }
+            
+            // Check for refresh trigger
+            const trigger = await AsyncStorage.getItem('services_refresh_trigger');
+            if (trigger) {
+              // Clear the trigger
+              await AsyncStorage.removeItem('services_refresh_trigger');
+              
+              // Reload cache in case it was updated
+              const updatedCache = await AsyncStorage.getItem('cached_registered_services');
+              if (updatedCache) {
+                try {
+                  const updatedArray = JSON.parse(updatedCache);
+                  if (Array.isArray(updatedArray)) {
+                    setRegisteredServices(updatedArray);
+                  }
+                } catch (parseError) {
+                  // Invalid cache
+                }
+              }
+            }
+          } catch (e) {
+            // Silently fail
           }
-          
-          // Suppress "Session expired" and server errors - they're expected or backend issues
-          const isSessionExpired = error?.message === 'Session expired' || 
-                                   error?.status === 401 && error?.message?.includes('Session expired') ||
-                                   error?._suppressUnhandled === true ||
-                                   error?._handled === true;
-          const isServerError = error?.status === 500 || error?.isServerError === true;
-          const isAuthError = error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required');
-          
-          if (!isSessionExpired && !isServerError && !isAuthError) {
-            globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
-          }
-        }),
-          fetchEarnings().catch((error: any) => {
-            // Silently handle earnings fetch errors - they're not critical
-            // Earnings will be updated via socket events when bookings change
-          })
-        ]).catch(() => {
-          // Silently fail - these are not critical errors
+        };
+        
+        // Load cache first for instant UI, then fetch from API
+        loadCacheAndCheckTrigger().then(() => {
+          // Fetch both registered services and earnings on focus
+          // Earnings are also updated via sockets, but we fetch on focus to ensure data is fresh
+          Promise.all([
+            fetchRegisteredServices().catch((error: any) => {
+            // Mark NO_TOKEN errors as handled to prevent unhandled rejection warnings
+            if (error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required')) {
+              if (!error?._handled) {
+                (error as any)._handled = true;
+                (error as any)._suppressUnhandled = true;
+              }
+            }
+            
+            // Suppress "Session expired" and server errors - they're expected or backend issues
+            const isSessionExpired = error?.message === 'Session expired' || 
+                                     error?.status === 401 && error?.message?.includes('Session expired') ||
+                                     error?._suppressUnhandled === true ||
+                                     error?._handled === true;
+            const isServerError = error?.status === 500 || error?.isServerError === true;
+            const isAuthError = error?.code === 'NO_TOKEN' || error?.message?.includes('Authentication required');
+            
+            if (!isSessionExpired && !isServerError && !isAuthError) {
+              globalErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), false, 'fetchRegisteredServices');
+            }
+          }),
+            fetchEarnings().catch((error: any) => {
+              // Silently handle earnings fetch errors - they're not critical
+              // Earnings will be updated via socket events when bookings change
+            })
+          ]).catch(() => {
+            // Silently fail - these are not critical errors
+          });
         });
       }
       // Reload location preferences when screen comes into focus
@@ -545,12 +632,18 @@ export default function HomeScreen() {
     try {
       setIsLoadingServices(true);
       
-      // First, load from cache for instant UI update
+      // PRODUCTION FIX: Get current state and cache BEFORE API call
+      // This ensures we don't lose newly registered services that aren't in API yet
+      let currentRegisteredServices: string[] = [];
       try {
         const cachedServices = await AsyncStorage.getItem('cached_registered_services');
         if (cachedServices) {
           const cachedArray = JSON.parse(cachedServices);
-          setRegisteredServices(cachedArray);
+          if (Array.isArray(cachedArray)) {
+            currentRegisteredServices = cachedArray;
+            // Set state from cache first for instant UI
+            setRegisteredServices(cachedArray);
+          }
         }
       } catch (cacheError) {
         // Silently fail - cache is optional
@@ -588,17 +681,31 @@ export default function HomeScreen() {
             return categoryId;
           }).filter(Boolean);
 
-          setRegisteredServices(registeredCategoryIds);
+          // PRODUCTION FIX: Merge API data with cache to preserve newly registered services
+          // If cache has services not in API yet (just registered), keep them
+          const mergedServices = [...new Set([...currentRegisteredServices, ...registeredCategoryIds])];
           
-          // Update cache with fresh data
+          setRegisteredServices(mergedServices);
+          
+          // Update cache with merged data
           try {
-            await AsyncStorage.setItem('cached_registered_services', JSON.stringify(registeredCategoryIds));
+            await AsyncStorage.setItem('cached_registered_services', JSON.stringify(mergedServices));
           } catch (cacheError) {
             // Silently fail
+          }
+        } else {
+          // If API fails but we have cache, keep using cache
+          if (currentRegisteredServices.length > 0) {
+            setRegisteredServices(currentRegisteredServices);
           }
         }
       } catch (apiError: any) {
         // Handle API errors silently - don't show error for home screen
+        // PRODUCTION FIX: If API fails, keep using cache
+        if (currentRegisteredServices.length > 0) {
+          setRegisteredServices(currentRegisteredServices);
+        }
+        
         // PRODUCTION FIX: Better error handling for authentication and network errors
         const isAuthError = apiError?.status === 401 || 
                            apiError?.code === 'NO_TOKEN' ||
@@ -837,8 +944,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeView backgroundColor="#F9FAFB">
-      <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+    <SafeView backgroundColor="#F9FAFB" excludeBottom={true}>
       <ScrollView 
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
@@ -1168,7 +1274,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: getResponsiveSpacing(12, 14, 16),
+    paddingTop: 8,
     paddingBottom: getResponsiveSpacing(4, 5, 6),
+    backgroundColor: '#FFFFFF',
   },
   headerLeft: {
     flex: 1,

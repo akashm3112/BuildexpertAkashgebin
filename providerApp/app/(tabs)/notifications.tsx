@@ -188,7 +188,7 @@ export default function NotificationsScreen() {
     header: {
       ...styles.header,
       paddingHorizontal: getResponsiveSpacing(16, 20, 24),
-      paddingTop: getResponsiveSpacing(12, 16, 20),
+      paddingTop: 8,
       paddingBottom: getResponsiveSpacing(12, 16, 20),
       minHeight: getResponsiveSpacing(56, 60, 64),
     },
@@ -353,8 +353,7 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <SafeView backgroundColor="#F8FAFC">
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+    <SafeView backgroundColor="#F8FAFC" excludeBottom={true}>
       <View style={responsiveStyles.header}>
         <Text style={responsiveStyles.headerTitle} numberOfLines={1} ellipsizeMode="tail">{t('notifications.title')}</Text>
         {notifications.length > 0 && (
@@ -423,7 +422,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingTop: 8,
+    paddingBottom: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 0,
     minHeight: 64,

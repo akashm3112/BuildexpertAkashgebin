@@ -739,8 +739,7 @@ export default function BookingsScreen() {
 
   if (isLoading && bookings.length === 0) {
     return (
-      <SafeView backgroundColor="#F8FAFC">
-        <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <SafeView backgroundColor="#F8FAFC" excludeBottom={true}>
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{t('bookings.title')}</Text>
           <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">{t('bookings.subtitle')}</Text>
@@ -755,8 +754,7 @@ export default function BookingsScreen() {
 
   if (error || errorKey) {
     return (
-      <SafeView backgroundColor="#F8FAFC">
-        <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <SafeView backgroundColor="#F8FAFC" excludeBottom={true}>
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{t('bookings.title')}</Text>
           <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">{t('bookings.subtitle')}</Text>
@@ -776,8 +774,7 @@ export default function BookingsScreen() {
 
   if (bookings.length === 0) {
     return (
-      <SafeView backgroundColor="#F8FAFC">
-        <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <SafeView backgroundColor="#F8FAFC" excludeBottom={true}>
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{t('bookings.title')}</Text>
           <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">{t('bookings.subtitle')}</Text>
@@ -796,8 +793,7 @@ export default function BookingsScreen() {
   }
 
   return (
-    <SafeView backgroundColor="#F8FAFC">
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+    <SafeView backgroundColor="#F8FAFC" excludeBottom={true}>
       <View style={styles.header}>
         <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{t('bookings.title')}</Text>
         <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">{t('bookings.subtitle')}</Text>
@@ -1060,7 +1056,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: getResponsiveSpacing(16, 20, 24),
-    paddingTop: getResponsiveSpacing(12, 14, 16),
+    paddingTop: 8,
     paddingBottom: getResponsiveSpacing(12, 14, 16),
     backgroundColor: '#FFFFFF', // Header background white
     borderBottomWidth: 1,

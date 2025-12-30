@@ -63,7 +63,11 @@ interface FormData {
 
 export default function ServiceRegistration() {
   const router = useRouter();
-  const { category, mode, serviceId } = useLocalSearchParams();
+  const params = useLocalSearchParams();
+  // PRODUCTION FIX: Handle array params correctly (expo-router can return arrays)
+  const category = Array.isArray(params.category) ? params.category[0] : (params.category as string || '');
+  const mode = Array.isArray(params.mode) ? params.mode[0] : (params.mode as string || '');
+  const serviceId = Array.isArray(params.serviceId) ? params.serviceId[0] : (params.serviceId as string || '');
   const { user, updateUser } = useAuth();
   const { t } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
@@ -84,7 +88,8 @@ export default function ServiceRegistration() {
     setShowAlertModal(true);
   };
 
-  const service = getServiceById(category as string);
+  // PRODUCTION FIX: category is already extracted as string above
+  const service = getServiceById(category);
   const isViewMode = mode === 'view';
   const isEditMode = mode === 'edit';
   const isEngineerOrInterior = category === 'engineer-interior';
@@ -789,6 +794,7 @@ export default function ServiceRegistration() {
       };
       
       const method = isEditMode ? 'PUT' : 'POST';
+      // PRODUCTION FIX: Use category (already extracted as string) in API URL
       let response = await fetch(`${API_BASE_URL}/api/services/${category}/providers`, {
         method,
         headers: {
@@ -873,9 +879,16 @@ export default function ServiceRegistration() {
       
       // For edit mode, show success message
       if (isEditMode) {
+        // PRODUCTION FIX: Trigger refresh after edit
         showAlert(t('alerts.success'), t('alerts.serviceUpdatedSuccessfully'), 'success', [
-          { text: 'OK', onPress: () => {
+          { text: 'OK', onPress: async () => {
             setShowAlertModal(false);
+            // Trigger refresh signal
+            try {
+              await AsyncStorage.setItem('services_refresh_trigger', Date.now().toString());
+            } catch (e) {
+              // Silently fail
+            }
             router.replace('/(tabs)/services');
           }, style: 'primary'},
         ]);
@@ -884,43 +897,34 @@ export default function ServiceRegistration() {
         const providerServiceId = data.data?.providerService?.id;
         const isFreeService = data.data?.isFreeService;
         
+        // PRODUCTION FIX: Use the category from route params directly (it's the frontend category ID)
+        // The category parameter is already the correct frontend category ID (e.g., 'labor', 'plumber')
+        // Category is already extracted as string above, just trim it
+        const categoryId = category.trim();
+        
+        // PRODUCTION FIX: Immediately update cache for instant UI feedback
+        // This MUST happen BEFORE showing the alert to ensure cache is ready
+        // Use await to ensure cache is written before proceeding
+        if (categoryId) {
+          try {
+            const cachedServices = await AsyncStorage.getItem('cached_registered_services');
+            const servicesArray = cachedServices ? JSON.parse(cachedServices) : [];
+            // Only add if not already present
+            if (!servicesArray.includes(categoryId)) {
+              servicesArray.push(categoryId);
+              // Write cache synchronously - CRITICAL: must complete before navigation
+              await AsyncStorage.setItem('cached_registered_services', JSON.stringify(servicesArray));
+            }
+            // Set refresh trigger immediately - this will be picked up by home screen and services tab
+            await AsyncStorage.setItem('services_refresh_trigger', Date.now().toString());
+          } catch (cacheError) {
+            // Log error for debugging but don't block user flow
+            console.error('Cache update error:', cacheError);
+          }
+        }
+        
         if (providerServiceId) {
           if (isFreeService) {
-            // Free service (labor) - immediately cache the registration for instant UI update
-            try {
-              const serviceNameToCategoryMap: { [key: string]: string } = {
-                'labors': 'labor',
-                'plumber': 'plumber',
-                'mason-mastri': 'mason-mastri',
-                'painting-cleaning': 'painting',
-                'painting': 'painting',
-                'cleaning': 'cleaning',
-                'granite-tiles': 'granite-tiles',
-                'engineer-interior': 'engineer-interior',
-                'electrician': 'electrician',
-                'carpenter': 'carpenter',
-                'painter': 'painting',
-                'interiors-building': 'interiors-building',
-                'stainless-steel': 'stainless-steel',
-                'contact-building': 'contact-building',
-                'glass-mirror': 'glass-mirror',
-                'borewell': 'borewell'
-              };
-              
-              const serviceName = data.data?.serviceName || service?.name || '';
-              const categoryId = serviceNameToCategoryMap[serviceName.toLowerCase()] || category;
-              
-              // Store in AsyncStorage for immediate UI update
-              const cachedServices = await AsyncStorage.getItem('cached_registered_services');
-              const servicesArray = cachedServices ? JSON.parse(cachedServices) : [];
-              if (!servicesArray.includes(categoryId)) {
-                servicesArray.push(categoryId);
-                await AsyncStorage.setItem('cached_registered_services', JSON.stringify(servicesArray));
-              }
-            } catch (cacheError) {
-              // Silently fail - cache is not critical
-            }
-            
             // Free service (labor) - show success and navigate to services
             showAlert(
               'Registration Successful! 🎉',
@@ -929,8 +933,14 @@ export default function ServiceRegistration() {
               [
                 { 
                   text: 'OK', 
-                  onPress: () => {
+                  onPress: async () => {
                     setShowAlertModal(false);
+                    // Ensure refresh trigger is still set (in case it was cleared)
+                    try {
+                      await AsyncStorage.setItem('services_refresh_trigger', Date.now().toString());
+                    } catch (e) {
+                      // Silently fail
+                    }
                     router.replace('/(tabs)/services');
                   }, 
                   style: 'primary' 
@@ -942,10 +952,10 @@ export default function ServiceRegistration() {
             router.push({
               pathname: '/payment',
               params: {
-                serviceId: category as string,
+                serviceId: categoryStr,
                 serviceName: service?.name,
                 amount: service?.basePrice || 99,
-                category: category as string,
+                category: categoryStr,
                 providerServiceId: providerServiceId
               }
             });
@@ -1131,7 +1141,7 @@ export default function ServiceRegistration() {
                   <View style={styles.subServicesList}>
                     {formData.subServices.map((subService, index) => {
                       // Get the selected sub-service option
-                      const selectedSubService = getSubServiceById(category as string, subService.serviceId);
+                      const selectedSubService = getSubServiceById(category, subService.serviceId);
                       
                       // Get all other selected sub-service IDs to exclude them from this dropdown
                       // This ensures once a sub-service is selected in one row, it disappears from all others
@@ -1190,7 +1200,7 @@ export default function ServiceRegistration() {
                                 onSelect={(subServiceId) => handleSubServiceChange(subService.id, 'serviceId', subServiceId)}
                                 placeholder={t('serviceRegistration.chooseRelatedService')}
                                 disabled={isViewMode}
-                                mainServiceId={category as string}
+                                mainServiceId={category}
                                 excludeSubServiceIds={otherSelectedSubServiceIds}
                                 error={errors.subServices && !subService.serviceId.trim() ? t('serviceRegistration.serviceTypeRequired') : undefined}
                                 style={styles.subServiceSelector}
@@ -1461,7 +1471,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: getResponsiveSpacing(12, 16, 20),
-    paddingVertical: getResponsiveSpacing(12, 16, 20),
+    paddingTop: 8,
+    paddingBottom: getResponsiveSpacing(12, 16, 20),
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',

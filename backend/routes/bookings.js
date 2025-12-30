@@ -158,25 +158,63 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
     throw new ValidationError('Invalid appointment time format');
   }
 
-  // Check for duplicate booking: same user cannot book same provider at same date/time
+  // PRODUCTION FIX: Check for duplicate booking with improved validation
   // Only check for pending or accepted bookings (rejected, completed, cancelled are allowed)
-  // Fetch all bookings for this user/provider/date with pending/accepted status
+  // Exclude past bookings - if appointment date/time has passed, it's not a duplicate
+  // Use explicit date casting to avoid timezone/format issues
   const potentialDuplicates = await getRows(`
-    SELECT b.id, b.status, b.appointment_date, b.appointment_time
+    SELECT b.id, b.status, b.appointment_date, b.appointment_time, b.provider_service_id
     FROM bookings b
     WHERE b.user_id = $1
       AND b.provider_service_id = $2
-      AND b.appointment_date = $3
+      AND DATE(b.appointment_date) = DATE($3::date)
       AND b.status IN ('pending', 'accepted')
+      AND (b.appointment_date > CURRENT_DATE 
+           OR (b.appointment_date = CURRENT_DATE 
+               AND b.appointment_time IS NOT NULL 
+               AND b.appointment_time != '' 
+               AND b.appointment_time != '00:00:00'))
   `, [req.user.id, providerServiceId, appointmentDate]);
 
-  // Normalize and compare times
+  // Normalize and compare times - only consider valid normalized times
   let existingBooking = null;
-  for (const booking of potentialDuplicates) {
-    const normalizedStoredTime = normalizeAppointmentTime(booking.appointment_time);
-    if (normalizedStoredTime === normalizedAppointmentTime) {
-      existingBooking = booking;
-      break;
+  if (potentialDuplicates && potentialDuplicates.length > 0) {
+    for (const booking of potentialDuplicates) {
+      // Verify provider_service_id matches (defensive check)
+      if (booking.provider_service_id !== providerServiceId) {
+        logger.warn('Booking found with mismatched provider_service_id', {
+          bookingId: booking.id,
+          expectedProviderServiceId: providerServiceId,
+          actualProviderServiceId: booking.provider_service_id
+        });
+        continue;
+      }
+      
+      // Skip if booking time is null or invalid
+      if (!booking.appointment_time || booking.appointment_time.trim() === '') {
+        logger.warn('Booking found with invalid appointment_time', {
+          bookingId: booking.id,
+          appointmentTime: booking.appointment_time
+        });
+        continue;
+      }
+      
+      const normalizedStoredTime = normalizeAppointmentTime(booking.appointment_time);
+      
+      // Only compare if both times are successfully normalized
+      // If stored time can't be normalized, skip it (might be corrupted data)
+      if (!normalizedStoredTime) {
+        logger.warn('Could not normalize stored appointment time', {
+          bookingId: booking.id,
+          storedTime: booking.appointment_time
+        });
+        continue;
+      }
+      
+      if (normalizedStoredTime === normalizedAppointmentTime) {
+        existingBooking = booking;
+        break;
+      }
     }
   }
 
@@ -187,7 +225,9 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
       appointmentDate,
       appointmentTime: normalizedAppointmentTime,
       existingBookingId: existingBooking.id,
-      existingStatus: existingBooking.status
+      existingStatus: existingBooking.status,
+      existingTime: existingBooking.appointment_time,
+      totalPotentialDuplicates: potentialDuplicates.length
     });
     throw new ValidationError('You already have a booking with this provider at the same date and time. Please choose a different time or wait for the current booking to be completed or cancelled.');
   }
@@ -448,19 +488,20 @@ router.get('/', auth, asyncHandler(async (req, res) => {
 router.get('/:id', auth, asyncHandler(async (req, res) => {
   const { id } = req.params;
 
+  // PRODUCTION FIX: Use LEFT JOIN to ensure bookings remain visible even after service deletion
   const booking = await getRow(`
       SELECT 
         b.*,
-        u.full_name as provider_name,
-        u.phone as provider_phone,
+        COALESCE(u.full_name, 'Provider') as provider_name,
+        COALESCE(u.phone, '') as provider_phone,
         u.profile_pic_url as provider_profile_pic_url,
-        sm.name as service_name,
+        COALESCE(sm.name, b.selected_service, 'Service') as service_name,
         ps.working_proof_urls
       FROM bookings b
-      JOIN provider_services ps ON b.provider_service_id = ps.id
-      JOIN provider_profiles pp ON ps.provider_id = pp.id
-      JOIN users u ON pp.user_id = u.id
-      JOIN services_master sm ON ps.service_id = sm.id
+      LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
+      LEFT JOIN provider_profiles pp ON ps.provider_id = pp.id
+      LEFT JOIN users u ON pp.user_id = u.id
+      LEFT JOIN services_master sm ON ps.service_id = sm.id
       WHERE b.id = $1 AND b.user_id = $2
     `, [id, req.user.id]);
 
@@ -608,12 +649,12 @@ router.put('/:id/cancel', auth, [
   // This triggers the frontend to refresh the unread count when user cancels their booking
   getIO().to(req.user.id).emit('booking_unread_count_update');
 
-  // Get booking details for notifications
+  // Get booking details for notifications (use LEFT JOIN to handle deleted services)
   const bookingDetails = await getRow(`
-      SELECT b.*, sm.name as service_name
+      SELECT b.*, COALESCE(sm.name, b.selected_service, 'Service') as service_name
       FROM bookings b
-      JOIN provider_services ps ON b.provider_service_id = ps.id
-      JOIN services_master sm ON ps.service_id = sm.id
+      LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
+      LEFT JOIN services_master sm ON ps.service_id = sm.id
       WHERE b.id = $1
     `, [id]);
 
@@ -721,12 +762,12 @@ router.post('/:id/rate', auth, [
 
   const newRating = result.rows[0];
 
-  // Fetch provider user_id and service_name
+  // Fetch provider user_id and service_name (use LEFT JOIN to handle deleted services)
   const ratingBooking = await getRow(`
-      SELECT ps.provider_id, sm.name as service_name, ps.id as provider_service_id
+      SELECT ps.provider_id, COALESCE(sm.name, b.selected_service, 'Service') as service_name, ps.id as provider_service_id
       FROM bookings b
-      JOIN provider_services ps ON b.provider_service_id = ps.id
-      JOIN services_master sm ON ps.service_id = sm.id
+      LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
+      LEFT JOIN services_master sm ON ps.service_id = sm.id
       WHERE b.id = $1
     `, [id]);
   if (ratingBooking) {

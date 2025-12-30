@@ -14,6 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.builtxpert.user",
       "infoPlist": {
         "UIBackgroundModes": [
           "remote-notification"
@@ -59,9 +60,14 @@
         "ACCESS_NETWORK_STATE"
       ],
       "package": "com.builtxpert.user",
+      "appName": "BuildXpert User",
       "usesCleartextTraffic": false,
       "networkSecurityConfig": {
         "cleartextTrafficPermitted": false
+      },
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#F8FAFC"
       }
     },
     "experiments": {

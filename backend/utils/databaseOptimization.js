@@ -30,7 +30,9 @@ class DatabaseOptimizer {
       paramCount++;
     }
 
-    // Single optimized query with all joins
+    // PRODUCTION FIX: Use LEFT JOIN for provider_services and services_master
+    // This ensures bookings remain visible even after service deletion
+    // Old bookings should still be accessible in completed/cancelled tabs
     const bookings = await getRows(`
       SELECT 
         b.id,
@@ -43,17 +45,17 @@ class DatabaseOptimizer {
         b.created_at,
         -- User/Provider info
         ${userType === 'user' ? `
-          u.full_name as provider_name,
-          u.phone as provider_phone,
-          u.profile_pic_url as provider_profile_pic_url,
+          COALESCE(u_provider.full_name, 'Provider') as provider_name,
+          COALESCE(u_provider.phone, '') as provider_phone,
+          u_provider.profile_pic_url as provider_profile_pic_url,
         ` : `
           u.full_name as customer_name,
           u.phone as customer_phone,
           a_customer.state as customer_state,
           a_customer.full_address as customer_address,
         `}
-        -- Service info
-        sm.name as service_name,
+        -- Service info (use COALESCE to handle deleted services)
+        COALESCE(sm.name, b.selected_service, 'Service') as service_name,
         ps.id as provider_service_id,
         b.service_charge_value,
         ps.working_proof_urls,
@@ -62,10 +64,11 @@ class DatabaseOptimizer {
         r.review as rating_review,
         r.created_at as rating_created_at
       FROM bookings b
-      JOIN provider_services ps ON b.provider_service_id = ps.id
-      JOIN provider_profiles pp ON ps.provider_id = pp.id
-      JOIN users u ON ${userType === 'user' ? 'pp.user_id' : 'b.user_id'} = u.id
-      JOIN services_master sm ON ps.service_id = sm.id
+      LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
+      LEFT JOIN provider_profiles pp ON ps.provider_id = pp.id
+      LEFT JOIN users u_provider ON pp.user_id = u_provider.id
+      LEFT JOIN users u ON ${userType === 'user' ? 'pp.user_id' : 'b.user_id'} = u.id
+      LEFT JOIN services_master sm ON ps.service_id = sm.id
       ${userType === 'provider' ? `
         LEFT JOIN addresses a_customer ON a_customer.user_id = b.user_id AND a_customer.type = 'home'
       ` : ''}
@@ -75,12 +78,12 @@ class DatabaseOptimizer {
       LIMIT $${paramCount} OFFSET $${paramCount + 1}
     `, [...queryParams, limit, offset]);
 
-    // Get total count efficiently
+    // Get total count efficiently (use LEFT JOIN to include bookings with deleted services)
     const countResult = await getRow(`
       SELECT COUNT(*) as total
       FROM bookings b
-      JOIN provider_services ps ON b.provider_service_id = ps.id
-      JOIN provider_profiles pp ON ps.provider_id = pp.id
+      LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
+      LEFT JOIN provider_profiles pp ON ps.provider_id = pp.id
       ${whereClause}
     `, queryParams);
 

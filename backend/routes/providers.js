@@ -657,10 +657,10 @@ router.put('/bookings/:id/status', [
   setImmediate(async () => {
     try {
       const bookingDetails = await getRow(`
-        SELECT b.user_id, sm.name as service_name, b.appointment_date, b.appointment_time
+        SELECT b.user_id, COALESCE(sm.name, b.selected_service, 'Service') as service_name, b.appointment_date, b.appointment_time
         FROM bookings b
-        JOIN provider_services ps ON b.provider_service_id = ps.id
-        JOIN services_master sm ON ps.service_id = sm.id
+        LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
+        LEFT JOIN services_master sm ON ps.service_id = sm.id
         WHERE b.id = $1
       `, [id]);
       
@@ -847,10 +847,10 @@ router.post('/bookings/:id/rate-customer', [
   setImmediate(async () => {
     try {
       const ratingBooking = await getRow(`
-        SELECT sm.name as service_name
+        SELECT COALESCE(sm.name, b.selected_service, 'Service') as service_name
         FROM bookings b
-        JOIN provider_services ps ON b.provider_service_id = ps.id
-        JOIN services_master sm ON ps.service_id = sm.id
+        LEFT JOIN provider_services ps ON b.provider_service_id = ps.id
+        LEFT JOIN services_master sm ON ps.service_id = sm.id
         WHERE b.id = $1
       `, [id]);
       
