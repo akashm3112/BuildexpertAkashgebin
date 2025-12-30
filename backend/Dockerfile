@@ -14,8 +14,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (including PM2 for production clustering)
-# PRODUCTION FIX: package-lock.json has been regenerated to include PM2 dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --production --no-audit --no-fund && npm cache clean --force
 
 # Stage 2: Production stage
 FROM node:18-alpine
@@ -56,8 +55,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application with PM2 for clustering (production-ready)
-# PM2-runtime is designed for Docker/containerized environments
-# It automatically handles clustering, restarts, and signal forwarding
-CMD ["npx", "pm2-runtime", "start", "ecosystem.config.js", "--env", "production"]
+# Start the application
+CMD ["node", "server.js"]
 
