@@ -14,6 +14,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (including PM2 for production clustering)
+# PRODUCTION FIX: package-lock.json has been regenerated to include PM2 dependencies
 RUN npm ci --only=production && npm cache clean --force
 
 # Stage 2: Production stage
