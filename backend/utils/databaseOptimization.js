@@ -81,7 +81,8 @@ class DatabaseOptimizer {
         LEFT JOIN addresses a_customer ON a_customer.user_id = b.user_id AND a_customer.type = 'home'
       ` : ''}
       -- PRODUCTION ROOT FIX: Explicitly ensure rating belongs to this specific booking
-      LEFT JOIN ratings r ON r.booking_id = b.id
+      -- Filter by rater_type: 'user' for user bookings (user rating provider), 'provider' for provider bookings (provider rating customer)
+      LEFT JOIN ratings r ON r.booking_id = b.id AND r.rater_type = ${userType === 'user' ? "'user'" : "'provider'"}
       ${whereClause}
       ORDER BY b.created_at DESC
       LIMIT $${paramCount} OFFSET $${paramCount + 1}
@@ -285,18 +286,19 @@ class DatabaseOptimizer {
       });
     }
 
-    // Get ratings with customer names in a single query
+    // PRODUCTION ROOT FIX: Get ratings with customer names - only user ratings (customers rating providers)
+    // Provider ratings (provider rating customers) should not appear in provider's public profile
     const ratings = await getRows(`
       SELECT 
         r.rating, 
         r.review, 
         r.created_at, 
-        u.full_name as customer_name,
+        COALESCE(b.customer_name, u.full_name, 'Customer') as customer_name,
         b.appointment_date
       FROM ratings r
       JOIN bookings b ON r.booking_id = b.id
-      JOIN users u ON b.user_id = u.id
-      WHERE b.provider_service_id = $1
+      LEFT JOIN users u ON b.user_id = u.id
+      WHERE b.provider_service_id = $1 AND r.rater_type = 'user'
       ORDER BY r.created_at DESC
       LIMIT 10
     `, [providerServiceId]);

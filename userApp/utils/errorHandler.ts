@@ -52,7 +52,7 @@ export const classifyError = (error: any, response?: Response): ErrorInfo => {
         category: ErrorCategory.NETWORK,
         errorCode: 'NETWORK_ERROR',
         retryable: true,
-        userMessage: 'Unable to connect to the server. Please check your internet connection and try again.',
+        userMessage: 'Unable to connect. Please check your internet connection and try again',
         originalError: error
       };
     }
@@ -63,7 +63,7 @@ export const classifyError = (error: any, response?: Response): ErrorInfo => {
         category: ErrorCategory.NETWORK,
         errorCode: 'TIMEOUT_ERROR',
         retryable: true,
-        userMessage: 'The request took too long. Please try again.',
+        userMessage: 'This is taking longer than expected. Please try again',
         originalError: error
       };
     }
@@ -78,7 +78,7 @@ export const classifyError = (error: any, response?: Response): ErrorInfo => {
           category: ErrorCategory.VALIDATION,
           errorCode: 'VALIDATION_ERROR',
           retryable: false,
-          userMessage: 'Invalid request. Please check your input and try again.',
+          userMessage: 'Please check the information you entered and try again',
           originalError: error
         };
       
@@ -88,7 +88,7 @@ export const classifyError = (error: any, response?: Response): ErrorInfo => {
           category: ErrorCategory.AUTHENTICATION,
           errorCode: 'AUTHENTICATION_ERROR',
           retryable: false,
-          userMessage: 'Your session has expired. Please log in again.',
+          userMessage: 'Your session has expired. Please sign in again to continue',
           originalError: error
         };
       
@@ -98,7 +98,7 @@ export const classifyError = (error: any, response?: Response): ErrorInfo => {
           category: ErrorCategory.AUTHORIZATION,
           errorCode: 'AUTHORIZATION_ERROR',
           retryable: false,
-          userMessage: 'You do not have permission to perform this action.',
+          userMessage: 'You don\'t have permission to perform this action',
           originalError: error
         };
       
@@ -108,7 +108,7 @@ export const classifyError = (error: any, response?: Response): ErrorInfo => {
           category: ErrorCategory.NOT_FOUND,
           errorCode: 'NOT_FOUND_ERROR',
           retryable: false,
-          userMessage: 'The requested resource was not found.',
+          userMessage: 'The information you\'re looking for is not available',
           originalError: error
         };
       
@@ -118,7 +118,7 @@ export const classifyError = (error: any, response?: Response): ErrorInfo => {
           category: ErrorCategory.NETWORK,
           errorCode: 'RATE_LIMIT_ERROR',
           retryable: true,
-          userMessage: 'Too many requests. Please wait a moment and try again.',
+          userMessage: 'Too many requests. Please wait a moment and try again',
           originalError: error
         };
       
@@ -131,7 +131,7 @@ export const classifyError = (error: any, response?: Response): ErrorInfo => {
           category: ErrorCategory.SERVER,
           errorCode: 'SERVER_ERROR',
           retryable: true,
-          userMessage: 'Server error occurred. Please try again later.',
+          userMessage: 'Something went wrong on our end. Please try again in a moment',
           originalError: error
         };
     }
@@ -158,7 +158,7 @@ export const classifyError = (error: any, response?: Response): ErrorInfo => {
     category: ErrorCategory.UNKNOWN,
     errorCode: 'UNKNOWN_ERROR',
     retryable: false,
-    userMessage: 'An unexpected error occurred. Please try again.',
+        userMessage: 'Something unexpected happened. Please try again',
     originalError: error
   };
 };

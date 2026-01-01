@@ -417,7 +417,7 @@ export default function BookingsScreen() {
     setReportBooking(null);
     setReportReason('');
     setCustomReportOtherReason('');
-    showAlert('Report Submitted', 'The user has been reported. Thank you for helping us maintain a safe community.');
+    showAlert('Report Submitted', 'Thank you for reporting this. We\'ll review it and take appropriate action', 'success');
   };
 
   const openRatingModal = (bookingId: string) => {
@@ -458,10 +458,10 @@ export default function BookingsScreen() {
       setRatingBookingId(null);
       setCustomerRating(0);
       setRatingFeedback('');
-      showAlert(t('alerts.success'), 'Rating submitted and booking completed successfully');
+      showAlert(t('alerts.success'), 'Your rating has been submitted and the booking has been marked as completed');
     } catch (error: any) {
       console.error('Error submitting rating:', error);
-      showAlert(t('alerts.error'), error.message || 'Failed to submit rating. Please try again.');
+      showAlert(t('alerts.error'), error.message || 'Unable to submit your rating. Please try again');
     } finally {
       setIsSubmittingRating(false);
     }

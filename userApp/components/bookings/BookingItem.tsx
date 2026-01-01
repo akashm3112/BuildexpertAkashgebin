@@ -285,12 +285,12 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
         showAlert(t('bookingItem.bookingCancelled'), t('bookingItem.bookingCancelledSuccess'), 'success');
       } else {
         const errorMessage = response.data?.message || t('alerts.error.generic');
-        showAlert('Error', errorMessage, 'error');
+        showAlert('Unable to Cancel Booking', errorMessage, 'error');
       }
     } catch (err: any) {
       // apiClient already handled token refresh / logout; show user-friendly error
       const errorMessage = err?.message || err?.data?.message || t('alerts.error.generic');
-      showAlert('Error', errorMessage, 'error');
+        showAlert('Unable to Submit Report', errorMessage, 'error');
     } finally {
       setIsCancelling(false);
     }
@@ -327,12 +327,12 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
         }
       } else {
         const errorMessage = response.data?.message || t('alerts.error.generic');
-        showAlert('Error', errorMessage, 'error');
+        showAlert('Unable to Cancel Booking', errorMessage, 'error');
       }
     } catch (err: any) {
       // apiClient already handled token refresh / logout; show user-friendly error
       const errorMessage = err?.message || err?.data?.message || t('alerts.error.generic');
-      showAlert('Error', errorMessage, 'error');
+        showAlert('Unable to Submit Report', errorMessage, 'error');
     } finally {
       setIsReporting(false);
     }
@@ -372,12 +372,12 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
         }
       } else {
         const errorMessage = response.data?.message || t('alerts.error.generic');
-        showAlert('Error', errorMessage, 'error');
+        showAlert('Unable to Cancel Booking', errorMessage, 'error');
       }
     } catch (err: any) {
       // apiClient already handled token refresh / logout; show user-friendly error
       const errorMessage = err?.message || err?.data?.message || t('alerts.error.generic');
-      showAlert('Error', errorMessage, 'error');
+        showAlert('Unable to Submit Report', errorMessage, 'error');
     } finally {
       setIsSubmitting(false);
     }

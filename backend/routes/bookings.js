@@ -595,10 +595,12 @@ router.get('/:id', auth, asyncHandler(async (req, res) => {
 
   // PRODUCTION FIX: Get rating if exists - ensure it belongs to this specific booking
   // Add explicit validation to prevent rating from other bookings being returned
+  // PRODUCTION ROOT FIX: Fetch user's rating for this booking (not provider's rating)
+  // This ensures users see their own rating, not the provider's rating of them
   const rating = await getRow(`
     SELECT r.* 
     FROM ratings r
-    WHERE r.booking_id = $1
+    WHERE r.booking_id = $1 AND r.rater_type = 'user'
     LIMIT 1
   `, [id]);
 
@@ -828,60 +830,65 @@ router.post('/:id/rate', auth, [
     throw new ValidationError('Can only rate completed bookings');
   }
 
-  // PRODUCTION ROOT FIX: Check if already rated with explicit validation
-  // Ensure we're checking the correct booking_id and that rating belongs to this booking
+  // PRODUCTION ROOT FIX: Check if user has already rated this booking
+  // Use rater_type to distinguish user ratings from provider ratings
+  // This allows both user and provider to rate the same booking separately
   const existingRating = await getRow(`
     SELECT r.* 
     FROM ratings r
-    WHERE r.booking_id = $1
+    WHERE r.booking_id = $1 AND r.rater_type = 'user'
     LIMIT 1
   `, [id]);
   
   if (existingRating) {
-    // PRODUCTION FIX: Double-check that rating belongs to this booking (defensive validation)
-    if (existingRating.booking_id !== id) {
-      logger.error('Rating booking_id mismatch detected', {
+    // PRODUCTION FIX: Double-check that rating belongs to this booking and is user type
+    if (existingRating.booking_id !== id || existingRating.rater_type !== 'user') {
+      logger.error('Rating data mismatch detected', {
         ratingId: existingRating.id,
         expectedBookingId: id,
         actualBookingId: existingRating.booking_id,
+        expectedRaterType: 'user',
+        actualRaterType: existingRating.rater_type,
         userId: req.user.id
       });
       throw new ValidationError('Rating data inconsistency detected. Please contact support.');
     }
     
-    logger.warn('Booking already rated - update not supported', {
+    logger.warn('User already rated this booking', {
       bookingId: id,
       ratingId: existingRating.id,
       userId: req.user.id,
       existingRating: existingRating.rating
     });
-    throw new ValidationError('This booking has already been rated. Each booking can only be rated once.');
+    throw new ValidationError('You have already rated this booking. Each booking can only be rated once.');
   }
 
   // PRODUCTION ROOT FIX: Use transaction to ensure atomic rating creation
   // This prevents race conditions where multiple ratings might be created for the same booking
   const { withTransaction } = require('../database/connection');
   const ratingResult = await withTransaction(async (client) => {
-    // Re-check rating existence within transaction (prevent race condition)
+    // PRODUCTION ROOT FIX: Re-check rating existence within transaction (prevent race condition)
+    // Check only for user ratings (rater_type = 'user')
     const recheckRating = await client.query(`
       SELECT r.* 
       FROM ratings r
-      WHERE r.booking_id = $1
+      WHERE r.booking_id = $1 AND r.rater_type = 'user'
       FOR UPDATE
       LIMIT 1
     `, [id]);
     
     if (recheckRating.rows.length > 0) {
       const existing = recheckRating.rows[0];
-      if (existing.booking_id === id) {
-        throw new ValidationError('This booking has already been rated. Each booking can only be rated once.');
+      if (existing.booking_id === id && existing.rater_type === 'user') {
+        throw new ValidationError('You have already rated this booking. Each booking can only be rated once.');
       }
     }
     
-    // Create rating within transaction
+    // PRODUCTION ROOT FIX: Create rating with rater_type = 'user'
+    // This allows both user and provider to rate the same booking separately
     const result = await client.query(`
-      INSERT INTO ratings (booking_id, rating, review, created_at)
-      VALUES ($1, $2, $3, NOW())
+      INSERT INTO ratings (booking_id, rating, review, rater_type, created_at)
+      VALUES ($1, $2, $3, 'user', NOW())
       RETURNING *
     `, [id, rating, review || null]);
     

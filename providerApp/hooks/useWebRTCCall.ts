@@ -172,7 +172,7 @@ export const useWebRTCCall = () => {
     // Show error toast to user
     Toast.show({
       type: 'error',
-      text1: 'Call Failed',
+      text1: 'Call Unsuccessful',
       text2: errorMessage,
       position: 'top',
       visibilityTime: 4000,
@@ -253,8 +253,8 @@ export const useWebRTCCall = () => {
                       // Show error toast to user
                       Toast.show({
                         type: 'error',
-                        text1: 'Call Failed',
-                        text2: errorMessage,
+                        text1: 'Call Connection Timeout',
+                        text2: 'Unable to connect. Please check your internet and try again',
                         position: 'top',
                         visibilityTime: 5000,
                       });
@@ -321,8 +321,8 @@ export const useWebRTCCall = () => {
                 // Show error toast to user
                 Toast.show({
                   type: 'error',
-                  text1: 'Call Failed',
-                  text2: errorMessage,
+                  text1: 'Call Connection Timeout',
+                  text2: 'Unable to connect. Please check your internet and try again',
                   position: 'top',
                   visibilityTime: 5000,
                 });
@@ -370,7 +370,7 @@ export const useWebRTCCall = () => {
       // Show error toast to user
       Toast.show({
         type: 'error',
-        text1: 'Call Failed',
+        text1: 'Unable to Make Call',
         text2: message,
         position: 'top',
         visibilityTime: 4000,
@@ -403,8 +403,8 @@ export const useWebRTCCall = () => {
               
               Toast.show({
                 type: 'error',
-                text1: 'Call Failed',
-                text2: errorMessage,
+                text1: 'Call Connection Timeout',
+                text2: 'Unable to connect. Please check your internet and try again',
                 position: 'top',
                 visibilityTime: 5000,
               });
@@ -439,7 +439,7 @@ export const useWebRTCCall = () => {
       
       Toast.show({
         type: 'error',
-        text1: 'Call Failed',
+        text1: 'Unable to Accept Call',
         text2: errorMessage,
         position: 'top',
         visibilityTime: 4000,

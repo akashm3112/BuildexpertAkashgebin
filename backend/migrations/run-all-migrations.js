@@ -46,6 +46,7 @@ const addLoginPerformanceIndexes = require('./032-add-login-performance-indexes'
 const addProviderDetailsToBookings = require('./033-add-provider-details-to-bookings');
 const preserveBookingsOnUserDeletion = require('./034-preserve-bookings-on-user-deletion');
 const addCustomerDetailsToBookings = require('./035-add-customer-details-to-bookings');
+const addRaterTypeToRatings = require('./036-add-rater-type-to-ratings');
 
 // Migration registry with order and metadata
 const migrations = [
@@ -293,6 +294,13 @@ const migrations = [
       description: 'Adds customer_name and customer_phone columns to bookings table to preserve customer information even after account deletion. This ensures provider bookings remain fully visible with customer details.',
       function: addCustomerDetailsToBookings,
       required: true // Required to preserve customer information in provider bookings
+    },
+    {
+      id: '036',
+      name: 'Add Rater Type to Ratings',
+      description: 'Adds rater_type column to ratings table to allow both user and provider to rate the same booking separately. Fixes critical bug where provider rating was blocking user rating.',
+      function: addRaterTypeToRatings,
+      required: true // Required to fix review system bug
     }
   ];
 

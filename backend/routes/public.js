@@ -198,7 +198,8 @@ router.get('/services/:id/providers', asyncHandler(async (req, res) => {
     JOIN services_master sm ON ps.service_id = sm.id
     LEFT JOIN addresses a ON a.user_id = u.id AND a.type = 'home'
     LEFT JOIN bookings b ON b.provider_service_id = ps.id
-    LEFT JOIN ratings r ON r.booking_id = b.id
+    -- PRODUCTION ROOT FIX: Only count user ratings (customers rating providers), not provider ratings
+    LEFT JOIN ratings r ON r.booking_id = b.id AND r.rater_type = 'user'
     ${whereClause}
     GROUP BY 
       u.id, u.full_name, u.phone, u.profile_pic_url,
@@ -474,28 +475,8 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
     
     let ratings = [];
     if (providerServiceInfo && providerServiceInfo.provider_id) {
-      // PRODUCTION ROOT FIX: Use LEFT JOIN and stored customer_name to handle deleted accounts
-      ratings = await getRows(`
-        SELECT 
-          r.rating, 
-          r.review, 
-          r.created_at, 
-          COALESCE(b.customer_name, u.full_name, 'Customer') as customer_name
-        FROM ratings r
-        JOIN bookings b ON r.booking_id = b.id
-        LEFT JOIN users u ON b.user_id = u.id
-        WHERE b.provider_id = $1
-        ORDER BY r.created_at DESC
-        LIMIT 10
-      `, [providerServiceInfo.provider_id]);
-    } else {
-      // If service is deleted, try to get provider_id from bookings table
-      const bookingInfo = await getRow(`
-        SELECT DISTINCT provider_id FROM bookings WHERE provider_service_id = $1 LIMIT 1
-      `, [providerId]);
-      
-      if (bookingInfo && bookingInfo.provider_id) {
         // PRODUCTION ROOT FIX: Use LEFT JOIN and stored customer_name to handle deleted accounts
+        // Only show user ratings (customers rating providers), not provider ratings
         ratings = await getRows(`
           SELECT 
             r.rating, 
@@ -505,7 +486,29 @@ router.get('/services/:id/providers/:providerId', asyncHandler(async (req, res) 
           FROM ratings r
           JOIN bookings b ON r.booking_id = b.id
           LEFT JOIN users u ON b.user_id = u.id
-          WHERE b.provider_id = $1
+          WHERE b.provider_id = $1 AND r.rater_type = 'user'
+          ORDER BY r.created_at DESC
+          LIMIT 10
+        `, [providerServiceInfo.provider_id]);
+    } else {
+      // If service is deleted, try to get provider_id from bookings table
+      const bookingInfo = await getRow(`
+        SELECT DISTINCT provider_id FROM bookings WHERE provider_service_id = $1 LIMIT 1
+      `, [providerId]);
+      
+      if (bookingInfo && bookingInfo.provider_id) {
+        // PRODUCTION ROOT FIX: Use LEFT JOIN and stored customer_name to handle deleted accounts
+        // Only show user ratings (customers rating providers), not provider ratings
+        ratings = await getRows(`
+          SELECT 
+            r.rating, 
+            r.review, 
+            r.created_at, 
+            COALESCE(b.customer_name, u.full_name, 'Customer') as customer_name
+          FROM ratings r
+          JOIN bookings b ON r.booking_id = b.id
+          LEFT JOIN users u ON b.user_id = u.id
+          WHERE b.provider_id = $1 AND r.rater_type = 'user'
           ORDER BY r.created_at DESC
           LIMIT 10
         `, [bookingInfo.provider_id]);
@@ -621,7 +624,8 @@ router.get('/featured-providers', asyncHandler(async (req, res) => {
           COUNT(r.rating) as total_reviews,
           COALESCE(AVG(r.rating), 0) as average_rating
         FROM bookings b
-        LEFT JOIN ratings r ON r.booking_id = b.id
+        -- PRODUCTION ROOT FIX: Only count user ratings (customers rating providers)
+        LEFT JOIN ratings r ON r.booking_id = b.id AND r.rater_type = 'user'
         WHERE b.provider_id = ANY($1::uuid[])
         GROUP BY b.provider_id
       `, [providerIds]);

@@ -391,8 +391,9 @@ export default function ServicesScreen() {
                         }
                       }
                       
-                      // Set refresh trigger so home screen updates immediately
-                      await AsyncStorage.setItem('services_refresh_trigger', 'true');
+                      // PRODUCTION ROOT FIX: Set refresh trigger with timestamp for immediate home screen update
+                      // This ensures home screen picks up the cache change immediately
+                      await AsyncStorage.setItem('services_refresh_trigger', Date.now().toString());
                     }
                   }
                 } catch (cacheError) {

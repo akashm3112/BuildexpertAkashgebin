@@ -218,8 +218,8 @@ export default function BookingScreen() {
     if (provider.service_name?.toLowerCase().includes('labors') || provider.service_name?.toLowerCase().includes('labour')) {
       if (!labourAccessStatus?.hasAccess) {
         showAlert(
-          'Labour Service Access Required',
-          'You need to pay ₹99 for 7-day access to book labour services. Would you like to proceed with payment?',
+          'Labour Service Access',
+          'To book labour services, you need a 7-day access pass for ₹99. Would you like to proceed with payment?',
           'warning',
           [
             {

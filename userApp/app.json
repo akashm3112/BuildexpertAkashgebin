@@ -60,7 +60,6 @@
         "ACCESS_NETWORK_STATE"
       ],
       "package": "com.builtxpert.user",
-      "appName": "BuildXpert User",
       "label": "BuildXpert User",
       "usesCleartextTraffic": false,
       "networkSecurityConfig": {
@@ -68,14 +67,26 @@
       },
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#F8FAFC",
-        "monochromeImage": "./assets/images/icon.png"
+        "backgroundColor": "#F8FAFC"
       },
       "notification": {
         "icon": "./assets/images/icon.png",
         "color": "#3B82F6",
         "sound": "default"
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "buildexpertakashgebin.onrender.com"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "experiments": {
       "typedRoutes": true

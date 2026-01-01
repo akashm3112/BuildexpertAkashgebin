@@ -99,7 +99,7 @@ export default function LabourPaymentScreen() {
     } catch (error: any) {
       setIsProcessing(false);
       setShowPaymentModal(false);
-      showAlert('Payment Failed', error.message || 'Failed to initiate payment', 'error', [
+      showAlert('Payment Unsuccessful', error.message || 'Unable to process your payment. Please try again', 'error', [
         { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
       ]);
     }
@@ -204,7 +204,7 @@ export default function LabourPaymentScreen() {
           ]
         );
       } else {
-        showAlert('Payment Failed', error.message || 'Failed to verify payment', 'error', [
+        showAlert('Payment Verification Unsuccessful', error.message || 'Unable to verify your payment. Please try again', 'error', [
           { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
         ]);
       }
@@ -218,7 +218,7 @@ export default function LabourPaymentScreen() {
 
   const handlePayment = () => {
     if (!selectedMethod) {
-      showAlert('Payment Method Required', 'Please select a payment method first', 'warning', [
+      showAlert('Select Payment Method', 'Please choose a payment method to continue', 'warning', [
         { text: 'OK', onPress: () => setShowAlertModal(false), style: 'primary' }
       ]);
       return;

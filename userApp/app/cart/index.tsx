@@ -124,7 +124,7 @@ export default function CartScreen() {
 
   const handleCheckout = () => {
     if (cartItems.length === 0) {
-      showAlert('Empty Cart', 'Please add items to cart before checkout', 'warning');
+      showAlert('Your Cart is Empty', 'Please add items to your cart before checkout', 'warning');
       return;
     }
 
@@ -143,7 +143,7 @@ export default function CartScreen() {
           onPress: () => {
             setShowAlertModal(false);
             // Navigate to checkout screen or payment
-            showAlert('Success', 'Proceeding to payment...', 'success');
+            showAlert('Redirecting to Payment', 'Please wait while we redirect you to the payment page', 'success');
           },
           style: 'primary'
         }

@@ -203,8 +203,8 @@ export default function LoginScreen() {
     if (!isValid) {
       Toast.show({
         type: 'error',
-        text1: 'Validation Error',
-        text2: 'Please check all fields and try again',
+        text1: 'Please Complete All Fields',
+        text2: 'Make sure your mobile number and password are entered correctly',
       });
       return;
     }
@@ -220,8 +220,8 @@ export default function LoginScreen() {
       if (!hasNetwork) {
         Toast.show({
           type: 'error',
-          text1: 'No Internet Connection',
-          text2: 'Please check your network and try again',
+          text1: 'Connection Problem',
+          text2: 'Please check your internet connection and try again',
         });
         setLoading(false);
         return;
@@ -276,7 +276,7 @@ export default function LoginScreen() {
           Toast.show({
             type: 'success',
             text1: 'Welcome Back!',
-            text2: 'Successfully logged in',
+            text2: 'You\'re all set to continue',
           });
 
           router.replace('/(tabs)');
@@ -284,15 +284,15 @@ export default function LoginScreen() {
           console.error('Storage error during login:', storageError);
           Toast.show({
             type: 'error',
-            text1: 'Storage Error',
-            text2: 'Failed to save login data. Please try again.',
+            text1: 'Unable to Save Login',
+            text2: 'Please try logging in again',
           });
         }
       } else {
         Toast.show({
           type: 'error',
-          text1: 'Login Failed',
-          text2: data.message || 'Invalid phone number or password',
+          text1: 'Login Unsuccessful',
+          text2: data.message || 'The mobile number or password you entered is incorrect. Please try again',
         });
       }
     } catch (error) {
@@ -302,8 +302,8 @@ export default function LoginScreen() {
       
       Toast.show({
         type: 'error',
-        text1: 'Login Failed',
-        text2: errorMessage,
+        text1: 'Unable to Sign In',
+        text2: errorMessage || 'Something went wrong. Please check your connection and try again',
       });
     } finally {
       setLoading(false);

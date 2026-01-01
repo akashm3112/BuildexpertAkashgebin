@@ -219,8 +219,8 @@ export default function MobileVerificationScreen() {
           // For existing users, just verify OTP
           Toast.show({
             type: 'success',
-            text1: 'OTP Verified',
-            text2: 'Your mobile number has been verified successfully!',
+            text1: 'Mobile Number Verified!',
+            text2: 'Your account is now active',
           });
           router.back();
         }
@@ -232,14 +232,14 @@ export default function MobileVerificationScreen() {
           showModal('Account Locked', `Too many failed attempts. Please try again in ${formatTime(data.lockoutTimeRemaining || 900)}`, 'error');
         } else if (data.remainingAttempts !== undefined) {
           setRemainingAttempts(data.remainingAttempts);
-          showModal('Verification Failed', data.message || 'Invalid OTP. Please try again.', 'error');
+          showModal('Verification Unsuccessful', data.message || 'The code you entered is incorrect. Please check and try again', 'error');
         } else {
-          showModal('Verification Failed', data.message || 'Invalid OTP. Please try again.', 'error');
+          showModal('Verification Unsuccessful', data.message || 'The code you entered is incorrect. Please check and try again', 'error');
         }
       }
     } catch (error) {
       console.error('OTP verification error:', error);
-      showModal('Network Error', 'Could not verify OTP. Please check your connection and try again.', 'error');
+      showModal('Connection Problem', 'Unable to verify the code. Please check your internet connection and try again', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -273,13 +273,13 @@ export default function MobileVerificationScreen() {
       Toast.show({
         type: 'success',
         text1: 'Welcome to BuildXpert!',
-        text2: 'Your account has been created successfully!',
+        text2: 'Your account is ready. Let\'s get started!',
       });
 
       router.replace('/(tabs)');
     } catch (error) {
       console.error('Error accepting terms:', error);
-      showModal('Error', 'Failed to create account. Please try again.', 'error');
+      showModal('Unable to Complete Registration', 'Something went wrong. Please try again', 'error');
     }
   };
 
@@ -295,7 +295,7 @@ export default function MobileVerificationScreen() {
     const cleanPhone = String(phone || '').replace(/^\+/, '').replace(/^1/, '').replace(/^91/, '').replace(/\D/g, '');
     
     if (!cleanPhone || cleanPhone.length !== 10) {
-      showModal('Invalid Phone Number', 'Please enter a valid 10-digit phone number', 'error');
+      showModal('Invalid Mobile Number', 'Please enter a valid 10-digit mobile number', 'error');
       return;
     }
 

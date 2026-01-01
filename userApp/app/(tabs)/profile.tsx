@@ -360,7 +360,7 @@ export default function ProfileScreen() {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (permissionResult.granted === false) {
-        showAlert('Permission Required', 'Camera permission is required to take a photo.', 'error');
+        showAlert('Camera Access Required', 'Please allow camera access in your device settings to take a photo', 'error');
         return;
       }
 
@@ -375,7 +375,7 @@ export default function ProfileScreen() {
         await uploadProfilePicture(result.assets[0].uri);
       }
     } catch (error) {
-      showAlert('Error', 'Failed to take photo. Please try again.', 'error');
+      showAlert('Unable to Take Photo', 'Something went wrong. Please try again', 'error');
     }
   };
 
@@ -383,7 +383,7 @@ export default function ProfileScreen() {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permissionResult.granted === false) {
-        showAlert('Permission Required', 'Gallery permission is required to select a photo.', 'error');
+        showAlert('Gallery Access Required', 'Please allow gallery access in your device settings to select a photo', 'error');
         return;
       }
 
@@ -398,17 +398,17 @@ export default function ProfileScreen() {
         await uploadProfilePicture(result.assets[0].uri);
       }
     } catch (error) {
-      showAlert('Error', 'Failed to select photo. Please try again.', 'error');
+      showAlert('Unable to Select Photo', 'Something went wrong. Please try again', 'error');
     }
   };
 
   const uploadProfilePicture = async (imageUri: string) => {
     try {
-      showAlert('Uploading...', 'Please wait while we upload your profile picture.', 'info');
+      showAlert('Uploading Photo', 'Please wait while we update your profile picture', 'info');
       
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        showAlert('Error', 'Authentication required. Please login again.', 'error');
+        showAlert('Session Expired', 'Please sign in again to continue', 'error');
         return;
       }
 
@@ -419,7 +419,7 @@ export default function ProfileScreen() {
       );
 
       if (!optimizedImage.base64) {
-        showAlert('Error', 'Unable to process image. Please try a different photo.', 'error');
+        showAlert('Unable to Process Photo', 'Please try selecting a different image', 'error');
         return;
       }
 
@@ -464,16 +464,16 @@ export default function ProfileScreen() {
             await updateUser({ profile_pic_url: newImageUrl });
           }
 
-          showAlert('Success', 'Profile picture updated successfully!', 'success');
+          showAlert('Profile Picture Updated', 'Your profile picture has been updated successfully', 'success');
         } else {
-          showAlert('Error', 'Failed to get image URL from response.', 'error');
+          showAlert('Update Unsuccessful', 'Unable to save your profile picture. Please try again', 'error');
         }
       } else {
         const errorData = await uploadResponse.json();
-        showAlert('Error', errorData.message || 'Failed to update profile picture.', 'error');
+        showAlert('Update Unsuccessful', errorData.message || 'Unable to update your profile picture. Please try again', 'error');
       }
     } catch (error) {
-      showAlert('Error', 'Failed to upload profile picture. Please try again.', 'error');
+      showAlert('Upload Unsuccessful', 'Unable to upload your profile picture. Please check your connection and try again', 'error');
     }
   };
 
@@ -481,7 +481,7 @@ export default function ProfileScreen() {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        showAlert('Error', 'Authentication required. Please login again.', 'error');
+        showAlert('Session Expired', 'Please sign in again to continue', 'error');
         return;
       }
 
@@ -508,13 +508,13 @@ export default function ProfileScreen() {
           await updateUser({ profile_pic_url: '' });
         }
         
-        showAlert('Success', 'Profile picture removed successfully!', 'success');
+        showAlert('Profile Picture Removed', 'Your profile picture has been removed successfully', 'success');
       } else {
         const errorData = await response.json();
-        showAlert('Error', errorData.message || 'Failed to remove profile picture.', 'error');
+        showAlert('Unable to Remove Photo', errorData.message || 'Something went wrong. Please try again', 'error');
       }
     } catch (error) {
-      showAlert('Error', 'Failed to remove profile picture. Please try again.', 'error');
+      showAlert('Unable to Remove Photo', 'Please check your connection and try again', 'error');
     }
   };
 
@@ -734,7 +734,7 @@ export default function ProfileScreen() {
       // Validation
       if (!userProfile.name.trim()) {
         setIsLoading(false);
-        showAlert('Error', 'Name is required', 'error');
+        showAlert('Name Required', 'Please enter your name', 'error');
         return;
       }
 
@@ -785,7 +785,7 @@ export default function ProfileScreen() {
 
       if (!userProfile.email.trim()) {
         setIsLoading(false);
-        showAlert('Error', 'Email is required', 'error');
+        showAlert('Email Required', 'Please enter your email address', 'error');
         return;
       }
 
@@ -795,17 +795,22 @@ export default function ProfileScreen() {
         email: userProfile.email.trim(),
       };
 
-      // Upload profile image if it's a local URI
+      // Handle profile image - convert local URI to base64 for backend upload
       if (userProfile.image && userProfile.image.startsWith('file://')) {
         try {
-          const { uploadImage } = await import('@/utils/cloudinary');
-          const uploadResult = await uploadImage(userProfile.image, 'buildxpert/profile-pictures');
-          if (uploadResult.success) {
-            updateData.profilePicUrl = uploadResult.url;
+          // Convert local file to base64 (backend will handle Cloudinary upload)
+          const optimizedImage = await ImageManipulator.manipulateAsync(
+            userProfile.image,
+            [{ resize: { width: 1080 } }],
+            { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+          );
+          
+          if (optimizedImage.base64) {
+            updateData.profilePicUrl = `data:image/jpeg;base64,${optimizedImage.base64}`;
           }
         } catch (imageError) {
-          console.error('Failed to upload profile image:', imageError);
-          // Continue without image if upload fails
+          console.error('Failed to process profile image:', imageError);
+          // Continue without image if processing fails
         }
       } else if (userProfile.image && userProfile.image.trim() !== '') {
         updateData.profilePicUrl = userProfile.image;
@@ -898,14 +903,14 @@ export default function ProfileScreen() {
             'error'
           );
         } else if (responseData.message && responseData.message.includes('Email already taken')) {
-          showAlert('Error', 'This email address is already in use by another account. Please use a different email address.', 'error');
+          showAlert('Email Already in Use', 'This email address is already registered. Please use a different email address', 'error');
         } else {
-          showAlert('Error', responseData.message || t('alerts.error.updateFailed'), 'error');
+          showAlert('Update Unsuccessful', responseData.message || t('alerts.error.updateFailed'), 'error');
         }
       }
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      showAlert('Error', error.message || t('alerts.error.updateFailed'), 'error');
+      showAlert('Update Unsuccessful', error.message || t('alerts.error.updateFailed'), 'error');
     } finally {
       setIsLoading(false);
     }
@@ -985,11 +990,11 @@ export default function ProfileScreen() {
               } else {
                 const data = await response.json();
                 setDeleteLoading(false);
-                showAlert('Error', data.message || t('alerts.error.deleteFailed'), 'error');
+                showAlert('Unable to Delete Account', data.message || t('alerts.error.deleteFailed'), 'error');
               }
             } catch (error) {
               setDeleteLoading(false);
-              showAlert('Error', t('alerts.error.deleteFailed'), 'error');
+              showAlert('Unable to Delete Account', t('alerts.error.deleteFailed'), 'error');
             }
           },
           style: 'destructive'
@@ -1033,10 +1038,10 @@ export default function ProfileScreen() {
       if (supported) {
         await Linking.openURL(PLAY_STORE_LINK);
       } else {
-        showAlert('Error', t('referFriendsModal.linkError'), 'error');
+        showAlert('Unable to Copy Link', t('referFriendsModal.linkError'), 'error');
       }
     } catch (error) {
-      showAlert('Error', t('referFriendsModal.linkError'), 'error');
+      showAlert('Unable to Copy Link', t('referFriendsModal.linkError'), 'error');
     }
   };
 
@@ -1046,7 +1051,7 @@ export default function ProfileScreen() {
       if (supported) {
         await Linking.openURL(PLAY_STORE_LINK);
       } else {
-        showAlert('Error', t('rateAppModal.error'), 'error');
+        showAlert('Unable to Open Store', t('rateAppModal.error'), 'error');
       }
     } catch (error) {
       showAlert('Error', t('rateAppModal.error'), 'error');
@@ -1059,7 +1064,7 @@ export default function ProfileScreen() {
       if (supported) {
         await Linking.openURL(APP_STORE_LINK);
       } else {
-        showAlert('Error', t('rateAppModal.error'), 'error');
+        showAlert('Unable to Open Store', t('rateAppModal.error'), 'error');
       }
     } catch (error) {
       showAlert('Error', t('rateAppModal.error'), 'error');
@@ -1072,7 +1077,7 @@ export default function ProfileScreen() {
         message: getReferralMessage(),
       });
     } catch (error) {
-      showAlert('Error', t('referFriendsModal.shareError'), 'error');
+      showAlert('Unable to Share', t('referFriendsModal.shareError'), 'error');
     }
   };
 
@@ -1158,10 +1163,10 @@ export default function ProfileScreen() {
       if (supported) {
         await Linking.openURL(mailto);
       } else {
-        showAlert('Error', t('supportModal.emailError'), 'error');
+        showAlert('Unable to Open Email', t('supportModal.emailError'), 'error');
       }
     } catch (error) {
-      showAlert('Error', t('supportModal.emailError'), 'error');
+      showAlert('Unable to Open Email', t('supportModal.emailError'), 'error');
     }
   };
 
@@ -1173,10 +1178,10 @@ export default function ProfileScreen() {
       if (supported) {
         await Linking.openURL(phoneUrl);
       } else {
-        showAlert('Error', t('supportModal.phoneError'), 'error');
+        showAlert('Unable to Make Call', t('supportModal.phoneError'), 'error');
       }
     } catch (error) {
-      showAlert('Error', t('supportModal.phoneError'), 'error');
+      showAlert('Unable to Make Call', t('supportModal.phoneError'), 'error');
     }
   };
 
@@ -1189,10 +1194,10 @@ export default function ProfileScreen() {
       if (supported) {
         await Linking.openURL(whatsappUrl);
       } else {
-        showAlert('Error', t('supportModal.whatsappError'), 'error');
+        showAlert('Unable to Open WhatsApp', t('supportModal.whatsappError'), 'error');
       }
     } catch (error) {
-      showAlert('Error', t('supportModal.whatsappError'), 'error');
+      showAlert('Unable to Open WhatsApp', t('supportModal.whatsappError'), 'error');
     }
   };
 
@@ -1521,7 +1526,7 @@ export default function ProfileScreen() {
                   } else if (nameChangeCount < 2 && isNameChanging) {
                     return (
                       <Text style={styles.infoText}>
-                        {t('editProfile.nameChangesRemaining', { count: remaining })}
+                        {t('editProfile.nameChangesRemaining', { count: remaining.toString() })}
                       </Text>
                     );
                   }

@@ -681,15 +681,20 @@ export default function HomeScreen() {
             return categoryId;
           }).filter(Boolean);
 
-          // PRODUCTION FIX: Merge API data with cache to preserve newly registered services
-          // If cache has services not in API yet (just registered), keep them
-          const mergedServices = [...new Set([...currentRegisteredServices, ...registeredCategoryIds])];
+          // PRODUCTION ROOT FIX: Use API response as source of truth for deletions
+          // Only merge with cache if cache has services not in API (newly registered, not yet synced)
+          // This ensures deleted services are immediately removed from UI
+          const apiServicesSet = new Set(registeredCategoryIds);
+          const cacheOnlyServices = currentRegisteredServices.filter((id: string) => !apiServicesSet.has(id));
           
-          setRegisteredServices(mergedServices);
+          // Final list: API services (source of truth) + cache-only services (newly registered, not yet in API)
+          const finalServices = [...new Set([...registeredCategoryIds, ...cacheOnlyServices])];
           
-          // Update cache with merged data
+          setRegisteredServices(finalServices);
+          
+          // Update cache with final data (API is source of truth for deletions)
           try {
-            await AsyncStorage.setItem('cached_registered_services', JSON.stringify(mergedServices));
+            await AsyncStorage.setItem('cached_registered_services', JSON.stringify(finalServices));
           } catch (cacheError) {
             // Silently fail
           }

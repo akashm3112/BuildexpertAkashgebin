@@ -190,8 +190,8 @@ export default function SignupScreen() {
             } catch (error) {
               Toast.show({
                 type: 'error',
-                text1: 'Error',
-                text2: 'Failed to take photo. Please try again.',
+                text1: 'Unable to Take Photo',
+                text2: 'Please try again or choose a photo from your gallery',
               });
             } finally {
               setImageLoading(false);
@@ -229,8 +229,8 @@ export default function SignupScreen() {
             } catch (error) {
               Toast.show({
                 type: 'error',
-                text1: 'Error',
-                text2: 'Failed to select image. Please try again.',
+                text1: 'Unable to Select Image',
+                text2: 'Please try selecting a different photo',
               });
             } finally {
               setImageLoading(false);
@@ -506,8 +506,8 @@ export default function SignupScreen() {
     if (!isValid) {
       Toast.show({
         type: 'error',
-        text1: 'Validation Error',
-        text2: 'Please check all fields and try again',
+        text1: 'Please Complete All Fields',
+        text2: 'Make sure all required information is filled correctly',
       });
       return;
     }
@@ -539,8 +539,8 @@ export default function SignupScreen() {
       if (response.ok) {
         Toast.show({
           type: 'success',
-          text1: 'Account Created',
-          text2: 'Please verify your mobile number to complete registration',
+          text1: 'Account Created Successfully!',
+          text2: 'Please verify your mobile number to get started',
         });
 
         // Navigate to OTP verification
@@ -563,8 +563,8 @@ export default function SignupScreen() {
         } else {
           Toast.show({
             type: 'error',
-            text1: 'Signup Failed',
-            text2: data.message || 'Failed to create account. Please try again.',
+            text1: 'Unable to Create Account',
+            text2: data.message || 'Something went wrong. Please check your information and try again',
           });
         }
       }
@@ -572,8 +572,8 @@ export default function SignupScreen() {
       console.error('Signup error:', error);
       Toast.show({
         type: 'error',
-        text1: 'Network Error',
-        text2: 'Please check your connection and try again',
+        text1: 'Connection Problem',
+        text2: 'Please check your internet connection and try again',
       });
     } finally {
       setLoading(false);

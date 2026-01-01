@@ -834,16 +834,21 @@ router.post('/bookings/:id/rate-customer', [
     throw new NotFoundError('Booking not found');
   }
 
-  // Check if already rated
-  const existingRating = await getRow('SELECT * FROM ratings WHERE booking_id = $1', [id]);
+  // PRODUCTION ROOT FIX: Check if provider has already rated this customer for this booking
+  // Use rater_type to distinguish provider ratings from user ratings
+  const existingRating = await getRow(`
+    SELECT * FROM ratings 
+    WHERE booking_id = $1 AND rater_type = 'provider'
+  `, [id]);
   if (existingRating) {
-    throw new ValidationError('Customer already rated for this booking');
+    throw new ValidationError('You have already rated this customer for this booking');
   }
 
-  // Create rating (using ratings table - same as user ratings)
+  // PRODUCTION ROOT FIX: Create rating with rater_type = 'provider'
+  // This allows both provider and user to rate the same booking separately
   const result = await query(`
-    INSERT INTO ratings (booking_id, rating, review, created_at)
-    VALUES ($1, $2, $3, NOW())
+    INSERT INTO ratings (booking_id, rating, review, rater_type, created_at)
+    VALUES ($1, $2, $3, 'provider', NOW())
     RETURNING *
   `, [id, rating, review || null]);
 

@@ -584,7 +584,8 @@ router.get('/:id/providers/:providerId', asyncHandler(async (req, res) => {
   }
   
   // PRODUCTION ROOT FIX: Use LEFT JOIN and stored customer_name to handle deleted accounts
-  // This ensures ratings remain visible even after customer deletes account
+  // Only show user ratings (customers rating providers), not provider ratings (provider rating customers)
+  // This ensures provider's public profile shows customer reviews, not their own ratings of customers
   const ratings = await getRows(`
     SELECT 
       r.rating, 
@@ -594,7 +595,7 @@ router.get('/:id/providers/:providerId', asyncHandler(async (req, res) => {
     FROM ratings r
     JOIN bookings b ON r.booking_id = b.id
     LEFT JOIN users u ON b.user_id = u.id
-    WHERE b.provider_id = $1
+    WHERE b.provider_id = $1 AND r.rater_type = 'user'
     ORDER BY r.created_at DESC
     LIMIT 10
   `, [providerServiceInfo.provider_id]);

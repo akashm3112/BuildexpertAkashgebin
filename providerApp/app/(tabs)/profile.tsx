@@ -628,7 +628,7 @@ export default function ProfileScreen() {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (permissionResult.granted === false) {
-        showAlert('Permission Required', 'Camera permission is required to take a photo.', 'error');
+        showAlert('Camera Access Required', 'Please allow camera access in your device settings to take a photo', 'error');
         return;
       }
 
@@ -643,7 +643,7 @@ export default function ProfileScreen() {
         await uploadProfilePicture(result.assets[0].uri);
       }
     } catch (error) {
-      showAlert('Error', 'Failed to take photo. Please try again.', 'error');
+      showAlert('Unable to Take Photo', 'Something went wrong. Please try again', 'error');
     }
   };
 
@@ -651,7 +651,7 @@ export default function ProfileScreen() {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permissionResult.granted === false) {
-        showAlert('Permission Required', 'Gallery permission is required to select a photo.', 'error');
+        showAlert('Gallery Access Required', 'Please allow gallery access in your device settings to select a photo', 'error');
         return;
       }
 
@@ -666,14 +666,14 @@ export default function ProfileScreen() {
         await uploadProfilePicture(result.assets[0].uri);
       }
     } catch (error) {
-      showAlert('Error', 'Failed to select photo. Please try again.', 'error');
+      showAlert('Unable to Select Photo', 'Something went wrong. Please try again', 'error');
     }
   };
 
   const uploadProfilePicture = async (imageUri: string) => {
     let optimizedImage: ImageManipulator.ImageResult | null = null;
     try {
-      showAlert('Uploading...', 'Please wait while we upload your profile picture.', 'info');
+      showAlert('Uploading Photo', 'Please wait while we update your profile picture', 'info');
       
       const token = await tokenManager.getValidToken();
       if (!token) {
@@ -688,7 +688,7 @@ export default function ProfileScreen() {
       );
 
       if (!optimizedImage.base64) {
-        showAlert('Error', 'Unable to process image. Please try a different photo.', 'error');
+        showAlert('Unable to Process Photo', 'Please try selecting a different image', 'error');
         return;
       }
 
@@ -737,14 +737,14 @@ export default function ProfileScreen() {
           await fetchUserProfile();
           
           setTimeout(() => {
-            showAlert('Success', 'Profile picture updated successfully!', 'success');
+            showAlert('Profile Picture Updated', 'Your profile picture has been updated successfully', 'success');
           }, 100);
         } else {
-          showAlert('Error', 'Failed to get image URL from response.', 'error');
+          showAlert('Update Unsuccessful', 'Unable to save your profile picture. Please try again', 'error');
         }
       } else {
         const errorData = await uploadResponse.json();
-        showAlert('Error', errorData.message || 'Failed to upload profile picture.', 'error');
+        showAlert('Update Unsuccessful', errorData.message || 'Unable to update your profile picture. Please try again', 'error');
       }
     } catch (error) {
       // Check if it's a network connectivity issue
@@ -760,12 +760,12 @@ export default function ProfileScreen() {
           setUserProfile(prev => ({ ...prev, image: optimizedForOffline }));
           await cacheProfileImage(optimizedForOffline);
           
-          showAlert('Network Issue', 'Your profile picture has been saved locally and will be uploaded when network connection is restored.', 'warning');
+          showAlert('Saved for Later', 'Your profile picture has been saved and will be uploaded when your connection is restored', 'warning');
         } catch (storageError) {
-          showAlert('Error', 'Failed to upload profile picture due to network issues. Please try again when connected.', 'error');
+          showAlert('Connection Problem', 'Unable to upload your profile picture. Please check your internet and try again', 'error');
         }
       } else {
-        showAlert('Error', 'Failed to upload profile picture. Please try again.', 'error');
+        showAlert('Upload Unsuccessful', 'Unable to upload your profile picture. Please check your connection and try again', 'error');
       }
     }
   };
@@ -809,14 +809,14 @@ export default function ProfileScreen() {
         
         // Small delay to ensure state updates are processed
         setTimeout(() => {
-          showAlert('Success', 'Profile picture removed successfully!', 'success');
+          showAlert('Profile Picture Removed', 'Your profile picture has been removed successfully', 'success');
         }, 100);
       } else {
         const errorData = await response.json();
-        showAlert('Error', errorData.message || 'Failed to remove profile picture.', 'error');
+        showAlert('Unable to Remove Photo', errorData.message || 'Something went wrong. Please try again', 'error');
       }
     } catch (error) {
-      showAlert('Error', 'Failed to remove profile picture. Please try again.', 'error');
+      showAlert('Unable to Remove Photo', 'Please check your connection and try again', 'error');
     }
   };
 
@@ -945,10 +945,10 @@ export default function ProfileScreen() {
       if (supported) {
         await Linking.openURL(PLAY_STORE_LINK);
       } else {
-        showAlert('Error', 'Unable to open the Play Store on this device.', 'error');
+        showAlert('Unable to Open Play Store', 'Please try opening the Play Store manually', 'error');
       }
     } catch (error) {
-      showAlert('Error', 'Unable to open the Play Store on this device.', 'error');
+      showAlert('Unable to Open Play Store', 'Please try opening the Play Store manually', 'error');
     }
   };
 
@@ -984,7 +984,7 @@ export default function ProfileScreen() {
         message: getReferralMessage(),
       });
     } catch (error) {
-      showAlert('Error', 'Unable to open the share sheet right now. Please try again.', 'error');
+      showAlert('Unable to Share', 'Please try again in a moment', 'error');
     }
   };
 
