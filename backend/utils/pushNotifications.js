@@ -252,7 +252,9 @@ class PushNotificationService {
       data: notification.data || {},
       badge: notification.badge,
       priority: notification.priority || 'high',
-      ttl: notification.ttl || 3600, // 1 hour default
+      // PRODUCTION ROOT FIX: Increased TTL to 24 hours for better background notification delivery
+      // This ensures notifications are delivered even if device is offline or app is closed
+      ttl: notification.ttl || 86400, // 24 hours default (was 1 hour)
       expiration: notification.expiration || null,
       channelId: notification.channelId || 'default',
     };

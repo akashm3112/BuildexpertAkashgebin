@@ -775,11 +775,13 @@ router.put('/bookings/:id/status', [
       // Emit booking_unread_count_update event to provider for real-time badge update
       getIO().to(req.user.id).emit('booking_unread_count_update');
 
-      // Emit earnings update to provider when booking is completed (async)
-      if (status === 'completed') {
+      // PRODUCTION ROOT FIX: Emit earnings update for ALL status changes that affect earnings
+      // Earnings are affected by: accepted (moves pending to accepted), completed (moves to thisMonth/today), cancelled (removes from pending)
+      // This ensures earnings update instantly in providerApp when booking status changes
+      if (['accepted', 'completed', 'cancelled'].includes(status)) {
         emitEarningsUpdate(req.user.id).catch(err => logger.error('Failed to emit earnings update', { error: err.message }));
         
-        // Invalidate earnings cache when booking is completed (async)
+        // Invalidate earnings cache when booking status changes (async)
         getRow('SELECT id FROM provider_profiles WHERE user_id = $1', [req.user.id])
           .then(providerProfile => {
             if (providerProfile) {

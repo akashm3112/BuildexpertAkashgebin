@@ -466,6 +466,53 @@ router.put('/profile', [profileUpdateLimiter, ...validateUpdateProfile], asyncHa
     
     const updatedUser = result.rows[0];
 
+    // PRODUCTION ROOT FIX: Invalidate all provider-related caches when profile is updated
+    // This ensures that updated provider names are reflected immediately in userApp
+    if (updatedUser.role === 'provider') {
+      const { invalidateCache, CacheKeys, invalidateServiceCache } = require('../utils/cacheIntegration');
+      const { getRow, getRows } = require('../database/connection');
+      
+      // Get provider profile ID to invalidate provider-specific caches
+      const providerProfile = await getRow('SELECT id FROM provider_profiles WHERE user_id = $1', [req.user.id]);
+      
+      if (providerProfile) {
+        // Invalidate featured providers cache (used in userApp home screen)
+        invalidateCache(CacheKeys.featuredProviders());
+        
+        // Invalidate all provider service listings (used when browsing services)
+        // Pattern matches: providers:service:* (all service listings)
+        invalidateCache('providers:service:.*');
+        
+        // Invalidate provider details cache (used in booking screen)
+        // Pattern matches: providers:details:* (all provider detail pages)
+        invalidateCache('providers:details:.*');
+        
+        // Invalidate provider-specific caches
+        const { invalidateProviderCache } = require('../utils/cacheIntegration');
+        invalidateProviderCache(providerProfile.id);
+        
+        // PRODUCTION ROOT FIX: Invalidate service-specific caches for all services this provider is registered for
+        // This ensures the updated name appears in all service listings
+        const providerServices = await getRows(
+          'SELECT service_id FROM provider_services WHERE provider_id = $1 AND payment_status = $2',
+          [providerProfile.id, 'active']
+        );
+        
+        if (providerServices && providerServices.length > 0) {
+          for (const service of providerServices) {
+            invalidateServiceCache(service.service_id);
+          }
+        }
+        
+        logger.info('Invalidated provider caches after profile update', {
+          userId: req.user.id,
+          providerProfileId: providerProfile.id,
+          servicesCount: providerServices?.length || 0,
+          updatedFields: updateFields
+        });
+      }
+    }
+
     res.json({
       status: 'success',
       message: 'Profile updated successfully',

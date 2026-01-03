@@ -220,17 +220,30 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
   const bookingResult = await withTransaction(async (client) => {
     // CRITICAL: Use FOR UPDATE to lock rows and prevent race conditions
     // This ensures that concurrent requests wait for each other
-    // PRODUCTION FIX: Simplified date comparison to avoid timezone issues
+    // PRODUCTION ROOT FIX: Use explicit date casting and ensure timezone consistency
     // Compare dates as strings (YYYY-MM-DD) to ensure exact match regardless of timezone
     const appointmentDateStr = appointmentDate; // Already in YYYY-MM-DD format from frontend
+    
+    // PRODUCTION ROOT FIX: Validate date format before query
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(appointmentDateStr)) {
+      throw new ValidationError('Invalid appointment date format');
+    }
+    
+    // PRODUCTION ROOT FIX: More strict duplicate check - only check for ACTIVE bookings
+    // Exclude cancelled, rejected, and completed bookings explicitly
+    // Also ensure we're comparing dates correctly without timezone issues
+    // CRITICAL: Use explicit DATE() casting to avoid timezone issues
+    // CRITICAL: Ensure user_id is NOT NULL (migration 034 sets user_id to NULL when user deletes account)
+    // This prevents matching bookings from deleted users
     const potentialDuplicates = await client.query(`
       SELECT b.id, b.status, b.appointment_date, b.appointment_time, b.provider_service_id
       FROM bookings b
       WHERE b.user_id = $1
+        AND b.user_id IS NOT NULL
         AND b.provider_service_id = $2
-        AND b.appointment_date::date = $3::date
+        AND DATE(b.appointment_date) = DATE($3::date)
         AND b.status IN ('pending', 'accepted')
-        AND b.appointment_date::date >= CURRENT_DATE
+        AND DATE(b.appointment_date) >= CURRENT_DATE
         AND b.appointment_time IS NOT NULL 
         AND b.appointment_time::text != '' 
         AND b.appointment_time::text != '00:00:00'
@@ -240,6 +253,7 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
     // Normalize and compare times - only consider valid normalized times
     let existingBooking = null;
     if (potentialDuplicates.rows && potentialDuplicates.rows.length > 0) {
+      // PRODUCTION ROOT FIX: Log detailed information for debugging false positives
       logger.info('Potential duplicates found, checking time matches', {
         userId: req.user.id,
         providerServiceId,
@@ -251,17 +265,47 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
           status: b.status,
           appointment_date: b.appointment_date,
           appointment_time: b.appointment_time,
-          provider_service_id: b.provider_service_id
-        }))
+          provider_service_id: b.provider_service_id,
+          dateStr: String(b.appointment_date).split('T')[0]
+        })),
+        queryParams: {
+          userId: req.user.id,
+          providerServiceId,
+          appointmentDateStr
+        }
       });
 
       for (const booking of potentialDuplicates.rows) {
+        // PRODUCTION ROOT FIX: Additional defensive checks to prevent false positives
+        
+        // Verify status is actually pending or accepted (defensive check)
+        if (booking.status !== 'pending' && booking.status !== 'accepted') {
+          logger.warn('Skipping booking with invalid status in duplicate check', {
+            bookingId: booking.id,
+            status: booking.status,
+            userId: req.user.id
+          });
+          continue;
+        }
+        
         // Verify provider_service_id matches (defensive check)
         if (booking.provider_service_id !== providerServiceId) {
           logger.info('Skipping booking with mismatched provider_service_id', {
             bookingId: booking.id,
             expected: providerServiceId,
             actual: booking.provider_service_id
+          });
+          continue;
+        }
+        
+        // PRODUCTION ROOT FIX: Verify date matches exactly (defensive check)
+        const bookingDateStr = String(booking.appointment_date).split('T')[0];
+        if (bookingDateStr !== appointmentDateStr) {
+          logger.warn('Skipping booking with mismatched date in duplicate check', {
+            bookingId: booking.id,
+            expected: appointmentDateStr,
+            actual: bookingDateStr,
+            rawDate: booking.appointment_date
           });
           continue;
         }
@@ -294,6 +338,7 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
           match: normalizedStoredTime === normalizedAppointmentTime
         });
         
+        // PRODUCTION ROOT FIX: Only match if times are exactly equal
         if (normalizedStoredTime === normalizedAppointmentTime) {
           existingBooking = booking;
           break;
@@ -309,17 +354,49 @@ router.post('/', [bookingTrafficShaper, bookingCreationLimiter, ...validateCreat
     }
 
     if (existingBooking) {
-      logger.warn('Duplicate booking attempt blocked (within transaction)', {
-        userId: req.user.id,
-        providerServiceId,
-        appointmentDate,
-        appointmentTime: normalizedAppointmentTime,
-        existingBookingId: existingBooking.id,
-        existingStatus: existingBooking.status,
-        existingTime: existingBooking.appointment_time,
-        existingDate: existingBooking.appointment_date
-      });
-      throw new ValidationError('You already have a booking with this provider at the same date and time. Please choose a different time or wait for the current booking to be completed or cancelled.');
+      // PRODUCTION ROOT FIX: Additional validation to prevent false positives
+      // Double-check that the booking is actually a duplicate before blocking
+      const bookingDateStr = String(existingBooking.appointment_date).split('T')[0];
+      const isStatusValid = existingBooking.status === 'pending' || existingBooking.status === 'accepted';
+      const isDateMatch = bookingDateStr === appointmentDateStr;
+      const isProviderMatch = existingBooking.provider_service_id === providerServiceId;
+      
+      // Only block if all validations pass
+      if (isStatusValid && isDateMatch && isProviderMatch) {
+        logger.warn('Duplicate booking attempt blocked (within transaction)', {
+          userId: req.user.id,
+          providerServiceId,
+          appointmentDate,
+          appointmentTime: normalizedAppointmentTime,
+          existingBookingId: existingBooking.id,
+          existingStatus: existingBooking.status,
+          existingTime: existingBooking.appointment_time,
+          existingDate: existingBooking.appointment_date
+        });
+        throw new ValidationError('You already have a booking with this provider at the same date and time. Please choose a different time or wait for the current booking to be completed or cancelled.');
+      } else {
+        // Log the false positive for debugging
+        logger.error('False duplicate detected - booking should not have matched', {
+          userId: req.user.id,
+          providerServiceId,
+          appointmentDate,
+          appointmentTime: normalizedAppointmentTime,
+          existingBookingId: existingBooking.id,
+          existingStatus: existingBooking.status,
+          existingTime: existingBooking.appointment_time,
+          existingDate: existingBooking.appointment_date,
+          existingProviderServiceId: existingBooking.provider_service_id,
+          validationChecks: {
+            isStatusValid,
+            isDateMatch,
+            isProviderMatch,
+            bookingDateStr,
+            appointmentDateStr
+          }
+        });
+        // Don't block - allow booking to proceed if validation fails
+        existingBooking = null;
+      }
     }
 
     // All duplicate checks passed - create booking within the same transaction

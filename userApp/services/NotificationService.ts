@@ -16,7 +16,32 @@ class NotificationService {
   private isInitialized: boolean = false;
 
   private constructor() {
+    // PRODUCTION ROOT FIX: Set notification handler IMMEDIATELY in constructor
+    // This ensures handler is set before any notifications can arrive (including background)
+    // Must be synchronous - no async operations here
+    this.setupNotificationHandlerSync();
     this.setupNotificationHandlers();
+  }
+
+  /**
+   * PRODUCTION ROOT FIX: Set notification handler synchronously
+   * This MUST be called before any async operations to ensure background notifications work
+   */
+  private setupNotificationHandlerSync() {
+    try {
+      // Set handler immediately - this works for foreground, background, AND when app is closed
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true, // CRITICAL: Show notification even when app is closed
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
+      });
+    } catch (error) {
+      // Silent error - handler setup will be retried in configureNotifications
+    }
   }
 
   static getInstance(): NotificationService {
@@ -130,14 +155,21 @@ class NotificationService {
    */
   private async configureNotifications(): Promise<void> {
     try {
-      // Configure how notifications are handled when app is in foreground
+      // PRODUCTION ROOT FIX: Configure notification handler FIRST before anything else
+      // This MUST be set before any notifications can arrive (including background notifications)
+      // The handler is called for ALL notifications: foreground, background, and when app is closed
       await Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-          shouldShowBanner: true,
-          shouldShowList: true,
-        }),
+        handleNotification: async (notification) => {
+          // CRITICAL: Always return these values to ensure notifications are shown
+          // This works for foreground, background, AND when app is completely closed
+          return {
+            shouldShowAlert: true, // Show notification banner/alert
+            shouldPlaySound: true, // Play sound
+            shouldSetBadge: true, // Update badge count
+            shouldShowBanner: true, // Show banner (iOS)
+            shouldShowList: true, // Show in notification list
+          };
+        },
       });
 
       // Configure notification channels for Android (CRITICAL for background notifications)
@@ -286,15 +318,29 @@ class NotificationService {
 
   /**
    * Register for push notifications and get token
+   * PRODUCTION ROOT FIX: Prevent Expo Go from registering push tokens
    */
   private async registerForPushNotifications(): Promise<string | null> {
     try {
+      // PRODUCTION ROOT FIX: Check if running in Expo Go - push notifications don't work properly in Expo Go
+      // The app name will always show as "Expo Go" if running in Expo Go
+      const isExpoGo = Constants.executionEnvironment === 'storeClient' || 
+                       Constants.appOwnership === 'expo' ||
+                       !Constants.expoConfig?.extra?.eas?.projectId;
+      
+      if (isExpoGo) {
+        console.warn('⚠️ Push notifications are not supported in Expo Go. Please build a standalone app.');
+        return null;
+      }
+
       if (!Device.isDevice) {
+        console.warn('⚠️ Push notifications are not supported on simulators/emulators.');
         return null;
       }
 
       const projectId = Constants.expoConfig?.extra?.eas?.projectId;
       if (!projectId) {
+        console.error('❌ EAS project ID not found. Push notifications require a standalone build.');
         return null;
       }
 
@@ -310,6 +356,7 @@ class NotificationService {
 
       return token;
     } catch (error: any) {
+      console.error('❌ Error registering for push notifications:', error);
       return null;
     }
   }

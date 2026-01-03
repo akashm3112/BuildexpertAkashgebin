@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar, Flag, Star, X, XCircle, Phone, MapPin, CreditCard } from 'lucide-react-native';
 import { Modal } from '@/components/common/Modal';
+import { SafeView } from '@/components/SafeView';
 import WebRTCCallButton from '@/components/calls/WebRTCCallButton';
 import { format, parseISO } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
@@ -742,11 +743,10 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
         presentationStyle="pageSheet"
         onRequestClose={() => setShowReportModal(false)}
       >
-        <View style={styles.modalContainer}>
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
           <View style={[
             styles.modalHeader, 
             { 
-              paddingTop: Math.max(insets.top + 8, 16),
               paddingHorizontal: getResponsiveSpacing(16, 20, 24),
               paddingBottom: getResponsiveSpacing(16, 18, 20)
             }
@@ -762,7 +762,14 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
             </Text>
             <View style={styles.placeholder} />
           </View>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalContentContainer}>
+          <ScrollView 
+            style={{ flex: 1 }} 
+            contentContainerStyle={[
+              styles.modalContentContainer,
+              { paddingHorizontal: getResponsiveSpacing(16, 20, 24) }
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.bookingSummary}>
               <Image source={{ uri: booking.imageUrl }} style={styles.modalProviderImage} />
               <View style={styles.bookingDetails}>
@@ -839,7 +846,7 @@ export function BookingItem({ booking, onStatusChange, onBookingReported }: Book
               </TouchableOpacity>
             </View>
           </ScrollView>
-        </View>
+        </SafeView>
       </RNModal>
 
       <Modal
@@ -1104,7 +1111,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalContentContainer: {
-    padding: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   bookingSummary: {
     flexDirection: 'row',

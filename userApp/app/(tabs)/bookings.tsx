@@ -575,24 +575,41 @@ export default function BookingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowFilterModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+        <SafeView style={styles.modalContainer} backgroundColor="#FFFFFF">
+          <View style={[
+            styles.modalHeader,
+            { paddingHorizontal: getResponsiveSpacing(16, 20, 24) }
+          ]}>
             <TouchableOpacity 
               onPress={() => setShowFilterModal(false)}
               style={styles.closeButton}
             >
               <X size={24} color="#64748B" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{t('bookings.filterBookings')}</Text>
+            <Text style={[
+              styles.modalTitle,
+              { fontSize: getResponsiveFontSize(16, 18, 20) }
+            ]}>
+              {t('bookings.filterBookings')}
+            </Text>
             <TouchableOpacity 
               onPress={resetFilters}
               style={styles.resetButton}
             >
-              <Text style={styles.resetButtonText}>{t('bookings.reset')}</Text>
+              <Text style={[
+                styles.resetButtonText,
+                { fontSize: getResponsiveFontSize(14, 16, 18) }
+              ]}>
+                {t('bookings.reset')}
+              </Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.modalContent} 
+            contentContainerStyle={{ paddingHorizontal: getResponsiveSpacing(16, 20, 24) }}
+            showsVerticalScrollIndicator={false}
+          >
             {/* Status Filter */}
             <View style={styles.filterSection}>
               <Text style={styles.filterSectionTitle}>{t('bookings.status')}</Text>
@@ -761,7 +778,7 @@ export default function BookingsScreen() {
               <Text style={styles.modalApplyButtonText}>{t('bookings.applyFilters')}</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeView>
       </Modal>
     </SafeView>
   );
@@ -1121,19 +1138,17 @@ const styles = StyleSheet.create({
   },
   resetButtonText: {
     color: '#3B82F6',
-    fontSize: 16,
     fontWeight: '500',
   },
   modalContent: {
     flex: 1,
-    paddingHorizontal: 16,
   },
   filterSectionTitle: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(14, 16, 18),
     fontWeight: '600',
     color: '#1E293B',
-    marginBottom: 12,
-    marginTop: 16,
+    marginBottom: getResponsiveSpacing(10, 12, 14),
+    marginTop: getResponsiveSpacing(14, 16, 18),
   },
   filterOptions: {
     gap: 8,
@@ -1142,10 +1157,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: getResponsiveSpacing(10, 12, 14),
+    paddingHorizontal: getResponsiveSpacing(14, 16, 18),
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
+    borderRadius: getResponsiveSpacing(10, 12, 14),
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -1154,7 +1169,7 @@ const styles = StyleSheet.create({
     borderColor: '#3B82F6',
   },
   filterOptionText: {
-    fontSize: 16,
+    fontSize: getResponsiveFontSize(14, 16, 18),
     color: '#1E293B',
     fontWeight: '500',
   },
@@ -1206,9 +1221,9 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    gap: getResponsiveSpacing(10, 12, 14),
+    paddingHorizontal: getResponsiveSpacing(16, 20, 24),
+    paddingVertical: getResponsiveSpacing(14, 16, 18),
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
   },
